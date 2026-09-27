@@ -25,3 +25,6 @@ O próprio endpoint da CAIXA já devolve todos os jogos do concurso com placar f
 ## Levantamento original (busca web, não verificado) — mantido como referência
 - Projetos de terceiros com propósito parecido: `guidi/loteria_api`, `dantetesta/LotoLogic`, `rockcavera/nim-lotcef`, pacote PyPI `loteria-caixa`, `guto-alves/loterias-api`, `fabriciocovalesci/loterias-caixa-api`.
 - APIs de futebol brasileiro consideradas e descartadas da v1 após o achado acima: API Futebol, `campeonato-brasileiro-api`, `api-futebol-brasileiro`, Base dos Dados.
+
+## Correção (27/09/2026)
+`guidi/loteria_api` e `guto-alves/loterias-api` foram reanalisados a pedido do usuário — ver `docs/correcao-guidi-guto-alves.md`. Resumo: `guto-alves` confirmado sem Loteca; `guidi` lista Loteca mas tem bug real (times/placar vêm vazios) — nenhum dos dois substitui o endpoint direto da CAIXA.
