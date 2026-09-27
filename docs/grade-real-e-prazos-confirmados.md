@@ -20,5 +20,11 @@ Resolve a suspeita anterior de que "14h de sábado" estava desatualizado — est
 ## Copa da Loteca 2026 — datas completas confirmadas
 Extra/Globo (01/06/2026): concursos em **17, 22, 25 e 29 de junho de 2026**, apostas de 30/05 a 25/06, prêmio estimado ~R$10 milhões. Fecha a pendência da 4ª data.
 
+## Portal de acompanhamento indicado pelo usuário
+- `https://loterias.caixa.gov.br/Paginas/Programacao-Loteca.aspx` — programação do concurso corrente.
+- `https://loterias.caixa.gov.br/Paginas/default.aspx` — página inicial de Loterias CAIXA, resultado mais recente de cada modalidade em HTML legível. Confirmado: mostra o concurso 1271 da Loteca (time, placar, coluna) igual ao que a API devolve, mais a estimativa de prêmio do próximo concurso e links para outras páginas do portal (Sorteios, Circulares e Relatórios, Notícias, Repasses Sociais).
+
+Registradas como canais oficiais de acompanhamento do projeto, junto com o endpoint JSON já decidido como fonte primária — ver `README.md`.
+
 ## Impacto no projeto
 Novo requisito de modelagem: distinguir clube de seleção nacional. Prazo de aposta atualizado para 15h. Datas da Copa da Loteca 2026 completas para uso como período de teste do importador.

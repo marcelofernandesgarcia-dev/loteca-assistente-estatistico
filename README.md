@@ -15,6 +15,7 @@ Projeto pessoal, sem vínculo institucional. Ver `CLAUDE.md`.
   - Sugestões de melhoria sobre as bases já marcadas pelo usuário.
 - **Plataforma:** aplicativo web (site/painel), acessível de qualquer computador ou tablet do balcão da lotérica.
 - **Fonte de dados dos concursos:** decidida e testada — endpoint não-oficial da CAIXA, ver `docs/pesquisa-fontes-dados.md`.
+- **Canais oficiais de acompanhamento:** https://loterias.caixa.gov.br/Paginas/Programacao-Loteca.aspx (programação do concurso corrente) e https://loterias.caixa.gov.br/Paginas/default.aspx (resultado mais recente em HTML, verificação cruzada humana da API).
 
 ## Status atual
 
