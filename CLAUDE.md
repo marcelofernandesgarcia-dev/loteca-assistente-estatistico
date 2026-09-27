@@ -11,4 +11,4 @@ O assistente entrega estatística e probabilidade histórica (frequência de 1/X
 Decisões de arquitetura, pesquisa de fontes de dados e estado do projeto ficam no cofre Obsidian **Cerebro Pessoal**, área `Loteca/` (`C:\Users\marce\Cerebro Pessoal\Loteca\`). Ler o `00 - Estado Atual.md` daquela área no início de qualquer sessão futura.
 
 ## Status
-Fase de planejamento — nenhuma linha de código de produto ainda. Ver `README.md` para escopo e `docs/pesquisa-fontes-dados.md` para as fontes de dados candidatas já levantadas (não verificadas em produção).
+App local v1 funcionando (Python + SQLite + Streamlit): importador da CAIXA, motor estatístico (frequência, forma, percentual Poisson, fechamento de bolão) e camada de ajuste externo por notícias, com 4 páginas de visualização. Ver `README.md` para instalação/uso e o plano completo em `C:\Users\marce\.claude\plans\velvety-toasting-squid.md`.

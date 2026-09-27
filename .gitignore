@@ -5,3 +5,9 @@ dist/
 build/
 *.log
 .DS_Store
+__pycache__/
+*.pyc
+.pytest_cache/
+loteca.db
+.venv/
+venv/
