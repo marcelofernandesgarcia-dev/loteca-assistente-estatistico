@@ -18,7 +18,7 @@ Projeto pessoal, sem vínculo institucional. Ver `CLAUDE.md`.
 
 ## Status atual
 
-Planejamento. Fonte de dados fechada para a v1 (endpoint da CAIXA cobre concurso atual e histórico completo desde 2002, sem precisar de API externa de futebol). Regulamento oficial e benchmarks estatísticos levantados — ver `docs/regras-e-estatisticas-notebooklm.md`. Arquitetura, stack e modelo estatístico ainda não desenhados.
+Planejamento. Fonte de dados fechada para a v1 (endpoint da CAIXA cobre concurso atual e histórico completo desde 2002, sem precisar de API externa de futebol). Regulamento oficial e benchmarks estatísticos levantados — ver `docs/regras-e-estatisticas-notebooklm.md`. Metodologia estatística de referência analisada, com pendências de decisão (filtros seco/duplo/triplo e uso ou não de odds de mercado) — ver `docs/metodologia-estatistica-material-usuario.md`. Arquitetura, stack e modelo estatístico final ainda não desenhados.
 
 ## Aviso importante
 
