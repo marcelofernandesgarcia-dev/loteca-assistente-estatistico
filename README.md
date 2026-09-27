@@ -14,11 +14,11 @@ Projeto pessoal, sem vínculo institucional. Ver `CLAUDE.md`.
   - Fechamento de bolão/combinações dentro de orçamento.
   - Sugestões de melhoria sobre as bases já marcadas pelo usuário.
 - **Plataforma:** aplicativo web (site/painel), acessível de qualquer computador ou tablet do balcão da lotérica.
-- **Fonte de dados dos concursos:** ainda em pesquisa — ver `docs/pesquisa-fontes-dados.md`.
+- **Fonte de dados dos concursos:** decidida e testada — endpoint não-oficial da CAIXA, ver `docs/pesquisa-fontes-dados.md`.
 
 ## Status atual
 
-Planejamento inicial. Nenhuma arquitetura, stack ou modelo estatístico foi validado ainda. Pesquisa de fontes de dados em andamento (concursos/resultados da Loteca e desempenho dos clubes).
+Planejamento. Fonte de dados fechada para a v1 (endpoint da CAIXA cobre concurso atual e histórico completo desde 2002, sem precisar de API externa de futebol). Arquitetura, stack e modelo estatístico ainda não desenhados.
 
 ## Aviso importante
 
