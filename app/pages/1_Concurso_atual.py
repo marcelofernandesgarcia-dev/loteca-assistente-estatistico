@@ -10,6 +10,7 @@ from util import formatar_data_br, mostrar_aviso_responsabilidade, obter_conexao
 
 import config
 from importer.caixa_client import ErroImportacaoLoteca, importar_concurso
+from stats.cbf import classificacao_do_participante, resumo_curto_cbf
 from stats.fechamento import calcular
 from stats.percentual import percentual_historico
 from stats.sugestao import sugerir_marcacao
@@ -140,11 +141,16 @@ else:
         forma_casa = resumo_curto(desempenho_no_ano(conexao, j["casa_id"], ano_atual))
         forma_fora = resumo_curto(desempenho_no_ano(conexao, j["fora_id"], ano_atual))
 
+        cbf_casa = classificacao_do_participante(conexao, j["casa_id"])
+        cbf_fora = classificacao_do_participante(conexao, j["fora_id"])
+        extra_casa = f" · {resumo_curto_cbf(cbf_casa)}" if cbf_casa else ""
+        extra_fora = f" · {resumo_curto_cbf(cbf_fora)}" if cbf_fora else ""
+
         col_info, col_marca = st.columns([3, 2])
         with col_info:
             st.markdown(
-                f"**{j['num_jogo']}. {j['casa']}** ({pct['1']:.0f}% · {forma_casa}) "
-                f"x **{j['fora']}** ({pct['2']:.0f}% · {forma_fora}) — empate {pct['X']:.0f}%"
+                f"**{j['num_jogo']}. {j['casa']}** ({pct['1']:.0f}% · {forma_casa}{extra_casa}) "
+                f"x **{j['fora']}** ({pct['2']:.0f}% · {forma_fora}{extra_fora}) — empate {pct['X']:.0f}%"
             )
         with col_marca:
             escolha = st.multiselect(

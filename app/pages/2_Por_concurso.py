@@ -50,7 +50,7 @@ else:
         }
         for j in jogos
     ]
-    st.dataframe(pd.DataFrame(linhas), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
 
     premiacoes = conexao.execute(
         "SELECT faixa, pontos, ganhadores, valor_premio FROM premiacoes WHERE concurso_numero = ? ORDER BY faixa",
@@ -65,7 +65,7 @@ else:
                     for p in premiacoes
                 ]
             ),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 

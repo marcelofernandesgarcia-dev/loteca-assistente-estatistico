@@ -1,4 +1,6 @@
 """Conexão e schema do banco SQLite local. Um arquivo só, sem servidor."""
+import datetime as dt
+import shutil
 import sqlite3
 from contextlib import contextmanager
 
@@ -20,7 +22,7 @@ CREATE TABLE IF NOT EXISTS participantes (
     nome TEXT NOT NULL,
     tipo TEXT NOT NULL CHECK (tipo IN ('clube', 'selecao')),
     pais_ou_uf TEXT,
-    UNIQUE(nome, tipo)
+    UNIQUE(nome, tipo, pais_ou_uf)
 );
 
 CREATE TABLE IF NOT EXISTS jogos (
@@ -70,6 +72,75 @@ CREATE TABLE IF NOT EXISTS fatores_externos (
     sinal TEXT
 );
 
+-- Dados lidos das páginas públicas da CBF (ver docs/cbf-fonte-de-dados.md).
+-- Ficam só neste banco local (loteca.db não vai para o GitHub).
+CREATE TABLE IF NOT EXISTS cbf_times (
+    cod_time INTEGER PRIMARY KEY,
+    nome TEXT NOT NULL,
+    uf TEXT
+);
+
+CREATE TABLE IF NOT EXISTS cbf_classificacao (
+    serie TEXT NOT NULL,
+    ano INTEGER NOT NULL,
+    cod_time INTEGER NOT NULL REFERENCES cbf_times(cod_time),
+    rodada INTEGER NOT NULL,
+    posicao INTEGER,
+    pontos INTEGER,
+    jogos INTEGER,
+    vitorias INTEGER,
+    empates INTEGER,
+    derrotas INTEGER,
+    gols_pro INTEGER,
+    gols_contra INTEGER,
+    saldo INTEGER,
+    cartoes_amarelo INTEGER,
+    cartoes_vermelho INTEGER,
+    aproveitamento REAL,
+    ultimos_jogos TEXT,
+    proximo_adversario TEXT,
+    coletado_em TEXT NOT NULL,
+    PRIMARY KEY (serie, ano, cod_time, rodada)
+);
+
+CREATE TABLE IF NOT EXISTS cbf_estatisticas_time (
+    serie TEXT NOT NULL,
+    ano INTEGER NOT NULL,
+    cod_time INTEGER NOT NULL REFERENCES cbf_times(cod_time),
+    jogos_disputados INTEGER,
+    gols_feitos INTEGER,
+    gols_sofridos INTEGER,
+    jogos_sem_sofrer_gol INTEGER,
+    cartoes_amarelos INTEGER,
+    cartoes_vermelhos INTEGER,
+    coletado_em TEXT NOT NULL,
+    PRIMARY KEY (serie, ano, cod_time)
+);
+
+CREATE TABLE IF NOT EXISTS cbf_partidas (
+    id_jogo INTEGER PRIMARY KEY,
+    serie TEXT NOT NULL,
+    ano INTEGER NOT NULL,
+    rodada INTEGER,
+    data_jogo TEXT,
+    hora TEXT,
+    local TEXT,
+    mandante_id INTEGER NOT NULL,
+    visitante_id INTEGER NOT NULL,
+    gols_mandante INTEGER,
+    gols_visitante INTEGER,
+    penaltis_mandante INTEGER,
+    penaltis_visitante INTEGER,
+    coletado_em TEXT NOT NULL
+);
+
+-- Pareamento entre participante da Loteca e time da CBF (só clubes brasileiros).
+CREATE TABLE IF NOT EXISTS mapa_cbf_participante (
+    participante_id INTEGER PRIMARY KEY REFERENCES participantes(id),
+    cod_time INTEGER NOT NULL REFERENCES cbf_times(cod_time),
+    metodo TEXT NOT NULL
+);
+
 -- Bootstrap: histórico agregado 1/X/2 do dataset aberto ValorFinal (sem nome de time).
 -- Serve só para a frequência global até o importador da CAIXA preencher `jogos`.
 CREATE TABLE IF NOT EXISTS historico_valorfinal (
@@ -88,9 +159,37 @@ def conectar() -> sqlite3.Connection:
     return conexao
 
 
+def _precisa_migrar_participantes(conexao: sqlite3.Connection) -> bool:
+    linha = conexao.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'participantes'"
+    ).fetchone()
+    return bool(linha) and "UNIQUE(nome, tipo, pais_ou_uf)" not in linha["sql"]
+
+
+def _migrar_participantes(conexao: sqlite3.Connection) -> None:
+    """Versões antigas tratavam 'ATLETICO' (MG) e 'ATLETICO' (GO) como o mesmo
+    participante, misturando estatísticas. Recria as tabelas que dependem de
+    participante; os jogos são reimportados da CAIXA (o banco é cache
+    regenerável). `concursos` e `premiacoes` ficam."""
+    for tabela in ("percentuais", "fatores_externos", "mapa_cbf_participante", "jogos", "participantes"):
+        conexao.execute(f"DROP TABLE IF EXISTS {tabela}")
+
+
 def inicializar_schema() -> None:
-    with conectar() as conexao:
+    conexao = conectar()
+    try:
+        if _precisa_migrar_participantes(conexao):
+            conexao.close()
+            copia = config.DB_PATH.with_name(
+                f"{config.DB_PATH.name}.bak-{dt.datetime.now().strftime('%Y%m%d-%H%M%S')}"
+            )
+            shutil.copy2(config.DB_PATH, copia)
+            conexao = conectar()
+            _migrar_participantes(conexao)
         conexao.executescript(SCHEMA)
+        conexao.commit()
+    finally:
+        conexao.close()
 
 
 @contextmanager
@@ -105,7 +204,8 @@ def sessao():
 
 def obter_ou_criar_participante(conexao: sqlite3.Connection, nome: str, tipo: str, pais_ou_uf: str | None = None) -> int:
     linha = conexao.execute(
-        "SELECT id FROM participantes WHERE nome = ? AND tipo = ?", (nome, tipo)
+        "SELECT id FROM participantes WHERE nome = ? AND tipo = ? AND pais_ou_uf IS ?",
+        (nome, tipo, pais_ou_uf),
     ).fetchone()
     if linha:
         return linha["id"]

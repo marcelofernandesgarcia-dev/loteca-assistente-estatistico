@@ -1,3 +1,4 @@
+import datetime as dt
 import sys
 from pathlib import Path
 
@@ -8,6 +9,11 @@ import plotly.graph_objects as go
 import streamlit as st
 from util import formatar_data_br, mostrar_aviso_responsabilidade, obter_conexao
 
+from stats.cbf import (
+    classificacao_do_participante,
+    estatisticas_do_participante,
+    partidas_do_participante,
+)
 from stats.desempenho import (
     aproveitamento_casa_fora,
     contagem_por_resultado,
@@ -42,6 +48,56 @@ if not participantes:
 opcoes = {f"{p['nome']} ({p['tipo']})": p["id"] for p in participantes}
 escolha = st.selectbox("Participante (clube ou seleção)", list(opcoes.keys()))
 participante_id = opcoes[escolha]
+
+
+# Classificação e calendário oficiais (CBF) -- só clubes das Séries A e B
+classif = classificacao_do_participante(conexao, participante_id)
+st.subheader("Classificação oficial (CBF)")
+if classif is None:
+    st.caption(
+        "Sem dado da CBF para este participante -- só clubes das Séries A e B do Brasileirão são coletados "
+        "(atualize com scripts/coleta_cbf.py)."
+    )
+else:
+    serie = {"serie-a": "Série A", "serie-b": "Série B"}.get(classif["serie"], classif["serie"])
+    est = estatisticas_do_participante(conexao, participante_id) or {}
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    c1.metric(f"Posição ({serie})", f"{classif['posicao']}º")
+    c2.metric("Pontos", classif["pontos"])
+    c3.metric("Aproveitamento", f"{(classif['aproveitamento'] or 0):.0f}%")
+    c4.metric("V-E-D", f"{classif['vitorias']}-{classif['empates']}-{classif['derrotas']}")
+    c5.metric("Gols (pró / contra)", f"{classif['gols_pro']} / {classif['gols_contra']}", delta=f"saldo {classif['saldo']:+d}")
+    c6.metric("Jogos sem sofrer gol", est.get("jogos_sem_sofrer_gol", "-"))
+    ultimos = (classif.get("ultimos_jogos") or "").replace(",", " ") or "-"
+    st.write(
+        f"Últimos jogos: **{ultimos}** · Cartões: {classif['cartoes_amarelo']} amarelos, "
+        f"{classif['cartoes_vermelho']} vermelhos · Próximo adversário: {classif.get('proximo_adversario') or '-'}"
+    )
+    coletado = dt.datetime.fromisoformat(classif["coletado_em"]).strftime("%d/%m/%Y %H:%M")
+    st.caption(
+        f"Fonte: páginas públicas da CBF ({serie} {classif['ano']}, após a rodada {classif['rodada']}); coletado em {coletado}. "
+        "Dado guardado só neste computador."
+    )
+    with st.expander("Calendário e resultados da temporada (CBF)"):
+        partidas = partidas_do_participante(conexao, participante_id)
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        "Rodada": x["rodada"],
+                        "Data": formatar_data_br(x["data"]),
+                        "Hora": x["hora"] or "-",
+                        "Mando": x["mando"],
+                        "Adversário": x["adversario"],
+                        "Placar (feitos x sofridos)": f"{x['gols_feitos']} x {x['gols_sofridos']}" if x["realizada"] else "a jogar",
+                        "Local": x["local"] or "-",
+                    }
+                    for x in partidas
+                ]
+            ),
+            width="stretch",
+            hide_index=True,
+        )
 
 # Filtros -- aplicam-se a KPIs, gauges, contagem, insight e tabela
 anos_disponiveis = [
@@ -109,8 +165,8 @@ else:
         figura.update_layout(height=220, margin=dict(l=20, r=20, t=50, b=10))
         return figura
 
-    g1.plotly_chart(_gauge(aproveitamento["casa"], "Em casa", aproveitamento["jogos_casa"]), use_container_width=True)
-    g2.plotly_chart(_gauge(aproveitamento["fora"], "Fora de casa", aproveitamento["jogos_fora"]), use_container_width=True)
+    g1.plotly_chart(_gauge(aproveitamento["casa"], "Em casa", aproveitamento["jogos_casa"]), width="stretch")
+    g2.plotly_chart(_gauge(aproveitamento["fora"], "Fora de casa", aproveitamento["jogos_fora"]), width="stretch")
 
     # 4. Contagem por resultado (barra empilhada horizontal)
     st.subheader("Contagem por resultado")
@@ -123,7 +179,7 @@ else:
             )
         )
     barra.update_layout(barmode="stack", height=120, margin=dict(l=0, r=0, t=10, b=10), xaxis=dict(range=[0, 100], showticklabels=False))
-    st.plotly_chart(barra, use_container_width=True)
+    st.plotly_chart(barra, width="stretch")
 
     # 5. Tendência por ano (combo barra + linha)
     st.subheader("Tendência por ano")
@@ -142,7 +198,7 @@ else:
             yaxis2=dict(title="Jogos", overlaying="y", side="right"),
             legend=dict(orientation="h"),
         )
-        st.plotly_chart(combo, use_container_width=True)
+        st.plotly_chart(combo, width="stretch")
     else:
         st.caption("Ainda sem jogos datados suficientes para montar a tendência.")
 
@@ -196,7 +252,7 @@ if jogos:
                 "Campeonato": j["campeonato"] or "-",
             }
         )
-    st.dataframe(pd.DataFrame(linhas_tabela), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(linhas_tabela), width="stretch", hide_index=True)
     st.caption(f"Total: {len(jogos)} jogos · {total_feitos} gols feitos · {total_sofridos} gols sofridos.")
 else:
     st.caption("Nenhum jogo com esses filtros.")
@@ -234,7 +290,7 @@ if fatores:
                 for f in fatores
             ]
         ),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 else:

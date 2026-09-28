@@ -8,6 +8,6 @@ build/
 __pycache__/
 *.pyc
 .pytest_cache/
-loteca.db
+loteca.db*
 .venv/
 venv/

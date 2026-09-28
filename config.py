@@ -14,6 +14,25 @@ CAIXA_MAX_REQUISICOES_PARALELAS = int(os.environ.get("LOTECA_MAX_PARALELO", "2")
 CAIXA_REQUEST_TIMEOUT_SEGUNDOS = 15
 CAIXA_USER_AGENT = "Mozilla/5.0"
 
+# CBF -- páginas públicas do site (não há API documentada; ver docs/cbf-fonte-de-dados.md).
+# Decisão do usuário em 27/09/2026: acessar o portal como um usuário comum, em
+# agendamento, uso local. Os termos de uso da CBF (item 6) vedam uso não
+# autorizado do conteúdo -- o risco é do usuário; por isso: baixa frequência,
+# intervalo entre chamadas, nada de dado da CBF no GitHub, e chave para desligar.
+CBF_HABILITADO = os.environ.get("LOTECA_CBF_HABILITADO", "1") == "1"
+CBF_BASE_URL = "https://www.cbf.com.br"
+CBF_COMPETICOES = [
+    # (campeonato, serie, ano)
+    ("campeonato-brasileiro", "serie-a", 2026),
+    ("campeonato-brasileiro", "serie-b", 2026),
+]
+CBF_INTERVALO_SEGUNDOS = float(os.environ.get("LOTECA_CBF_INTERVALO_S", "2.0"))
+CBF_TIMEOUT_SEGUNDOS = 30
+CBF_VALIDADE_HORAS = int(os.environ.get("LOTECA_CBF_VALIDADE_H", "20"))
+CBF_USER_AGENT = "Mozilla/5.0 (compatible; LotecaAssistenteLocal/1.0; uso pessoal)"
+# Palavras que não ajudam a comparar nome de time da CBF com o da Loteca
+CBF_TOKENS_IGNORADOS = {"SAF", "FC", "S", "A", "F", "DE", "DA", "DO", "EC"}
+
 # Regras de apuração (ver docs/manual-produtos-caixa-v21.md, item 10)
 # Concurso mais antigo confirmado na API é o nº 1 (18/02/2002).
 PRIMEIRO_CONCURSO = 1
@@ -54,6 +73,17 @@ NOMES_SELECOES_NACIONAIS = {
     "EMIRADOS ARABES",
 }
 VARREDURA_DIAS_ANTES_DO_PRAZO = int(os.environ.get("LOTECA_VARREDURA_DIAS_ANTES", "2"))
+
+# Veículos prioritários do monitoramento de notícias (lista indicada pelo
+# usuário em 27/09/2026). Só os que têm site de notícias entram; TV
+# (Globo, Premiere, BandSports) e YouTube não são fonte de dado aqui.
+NOTICIAS_FONTES_PRIORITARIAS = [
+    ("ge.globo.com", "ge (Globo/SporTV)"),
+    ("espn.com.br", "ESPN Brasil"),
+]
+NOTICIAS_JANELA_DIAS = int(os.environ.get("LOTECA_NOTICIAS_JANELA_DIAS", "10"))
+NOTICIAS_MAX_ITENS_POR_FONTE = 6
+NOTICIAS_INTERVALO_SEGUNDOS = float(os.environ.get("LOTECA_NOTICIAS_INTERVALO_S", "0.5"))
 
 # Palavra-chave encontrada no título/resumo da notícia -> sinal estruturado
 # (chave de AJUSTE_EXTERNO_PESOS). Heurística por palavra-chave, não por

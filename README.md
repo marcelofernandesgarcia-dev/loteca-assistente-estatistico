@@ -39,11 +39,24 @@ with db.sessao() as conexao:
 
 - `importer/` — cliente da API da CAIXA (rate-limited, incremental) e bootstrap do dataset ValorFinal.
 - `stats/` — regra de negócio pura: cálculo de resultado, frequência, forma, percentual histórico (Poisson), sugestão seco/duplo/triplo, desempenho no ano, painel de desempenho por time (`desempenho.py`), fechamento de bolão.
-- `externo/` — varredura semanal de notícias (RSS público, sem chave de API) e cálculo do ajuste externo limitado.
+- `externo/` — varredura semanal de notícias (RSS público, sem chave de API; janela de 10 dias; veículos prioritários ge/Globo-SporTV e ESPN Brasil, ver `docs/fontes-de-noticias.md`) e cálculo do ajuste externo limitado.
+- `importer/cbf_client.py`, `importer/cbf_mapeamento.py`, `stats/cbf.py`, `scripts/coleta_cbf.py` — leitura das páginas públicas da CBF, pareamento com os times da Loteca (UF + nome) e consultas.
 - `app/` — páginas Streamlit (Concurso atual com 3 cards, Por concurso, Por time como painel com gráficos, Fechamento de bolão), sem lógica de negócio própria.
 - `tests/` — pytest para `stats/`, `externo/` e um teste de integração leve contra a API real.
 - `scripts/varredura_semanal.py` — ponto de entrada para o Agendador de Tarefas do Windows.
 - `config.py` — todos os parâmetros (rate-limit, pesos do ajuste externo, janela de forma, lista de seleções nacionais).
+
+## Dados oficiais da CBF (Séries A e B)
+
+A CBF não tem API pública documentada; o app lê as **páginas públicas** (classificação, estatísticas e jogos de cada time) como um usuário comum, com intervalo de 2 s entre páginas e sem repetir a coleta em menos de 20 h. Os termos de uso da CBF vedam uso não autorizado do conteúdo -- o uso foi decisão e risco do usuário (ver `docs/cbf-fonte-de-dados.md`). Os dados ficam só no banco local; nada da CBF vai ao GitHub. Para desligar: `LOTECA_CBF_HABILITADO=0`.
+
+Coletar agora: `.venv\Scripts\python scripts\coleta_cbf.py` (`--forcar` ignora a validade de 20 h).
+
+Agendar (você mesmo cria; o Claude não altera configuração do sistema) -- segunda, quinta e sexta às 07:30:
+
+```
+schtasks /Create /SC WEEKLY /D MON,THU,FRI /ST 07:30 /TN "Loteca - Coleta CBF" /TR "C:\Users\marce\Projetos\loteca-assistente-estatistico\.venv\Scripts\python.exe C:\Users\marce\Projetos\loteca-assistente-estatistico\scripts\coleta_cbf.py"
+```
 
 ## Varredura semanal de notícias (ajuste externo)
 
