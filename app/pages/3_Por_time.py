@@ -20,7 +20,10 @@ from stats.cbf import (
 from stats.competicao import (
     aproveitamento_movel,
     carregar_partidas,
+    comparar_com_liga,
+    disciplina_da_liga,
     evolucao_do_time,
+    forca_do_calendario,
     frases_visao_geral,
     gols_com_media_movel,
     jogos_do_time,
@@ -431,6 +434,94 @@ def renderizar_ataque_defesa_mando(jogos_time, partidas_liga, nomes):
     )
 
 
+ROTULOS_METRICAS = {
+    "aproveitamento": ("Aproveitamento", "%", False),
+    "ataque": ("Gols marcados por jogo", "", False),
+    "defesa": ("Gols sofridos por jogo", "", True),
+    "saldo_por_jogo": ("Saldo de gols por jogo", "", False),
+    "aproveitamento_casa": ("Aproveitamento em casa", "%", False),
+    "aproveitamento_fora": ("Aproveitamento fora de casa", "%", False),
+    "cartoes_por_jogo": ("Cartões por jogo", "", True),
+}
+EIXOS_RADAR = ("aproveitamento", "ataque", "defesa", "aproveitamento_casa", "aproveitamento_fora")
+NOMES_GRUPO = {"fortes": "Adversários fortes", "medios": "Adversários médios", "fracos": "Adversários fracos"}
+
+
+def renderizar_comparacao_liga(comparacao, calendario):
+    if not comparacao:
+        st.info("Sem jogos suficientes para comparar com a série.")
+        return
+    total = comparacao["aproveitamento"]["de"]
+    st.markdown("**Posição do time entre os da série**")
+    st.caption(
+        f"Cada linha compara o time com os {total} clubes da série. Posição 1 = melhor; em gols sofridos e cartões, "
+        "menos é melhor. O gráfico usa o percentil (100 = melhor da série, 50 = meio da tabela)."
+    )
+    eixos = [e for e in EIXOS_RADAR if e in comparacao]
+    if len(eixos) >= 3:
+        rotulos = ["Defesa (poucos gols sofridos)" if e == "defesa" else ROTULOS_METRICAS[e][0] for e in eixos]
+        valores = [comparacao[e]["percentil"] for e in eixos]
+        radar = go.Figure()
+        radar.add_trace(go.Scatterpolar(r=valores + valores[:1], theta=rotulos + rotulos[:1], fill="toself", name="Este time",
+                                        line=dict(color=AZUL), marker=dict(symbol="circle")))
+        radar.add_trace(go.Scatterpolar(r=[50] * (len(eixos) + 1), theta=rotulos + rotulos[:1], name="Meio da série (50)",
+                                        line=dict(color=CINZA, dash="dash")))
+        radar.update_layout(height=380, margin=dict(l=40, r=40, t=20, b=20), polar=dict(radialaxis=dict(range=[0, 100])),
+                            legend=dict(orientation="h"))
+        st.plotly_chart(radar, width="stretch")
+    linhas = []
+    for chave, (rotulo, unidade, _) in ROTULOS_METRICAS.items():
+        if chave not in comparacao:
+            continue
+        r = comparacao[chave]
+        sufixo = "%" if unidade == "%" else ""
+        linhas.append(
+            {
+                "Indicador": rotulo, "Este time": f"{r['valor']:.2f}{sufixo}", "Média da série": f"{r['media_da_serie']:.2f}{sufixo}",
+                "Posição": f"{r['posicao']}º de {r['de']}", "Percentil": round(r["percentil"]),
+            }
+        )
+    st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
+
+    st.markdown("**Força do calendário já enfrentado**")
+    if not calendario:
+        st.caption("Sem jogos suficientes para avaliar o calendário.")
+        return
+    diferenca = calendario["forca_media_adversarios"] - calendario["forca_media_da_serie"]
+    if abs(diferenca) < 2:
+        leitura = "dificuldade próxima da média"
+    else:
+        leitura = "adversários mais fortes que a média" if diferenca > 0 else "adversários mais fracos que a média"
+    st.caption(
+        f"Os adversários enfrentados somam {calendario['forca_media_adversarios']:.1f}% de aproveitamento médio "
+        f"(média da série: {calendario['forca_media_da_serie']:.1f}%): {leitura}. Calendário {calendario['posicao_dificuldade']}º "
+        f"mais difícil entre {calendario['times_comparados']} (1º = mais difícil). O aproveitamento de cada adversário não "
+        "conta o jogo contra este time. A temporada ainda está em andamento, então a força dos adversários muda a cada rodada."
+    )
+    grupos = calendario["grupos"]
+    barras = go.Figure()
+    nomes_grupo = [NOMES_GRUPO[g] for g in grupos]
+    valores = [grupos[g]["aproveitamento"] or 0 for g in grupos]
+    barras.add_trace(go.Bar(x=nomes_grupo, y=valores, marker_color=AZUL, name="Aproveitamento",
+                            text=[f"{v:.0f}% em {grupos[g]['jogos']} jogos" for v, g in zip(valores, grupos)], textposition="outside"))
+    barras.update_layout(height=300, margin=dict(l=10, r=10, t=10, b=10), yaxis=dict(title="Aproveitamento (%)", range=[0, 115]))
+    st.plotly_chart(barras, width="stretch")
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {"Grupo": NOMES_GRUPO[g], "Jogos": r["jogos"], "V": r["vitorias"], "E": r["empates"], "D": r["derrotas"],
+                 "Pontos": r["pontos"], "Aproveitamento (%)": round(r["aproveitamento"], 1) if r["aproveitamento"] is not None else None}
+                for g, r in grupos.items()
+            ]
+        ),
+        width="stretch", hide_index=True,
+    )
+    st.caption(
+        "Fortes, médios e fracos são os terços da série ordenados pelo aproveitamento (o terço de cima, o do meio e o de baixo). "
+        "Não é uma previsão: mostra contra quem o time já pontuou."
+    )
+
+
 def _figura_base(titulo_y: str, altura: int = 300):
     figura = go.Figure()
     figura.update_layout(
@@ -560,8 +651,8 @@ if contexto:
             "defasados; a classificação oficial está na aba 'Visão geral'."
         )
 
-aba_visao, aba_evolucao, aba_jogos, aba_ataque, aba_loteca = st.tabs(
-    ["Visão geral", "Evolução na competição", "Jogo a jogo", "Ataque, defesa e mando", "Na Loteca"]
+aba_visao, aba_evolucao, aba_jogos, aba_ataque, aba_liga, aba_loteca = st.tabs(
+    ["Visão geral", "Evolução na competição", "Jogo a jogo", "Ataque, defesa e mando", "Comparação com a liga", "Na Loteca"]
 )
 nomes = nomes_dos_times(conexao)
 
@@ -599,6 +690,15 @@ with aba_ataque:
         renderizar_ataque_defesa_mando(jogos_time, partidas_liga, nomes)
     else:
         st.info("Ataque, defesa e mando por temporada existem para clubes das Séries A e B. Para os demais, veja a aba 'Na Loteca'.")
+
+with aba_liga:
+    if jogos_time:
+        renderizar_comparacao_liga(
+            comparar_com_liga(partidas_liga, cod_time, disciplina_da_liga(conexao, serie_time, ano_time)),
+            forca_do_calendario(partidas_liga, cod_time),
+        )
+    else:
+        st.info("A comparação com a série existe para clubes das Séries A e B. Para os demais, veja a aba 'Na Loteca'.")
 
 with aba_loteca:
     renderizar_aba_loteca(conexao, participante_id)

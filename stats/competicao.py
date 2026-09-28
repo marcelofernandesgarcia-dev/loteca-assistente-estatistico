@@ -390,3 +390,166 @@ def gols_com_media_movel(jogos: list[dict], janela: int | None = None) -> list[d
             }
         )
     return linhas
+
+
+def _pontos(gols_pro: int, gols_contra: int) -> int:
+    if gols_pro > gols_contra:
+        return PONTOS_VITORIA
+    return PONTOS_EMPATE if gols_pro == gols_contra else 0
+
+
+def metricas_por_time(partidas: list[dict]) -> dict[int, dict]:
+    """Métricas de cada time da série com ao menos um jogo. Aproveitamento em
+    casa/fora fica None quando o time ainda não jogou nesse mando."""
+    brutos = defaultdict(lambda: {"jogos": 0, "pontos": 0, "gp": 0, "gc": 0,
+                                  "jogos_casa": 0, "pontos_casa": 0, "jogos_fora": 0, "pontos_fora": 0})
+    for p in partidas:
+        for cod, pro, contra, casa in (
+            (p["mandante_id"], p["gols_mandante"], p["gols_visitante"], True),
+            (p["visitante_id"], p["gols_visitante"], p["gols_mandante"], False),
+        ):
+            b = brutos[cod]
+            pontos = _pontos(pro, contra)
+            b["jogos"] += 1
+            b["pontos"] += pontos
+            b["gp"] += pro
+            b["gc"] += contra
+            b["jogos_casa" if casa else "jogos_fora"] += 1
+            b["pontos_casa" if casa else "pontos_fora"] += pontos
+
+    def aprov(pontos, jogos):
+        return 100.0 * pontos / (PONTOS_VITORIA * jogos) if jogos else None
+
+    return {
+        cod: {
+            "jogos": b["jogos"],
+            "aproveitamento": aprov(b["pontos"], b["jogos"]),
+            "ataque": b["gp"] / b["jogos"],
+            "defesa": b["gc"] / b["jogos"],
+            "saldo_por_jogo": (b["gp"] - b["gc"]) / b["jogos"],
+            "aproveitamento_casa": aprov(b["pontos_casa"], b["jogos_casa"]),
+            "aproveitamento_fora": aprov(b["pontos_fora"], b["jogos_fora"]),
+        }
+        for cod, b in brutos.items()
+    }
+
+
+def posicao_no_ranking(valores: dict[int, float | None], cod_time: int, menor_e_melhor: bool = False) -> dict | None:
+    """Posição (1 = melhor) do time entre os que têm valor. Empates dividem a
+    mesma posição. `percentil` vai de 0 (pior) a 100 (melhor)."""
+    validos = {cod: v for cod, v in valores.items() if v is not None}
+    if cod_time not in validos:
+        return None
+    meu = validos[cod_time]
+    melhores = sum(1 for v in validos.values() if (v < meu if menor_e_melhor else v > meu))
+    total = len(validos)
+    return {
+        "posicao": melhores + 1,
+        "de": total,
+        "percentil": 100.0 * (total - 1 - melhores) / (total - 1) if total > 1 else 100.0,
+        "valor": meu,
+        "media_da_serie": sum(validos.values()) / total,
+    }
+
+
+def comparar_com_liga(partidas: list[dict], cod_time: int, cartoes_por_jogo: dict[int, float] | None = None) -> dict:
+    """Posição do time entre os da série em cada métrica. Em `defesa` e
+    `cartoes_por_jogo`, menos é melhor."""
+    metricas = metricas_por_time(partidas)
+    resultado = {}
+    for nome, menor in (("aproveitamento", False), ("ataque", False), ("defesa", True), ("saldo_por_jogo", False),
+                        ("aproveitamento_casa", False), ("aproveitamento_fora", False)):
+        ranking = posicao_no_ranking({c: m[nome] for c, m in metricas.items()}, cod_time, menor)
+        if ranking:
+            resultado[nome] = ranking
+    if cartoes_por_jogo:
+        ranking = posicao_no_ranking(cartoes_por_jogo, cod_time, True)
+        if ranking:
+            resultado["cartoes_por_jogo"] = ranking
+    return resultado
+
+
+def disciplina_da_liga(conexao, serie: str, ano: int) -> dict[int, float]:
+    """Cartões (amarelos + vermelhos) por jogo de cada time, da estatística da CBF."""
+    linhas = conexao.execute(
+        """
+        SELECT cod_time, jogos_disputados, cartoes_amarelos, cartoes_vermelhos FROM cbf_estatisticas_time
+        WHERE serie = ? AND ano = ? AND jogos_disputados > 0
+        """,
+        (serie, ano),
+    )
+    return {
+        linha["cod_time"]: ((linha["cartoes_amarelos"] or 0) + (linha["cartoes_vermelhos"] or 0)) / linha["jogos_disputados"]
+        for linha in linhas
+    }
+
+
+def _forcas_sem(partidas: list[dict], excluido: int) -> dict[int, float]:
+    """Aproveitamento de cada time, sem contar os jogos contra `excluido` (para
+    a força do adversário não depender do resultado contra o próprio time)."""
+    pontos, jogos = defaultdict(int), defaultdict(int)
+    for p in partidas:
+        if excluido in (p["mandante_id"], p["visitante_id"]):
+            continue
+        for cod, pro, contra in ((p["mandante_id"], p["gols_mandante"], p["gols_visitante"]),
+                                 (p["visitante_id"], p["gols_visitante"], p["gols_mandante"])):
+            pontos[cod] += _pontos(pro, contra)
+            jogos[cod] += 1
+    return {cod: 100.0 * pontos[cod] / (PONTOS_VITORIA * jogos[cod]) for cod in jogos}
+
+
+def _forca_media_dos_adversarios(partidas: list[dict], cod_time: int) -> tuple[float, dict[int, float]] | None:
+    forcas = _forcas_sem(partidas, cod_time)
+    enfrentados = []
+    for p in partidas:
+        if cod_time == p["mandante_id"]:
+            enfrentados.append(p["visitante_id"])
+        elif cod_time == p["visitante_id"]:
+            enfrentados.append(p["mandante_id"])
+    enfrentados = [o for o in enfrentados if o in forcas]
+    if not enfrentados:
+        return None
+    return sum(forcas[o] for o in enfrentados) / len(enfrentados), forcas
+
+
+def forca_do_calendario(partidas: list[dict], cod_time: int) -> dict | None:
+    """Resultados do time contra adversários fortes, médios e fracos (tercis do
+    aproveitamento dos adversários, sem contar os jogos contra o próprio time) e
+    a dificuldade média do calendário já enfrentado, comparada à dos outros
+    times (posição 1 = calendário mais difícil)."""
+    calculo = _forca_media_dos_adversarios(partidas, cod_time)
+    if calculo is None:
+        return None
+    forca_media, forcas = calculo
+
+    ordenados = sorted(forcas, key=lambda cod: (-forcas[cod], cod))
+    k = len(ordenados) // 3
+    grupo_de = {cod: "fortes" for cod in ordenados[:k]}
+    grupo_de.update({cod: "fracos" for cod in ordenados[len(ordenados) - k:]} if k else {})
+    for cod in ordenados:
+        grupo_de.setdefault(cod, "medios")
+
+    grupos = {nome: {"jogos": 0, "vitorias": 0, "empates": 0, "derrotas": 0, "pontos": 0} for nome in ("fortes", "medios", "fracos")}
+    for jogo in jogos_do_time(partidas, cod_time):
+        grupo = grupos.get(grupo_de.get(jogo["adversario_id"], ""))
+        if grupo is None:
+            continue
+        grupo["jogos"] += 1
+        grupo["pontos"] += jogo["pontos"]
+        grupo[{"V": "vitorias", "E": "empates", "D": "derrotas"}[jogo["resultado"]]] += 1
+    for grupo in grupos.values():
+        grupo["aproveitamento"] = 100.0 * grupo["pontos"] / (PONTOS_VITORIA * grupo["jogos"]) if grupo["jogos"] else None
+
+    todos = {}
+    for cod in {p["mandante_id"] for p in partidas} | {p["visitante_id"] for p in partidas}:
+        medio = _forca_media_dos_adversarios(partidas, cod)
+        if medio:
+            todos[cod] = medio[0]
+    dificuldade = posicao_no_ranking(todos, cod_time)  # posicao 1 = adversários mais fortes
+    return {
+        "forca_media_adversarios": forca_media,
+        "forca_media_da_serie": sum(todos.values()) / len(todos) if todos else None,
+        "posicao_dificuldade": dificuldade["posicao"] if dificuldade else None,
+        "times_comparados": dificuldade["de"] if dificuldade else None,
+        "grupos": grupos,
+    }

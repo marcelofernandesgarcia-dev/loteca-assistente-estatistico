@@ -256,3 +256,73 @@ def test_gols_com_media_movel_so_apos_encher_a_janela():
     assert linhas[0]["pro_movel"] is None
     assert linhas[1]["pro_movel"] == pytest.approx(1.0) and linhas[1]["contra_movel"] == pytest.approx(0.0)
     assert linhas[3]["pro_movel"] == pytest.approx(2.5) and linhas[3]["contra_movel"] == pytest.approx(2.0)
+
+
+from stats.competicao import (  # noqa: E402
+    comparar_com_liga,
+    disciplina_da_liga,
+    forca_do_calendario,
+    metricas_por_time,
+    posicao_no_ranking,
+)
+
+# Liga sintética de 4 times, turno único (números conferidos à mão):
+# A 9 pts (gp 6, gc 1) · D 4 pts (gp 4, gc 4) · C 2 pts (gp 2, gc 3) · B 1 pt (gp 1, gc 5)
+LIGA = [
+    _p(1, A, B, 2, 0), _p(1, C, D, 1, 1),
+    _p(2, A, C, 1, 0), _p(2, B, D, 0, 2),
+    _p(3, A, D, 3, 1), _p(3, B, C, 1, 1),
+]
+
+
+def test_metricas_por_time():
+    m = metricas_por_time(LIGA)
+    assert m[A]["aproveitamento"] == pytest.approx(100.0) and m[A]["ataque"] == pytest.approx(2.0)
+    assert m[B]["defesa"] == pytest.approx(5 / 3) and m[D]["aproveitamento"] == pytest.approx(100 * 4 / 9)
+    assert m[A]["aproveitamento_fora"] is None  # A só jogou em casa
+
+
+def test_posicao_no_ranking_percentil_e_empate():
+    valores = {1: 10.0, 2: 20.0, 3: 20.0, 4: 30.0}
+    r = posicao_no_ranking(valores, 2)
+    assert (r["posicao"], r["de"]) == (2, 4) and r["percentil"] == pytest.approx(100 * 2 / 3)
+    assert posicao_no_ranking(valores, 3)["posicao"] == 2  # empate divide a posição
+    assert posicao_no_ranking(valores, 1, menor_e_melhor=True)["posicao"] == 1
+    assert posicao_no_ranking(valores, 99) is None
+    assert posicao_no_ranking({1: 5.0}, 1)["percentil"] == 100.0
+
+
+def test_comparar_com_liga_defesa_menor_e_melhor_e_time_sem_mando_fica_de_fora():
+    a = comparar_com_liga(LIGA, A)
+    assert a["aproveitamento"]["posicao"] == 1 and a["ataque"]["posicao"] == 1 and a["defesa"]["posicao"] == 1
+    assert "aproveitamento_fora" not in a  # A não tem jogo fora
+    c = comparar_com_liga(LIGA, C)
+    assert c["defesa"]["posicao"] == 2 and c["ataque"]["posicao"] == 3
+    b = comparar_com_liga(LIGA, B, cartoes_por_jogo={A: 2.0, B: 3.0, C: 1.0, D: 2.5})
+    assert b["cartoes_por_jogo"]["posicao"] == 4  # mais cartões = pior
+
+
+def test_forca_do_calendario_de_A():
+    f = forca_do_calendario(LIGA, A)
+    # forças sem contar jogos contra A: B 1/6, C 2/6, D 4/6 -> média 38,9
+    assert f["forca_media_adversarios"] == pytest.approx(100 * (1 / 6 + 2 / 6 + 4 / 6) / 3)
+    fortes = f["grupos"]["fortes"]
+    assert (fortes["jogos"], fortes["vitorias"], fortes["aproveitamento"]) == (1, 1, 100.0)
+    assert f["grupos"]["medios"]["jogos"] == 1 and f["grupos"]["fracos"]["jogos"] == 1
+    assert f["posicao_dificuldade"] in range(1, 5) and f["times_comparados"] == 4
+
+
+def test_forca_do_calendario_sem_jogos_devolve_none():
+    assert forca_do_calendario([], A) is None
+    assert forca_do_calendario(LIGA, 99) is None
+
+
+def test_disciplina_da_liga_le_o_banco():
+    conexao = sqlite3.connect(":memory:")
+    conexao.row_factory = sqlite3.Row
+    conexao.executescript(db.SCHEMA)
+    conexao.execute(
+        "INSERT INTO cbf_estatisticas_time (serie, ano, cod_time, jogos_disputados, cartoes_amarelos, cartoes_vermelhos, coletado_em)"
+        " VALUES ('serie-a', 2026, 1, 10, 18, 2, 'x'), ('serie-a', 2026, 2, 0, 0, 0, 'x')"
+    )
+    assert disciplina_da_liga(conexao, "serie-a", 2026) == {1: 2.0}
