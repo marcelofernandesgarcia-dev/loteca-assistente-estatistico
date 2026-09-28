@@ -19,9 +19,13 @@ else:
     numero = st.selectbox("Concurso", numeros)
 
     concurso = conexao.execute("SELECT * FROM concursos WHERE numero = ?", (numero,)).fetchone()
+    if concurso["horario_fim_apostas"] is not None:
+        prazo_texto = f"Prazo de aposta: {formatar_data_br(concurso['data_limite_aposta'])} às {concurso['horario_fim_apostas']}h"
+    else:
+        prazo_texto = f"Prazo de aposta (aproximado, dia do primeiro jogo): {formatar_data_br(concurso['data_limite_aposta'])}"
     st.caption(
         f"Apuração: {formatar_data_br(concurso['data_apuracao'])} · "
-        f"Prazo de aposta (aproximado): {formatar_data_br(concurso['data_limite_aposta'])} · "
+        f"{prazo_texto} · "
         f"Acumulou: {'sim' if concurso['acumulado'] else 'não'}"
     )
 

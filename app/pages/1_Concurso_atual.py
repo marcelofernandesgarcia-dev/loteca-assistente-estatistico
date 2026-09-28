@@ -9,10 +9,13 @@ from estilo_caixa import renderizar_cartao, renderizar_titulo_cartao
 from util import formatar_data_br, mostrar_aviso_responsabilidade, obter_conexao
 
 import config
-from importer.caixa_client import ErroImportacaoLoteca, importar_concurso
+from importer.caixa_client import ErroImportacaoLoteca, importar_concurso, importar_programacao
 from stats.cbf import classificacao_do_participante, resumo_curto_cbf
+from stats.concursos import concurso_a_jogar, ultimo_encerrado as buscar_ultimo_encerrado
+from stats.bilhete import montar_bilhete
 from stats.fechamento import calcular
 from stats.percentual import percentual_historico
+from stats.prazo import formatar_restante, situacao_do_prazo
 from stats.sugestao import sugerir_marcacao
 from stats.temporada import desempenho_no_ano, resumo_curto
 
@@ -21,11 +24,12 @@ mostrar_aviso_responsabilidade()
 
 conexao = obter_conexao()
 
-if st.button("Buscar/atualizar concurso vigente na CAIXA"):
+if st.button("Atualizar dados da CAIXA (concurso a jogar e último apurado)"):
     try:
-        numero = importar_concurso(None, conexao)
+        programados = importar_programacao(conexao)
+        apurado = importar_concurso(None, conexao)
         conexao.commit()
-        st.success(f"Concurso {numero} atualizado.")
+        st.success(f"Atualizado: concurso a jogar {', '.join(map(str, programados))}; último apurado {apurado}.")
     except ErroImportacaoLoteca as erro:
         st.error(f"Não foi possível atualizar: {erro}")
 
@@ -45,10 +49,10 @@ def _jogos_do_concurso(numero: int):
     ).fetchall()
 
 
-ultimo_encerrado = conexao.execute(
-    "SELECT DISTINCT concurso_numero FROM jogos WHERE resultado IS NOT NULL ORDER BY concurso_numero DESC LIMIT 1"
-).fetchone()
-concurso_vigente = conexao.execute("SELECT numero FROM concursos ORDER BY numero DESC LIMIT 1").fetchone()
+numero_encerrado = buscar_ultimo_encerrado(conexao)
+ultimo_encerrado = {"concurso_numero": numero_encerrado} if numero_encerrado else None
+a_jogar = concurso_a_jogar(conexao)
+concurso_vigente = a_jogar or conexao.execute("SELECT numero FROM concursos ORDER BY numero DESC LIMIT 1").fetchone()
 
 if not concurso_vigente:
     st.info("Nenhum concurso importado ainda -- clique no botão acima.")
@@ -84,10 +88,22 @@ else:
     # Card 2 -- percentual histórico do concurso vigente
     numero_vigente = concurso_vigente["numero"]
     jogos_vigente = _jogos_do_concurso(numero_vigente)
+    if a_jogar:
+        prazo = situacao_do_prazo(a_jogar["data_limite_aposta"], a_jogar["horario_fim_apostas"])
+        if prazo["limite"]:
+            hora = f" às {prazo['limite'].hour}h" if prazo["exato"] else " (dia do primeiro jogo, horário não informado)"
+            estado = formatar_restante(prazo["restante"])
+            texto = f"**Concurso {numero_vigente} (a jogar)** -- apostas até {formatar_data_br(a_jogar['data_limite_aposta'])}{hora} · {estado}"
+            (st.success if prazo["aberto"] else st.warning)(texto)
+    else:
+        st.info(
+            f"Nenhum concurso aberto encontrado; os cards 2 e 3 usam o concurso {numero_vigente} (já apurado). "
+            "Use o botão acima para buscar a programação."
+        )
     ano_atual = dt.date.today().year
 
     st.info(
-        "**2. Percentual histórico** -- para cada jogo do concurso vigente, a chance de vitória do "
+        "**2. Percentual histórico** -- para cada jogo do concurso a jogar, a chance de vitória do "
         "mandante, empate ou vitória do visitante, calculada a partir de todo o histórico de gols "
         "desse mandante e desse visitante já importado (método Poisson, sem depender de odds de "
         "mercado -- ver `stats/percentual.py`). É o dado puro, sem nenhum ajuste ou opinião ainda."
@@ -127,11 +143,27 @@ else:
         "**3. Seu bilhete** -- marque abaixo como se fosse o volante de aposta de verdade (pode marcar "
         "mais de uma coluna por jogo, igual a duplo/triplo). Ao lado de cada jogo está o percentual "
         f"histórico (card 2) e o desempenho de cada time só em {ano_atual} (o ano em curso), para você "
-        "confrontar sua marcação com o dado antes de decidir -- a marcação já vem preenchida com a "
-        "sugestão estatística (seco/duplo/triplo pelos limiares de `config.py`), mas você pode mudar "
+        "confrontar sua marcação com o dado antes de decidir -- a marcação já vem preenchida com uma "
+        "sugestão que cabe no seu orçamento e no máximo oficial do volante, mas você pode mudar "
         "qualquer jogo."
     )
     st.markdown(renderizar_titulo_cartao(f"3. Seu bilhete -- concurso {numero_vigente}"), unsafe_allow_html=True)
+
+    orcamento = st.number_input(
+        "Quanto quer gastar neste bilhete (R$)? A marcação inicial se ajusta a esse valor.",
+        min_value=4.0,
+        max_value=float(config.BILHETE_MAX_APOSTAS * 2),
+        value=config.BILHETE_ORCAMENTO_PADRAO,
+        step=2.0,
+        help="Mínimo oficial: R$ 4,00 (1 duplo). Máximo: R$ 1.728,00 (864 apostas). Cada aposta custa R$ 2,00.",
+    )
+    proposta = montar_bilhete([dados_por_jogo[j["id"]]["pct"] for j in jogos_vigente], orcamento=orcamento)
+    marcacao_inicial = {j["id"]: proposta["marcacoes"][i] for i, j in enumerate(jogos_vigente)}
+    st.caption(
+        f"Sugestão para R$ {orcamento:.2f}: {proposta['duplos']} duplo(s) e {proposta['triplos']} triplo(s), "
+        f"R$ {proposta['custo']:.2f}. Os duplos e triplos vão para os jogos em que cobrir mais uma coluna "
+        "rende mais chance por real gasto. É uma estimativa: não garante acerto."
+    )
 
     total_triplos = total_duplos = 0
     marcacoes = {}
@@ -156,8 +188,8 @@ else:
             escolha = st.multiselect(
                 "Marcação",
                 options=["1", "X", "2"],
-                default=sugestao["colunas"],
-                key=f"bilhete_{j['id']}",
+                default=marcacao_inicial[j["id"]],
+                key=f"bilhete_{j['id']}_{orcamento}",
                 label_visibility="collapsed",
             )
         marcacoes[j["id"]] = escolha or ["1"]
@@ -172,16 +204,16 @@ else:
         f"{custo['apostas']} combinações, R$ {custo['valor_reais']:.2f} "
         "(ver página 'Fechamento de bolão' para organizar como Bolão CAIXA)."
     )
-    if custo["apostas"] > 864:
+    if custo["apostas"] > config.BILHETE_MAX_APOSTAS:
         st.warning(
-            "Esse bilhete passa do máximo oficial da Loteca (864 apostas = 5 duplos + 3 triplos) -- "
-            "não seria aceito num volante de verdade. Remova algum duplo/triplo para caber no limite."
+            "Esse bilhete passa do máximo oficial da Loteca (864 apostas) -- não seria aceito num "
+            "volante de verdade. Remova algum duplo/triplo para caber no limite."
         )
+    if total_duplos + total_triplos == 0:
+        st.warning("O volante da Loteca exige ao menos 1 duplo (mínimo de R$ 4,00). Marque duas colunas em algum jogo.")
     st.caption(
-        "Marcação sugerida de partida: seco quando o favorito passa de "
-        f"{config.SUGESTAO_LIMIAR_SECO:.0f}%, duplo entre {config.SUGESTAO_LIMIAR_DUPLO:.0f}% e "
-        f"{config.SUGESTAO_LIMIAR_SECO:.0f}%, triplo abaixo disso. Ainda sem ajuste de notícias para "
-        "concursos futuros até a varredura semanal rodar."
+        "Mudar o valor do orçamento refaz a sugestão inicial (e descarta as alterações manuais). "
+        "Ainda sem ajuste de notícias para concursos futuros até a varredura semanal rodar."
     )
 
 conexao.close()

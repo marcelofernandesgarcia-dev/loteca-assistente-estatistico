@@ -111,6 +111,11 @@ VARREDURA_PALAVRAS_CHAVE_PARA_SINAL = {
 SUGESTAO_LIMIAR_SECO = float(os.environ.get("LOTECA_LIMIAR_SECO", "65.0"))
 SUGESTAO_LIMIAR_DUPLO = float(os.environ.get("LOTECA_LIMIAR_DUPLO", "45.0"))
 
+# Bilhete: máximo oficial de apostas (Manual de Produtos v21, item 6.3.3) e
+# orçamento inicial sugerido na tela (só ponto de partida; o usuário ajusta).
+BILHETE_MAX_APOSTAS = 864
+BILHETE_ORCAMENTO_PADRAO = float(os.environ.get("LOTECA_ORCAMENTO_PADRAO", "64.0"))
+
 # Forma recente -- quantidade de jogos considerados
 FORMA_JANELA_JOGOS = int(os.environ.get("LOTECA_FORMA_JANELA", "8"))
 

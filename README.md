@@ -37,8 +37,8 @@ with db.sessao() as conexao:
 
 ## Estrutura
 
-- `importer/` — cliente da API da CAIXA (rate-limited, incremental) e bootstrap do dataset ValorFinal.
-- `stats/` — regra de negócio pura: cálculo de resultado, frequência, forma, percentual histórico (Poisson), sugestão seco/duplo/triplo, desempenho no ano, painel de desempenho por time (`desempenho.py`), fechamento de bolão.
+- `importer/` — cliente da API da CAIXA (rate-limited, incremental; `/loteca` para concursos apurados e `/loteca/programacao` para o concurso a jogar, com prazo exato de apostas) e bootstrap do dataset ValorFinal.
+- `stats/` — regra de negócio pura: cálculo de resultado, frequência, forma, percentual histórico (Poisson), sugestão seco/duplo/triplo, desempenho no ano, painel de desempenho por time (`desempenho.py`), fechamento de bolão, `bilhete.py` (monta um bilhete válido: mínimo de 1 duplo, máximo oficial de 864 apostas e orçamento do usuário), `prazo.py` e `concursos.py` (qual concurso está a jogar).
 - `externo/` — varredura semanal de notícias (RSS público, sem chave de API; janela de 10 dias; veículos prioritários ge/Globo-SporTV e ESPN Brasil, ver `docs/fontes-de-noticias.md`) e cálculo do ajuste externo limitado.
 - `importer/cbf_client.py`, `importer/cbf_mapeamento.py`, `stats/cbf.py`, `scripts/coleta_cbf.py` — leitura das páginas públicas da CBF, pareamento com os times da Loteca (UF + nome) e consultas.
 - `app/` — páginas Streamlit (Concurso atual com 3 cards, Por concurso, Por time como painel com gráficos, Fechamento de bolão), sem lógica de negócio própria.

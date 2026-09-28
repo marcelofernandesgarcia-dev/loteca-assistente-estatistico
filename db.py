@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS concursos (
     numero INTEGER PRIMARY KEY,
     data_apuracao TEXT,
     data_limite_aposta TEXT,
+    horario_fim_apostas INTEGER,
     data_proximo TEXT,
     tipo TEXT NOT NULL DEFAULT 'regular',
     acumulado INTEGER,
@@ -175,6 +176,31 @@ def _migrar_participantes(conexao: sqlite3.Connection) -> None:
         conexao.execute(f"DROP TABLE IF EXISTS {tabela}")
 
 
+def _garantir_colunas(conexao: sqlite3.Connection) -> None:
+    """Bancos criados antes de uma coluna existir ganham a coluna sem perder dado."""
+    novas = {"concursos": [("horario_fim_apostas", "INTEGER")]}
+    for tabela, colunas in novas.items():
+        existentes = {linha["name"] for linha in conexao.execute(f"PRAGMA table_info({tabela})")}
+        for nome, tipo in colunas:
+            if nome not in existentes:
+                conexao.execute(f"ALTER TABLE {tabela} ADD COLUMN {nome} {tipo}")
+
+
+def limpar_participantes_orfaos(conexao: sqlite3.Connection) -> int:
+    """Remove participantes que nenhum jogo, pareamento CBF ou bilhete usa
+    mais (sobras de mudança na identidade/normalização de nomes)."""
+    cursor = conexao.execute(
+        """
+        DELETE FROM participantes
+        WHERE id NOT IN (SELECT casa_id FROM jogos UNION SELECT fora_id FROM jogos)
+          AND id NOT IN (SELECT participante_id FROM mapa_cbf_participante)
+          AND id NOT IN (SELECT participante_id FROM fatores_externos)
+          AND id NOT IN (SELECT participante_id FROM percentuais)
+        """
+    )
+    return cursor.rowcount
+
+
 def inicializar_schema() -> None:
     conexao = conectar()
     try:
@@ -187,6 +213,7 @@ def inicializar_schema() -> None:
             conexao = conectar()
             _migrar_participantes(conexao)
         conexao.executescript(SCHEMA)
+        _garantir_colunas(conexao)
         conexao.commit()
     finally:
         conexao.close()

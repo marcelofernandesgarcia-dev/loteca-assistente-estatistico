@@ -4,6 +4,7 @@ Sem dependência de framework, sem I/O -- só matemática e as regras oficiais
 da Loteca (ver docs/manual-produtos-caixa-v21.md, item 10, e
 docs/grade-real-e-prazos-confirmados.md).
 """
+import re
 import unicodedata
 
 import config
@@ -26,6 +27,26 @@ def calcular_resultado(gols_casa: int, gols_fora: int) -> str:
 def _normalizar(nome: str) -> str:
     sem_acento = unicodedata.normalize("NFKD", nome).encode("ascii", "ignore").decode("ascii")
     return sem_acento.strip().upper()
+
+
+_SUFIXO_CODIGO = re.compile(r"/[A-Za-z0-9]{2,4}$")
+
+
+def limpar_nome(nome: str) -> str:
+    """A API às vezes anexa um código ao nome ('SERVIA/SER', 'ESCOCIA/SCT').
+    Sem tirar isso, a seleção não bate com a lista de seleções e o mesmo
+    time vira participantes diferentes conforme o endpoint."""
+    return _SUFIXO_CODIGO.sub("", nome.strip())
+
+
+def identidade_participante(nome: str, sigla_uf: str | None) -> dict:
+    """Nome limpo, tipo (clube/seleção) e o que identifica o participante:
+    só a UF de clube brasileiro. Código de país NÃO entra na identidade -- o
+    endpoint da programação não o preenche e o histórico sim, o que
+    quebraria a continuidade das estatísticas do mesmo time."""
+    nome_limpo = limpar_nome(nome)
+    uf = (sigla_uf or "").strip().upper() or None
+    return {"nome": nome_limpo, "tipo": classificar_participante(nome_limpo, uf), "uf": uf}
 
 
 def classificar_participante(nome: str, sigla_uf: str | None) -> str:
