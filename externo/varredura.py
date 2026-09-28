@@ -8,13 +8,14 @@ não QUANDO; "2 dias antes do prazo" é calculado aqui a partir de
 concursos.data_limite_aposta para o script decidir se já deve rodar hoje.
 """
 import datetime as dt
+import json
 import logging
 
 import config
-from externo.ajuste import calcular_ajuste
+from externo.ajuste import calcular_ajuste, montar_evidencias
 from externo.analise import extrair_sinais
 from externo.coleta import buscar_noticias
-from stats.percentual import percentual_historico
+from externo.percentual_final import ajustes_do_concurso, percentuais_do_jogo
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +63,8 @@ def executar_para_concurso(conexao, numero_concurso: int) -> list[dict]:
 
         conexao.execute(
             """
-            INSERT INTO fatores_externos (participante_id, concurso_numero, coletado_em, resumo, fontes, ajuste_aplicado, sinal)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO fatores_externos (participante_id, concurso_numero, coletado_em, resumo, fontes, ajuste_aplicado, sinal, evidencias)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 participante["id"],
@@ -73,6 +74,7 @@ def executar_para_concurso(conexao, numero_concurso: int) -> list[dict]:
                 "; ".join(n.get("fonte", "") for n in noticias if n.get("fonte")),
                 ajuste["ajuste_aplicado"],
                 ",".join(ajuste["tipos_encontrados"]) or None,
+                json.dumps(montar_evidencias(sinais), ensure_ascii=False),
             ),
         )
         resultados.append({"participante": participante["nome"], **ajuste})
@@ -82,21 +84,18 @@ def executar_para_concurso(conexao, numero_concurso: int) -> list[dict]:
 
 
 def _recalcular_percentuais_do_concurso(conexao, numero_concurso: int, agora: str) -> None:
+    """Grava em `percentuais` o que a varredura calculou: histórico, ajuste do
+    participante e percentual final já normalizado para somar 100%."""
+    ajustes = ajustes_do_concurso(conexao, numero_concurso)
     jogos = conexao.execute(
         "SELECT id, casa_id, fora_id FROM jogos WHERE concurso_numero = ?", (numero_concurso,)
     ).fetchall()
     for jogo in jogos:
-        percentuais_hist = percentual_historico(conexao, jogo["casa_id"], jogo["fora_id"])
+        calculado = percentuais_do_jogo(conexao, jogo["casa_id"], jogo["fora_id"], ajustes)
         for participante_id, chave in ((jogo["casa_id"], "1"), (jogo["fora_id"], "2")):
-            ajuste_linha = conexao.execute(
-                "SELECT ajuste_aplicado FROM fatores_externos "
-                "WHERE participante_id = ? AND concurso_numero = ? "
-                "ORDER BY coletado_em DESC LIMIT 1",
-                (participante_id, numero_concurso),
-            ).fetchone()
-            ajuste = ajuste_linha["ajuste_aplicado"] if ajuste_linha else 0.0
-            hist = percentuais_hist[chave]
-            final = max(0.0, min(100.0, hist + ajuste))
+            ajuste = ajustes.get(participante_id, {}).get("ajuste", 0.0)
+            hist = calculado["historico"][chave]
+            final = calculado["final"][chave]
             conexao.execute(
                 """
                 INSERT INTO percentuais (jogo_id, participante_id, percentual_historico, ajuste_externo, percentual_final, calculado_em)

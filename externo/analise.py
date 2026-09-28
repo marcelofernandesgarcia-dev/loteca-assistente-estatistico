@@ -30,6 +30,7 @@ def extrair_sinais(noticias: list[dict]) -> list[dict]:
                         "sinal": tipo_sinal,
                         "evidencia": noticia["titulo"],
                         "fonte": noticia.get("fonte") or noticia.get("url", ""),
+                        "url": noticia.get("url", ""),
                     }
                 )
     return sinais

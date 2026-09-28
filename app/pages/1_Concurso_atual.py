@@ -9,17 +9,65 @@ from estilo_caixa import renderizar_cartao, renderizar_titulo_cartao
 from util import formatar_data_br, mostrar_aviso_responsabilidade, obter_conexao
 
 import config
+from externo.percentual_final import ajustes_do_concurso, percentuais_do_jogo
 from importer.caixa_client import ErroImportacaoLoteca, importar_concurso, importar_programacao
 from stats.cbf import classificacao_do_participante, resumo_curto_cbf
 from stats.concursos import concurso_a_jogar, ultimo_encerrado as buscar_ultimo_encerrado
 from stats.bilhete import montar_bilhete
 from stats.fechamento import calcular
-from stats.percentual import percentual_historico
 from stats.prazo import formatar_restante, situacao_do_prazo
 from stats.temporada import desempenho_no_ano, resumo_curto
 
 st.title("Concurso atual")
 mostrar_aviso_responsabilidade()
+
+
+def _texto_percentual(final: float, historico: float) -> str:
+    """Ex.: '58% (+2)' quando o ajuste de notícias mexeu no número; senão, só '56%'."""
+    diferenca = final - historico
+    return f"{final:.0f}%" + (f" ({diferenca:+.0f})" if abs(diferenca) >= 0.5 else "")
+
+
+def _texto_seguro(texto: str) -> str:
+    """Manchetes vêm de fora: tira caracteres que o Markdown interpretaria."""
+    limpo = "".join(c for c in (texto or "") if c not in "[]()*`<>\\")
+    return limpo.replace("_", " ")[:200]
+
+
+def _link_seguro(url: str) -> str | None:
+    if url and url.startswith(("http://", "https://")) and not any(c in url for c in " ()<>\""):
+        return url
+    return None
+
+
+def mostrar_motivos_do_ajuste(jogos, calculos):
+    com_ajuste = [j for j in jogos if calculos[j["id"]]["ajustes"]["casa"] or calculos[j["id"]]["ajustes"]["fora"]]
+    if not com_ajuste:
+        return
+    with st.expander("Por que os percentuais foram ajustados (notícias da varredura)"):
+        st.caption(
+            "O efeito no jogo é o ajuste do mandante menos o do visitante, limitado a "
+            f"{config.AJUSTE_EXTERNO_TETO_PONTOS:.0f} pontos. Os pontos que o lado favorecido ganha saem dos outros dois "
+            "resultados, na proporção deles, e a soma continua 100%. Só a manchete, o veículo e o link são guardados."
+        )
+        for j in com_ajuste:
+            calculo = calculos[j["id"]]
+            if calculo["ajustado"]:
+                lado = "do mandante" if calculo["deslocamento"] > 0 else "do visitante"
+                efeito = f"efeito líquido de {abs(calculo['deslocamento']):.1f} pontos a favor {lado}"
+            else:
+                efeito = "os ajustes se compensam (efeito líquido zero)"
+            st.markdown(f"**{j['num_jogo']}. {j['casa']} x {j['fora']}** — {efeito}")
+            for lado, nome in (("casa", j["casa"]), ("fora", j["fora"])):
+                ajuste = calculo["ajustes"][lado]
+                if not ajuste:
+                    continue
+                st.markdown(f"- {nome}: {ajuste['ajuste']:+.1f} pontos ({_texto_seguro(ajuste['resumo'])})")
+                for evidencia in ajuste["evidencias"]:
+                    link = _link_seguro(evidencia.get("url", ""))
+                    veiculo = _texto_seguro(evidencia.get("fonte", "")) or "veículo não informado"
+                    manchete = _texto_seguro(evidencia.get("manchete", ""))
+                    st.markdown(f"    - «{manchete}» — {veiculo}" + (f" — [abrir]({link})" if link else ""))
 
 conexao = obter_conexao()
 
@@ -102,18 +150,24 @@ else:
     ano_atual = dt.date.today().year
 
     st.info(
-        "**2. Percentual histórico** -- para cada jogo do concurso a jogar, a chance de vitória do "
-        "mandante, empate ou vitória do visitante, calculada a partir de todo o histórico de gols "
-        "desse mandante e desse visitante já importado (método Poisson, sem depender de odds de "
-        "mercado -- ver `stats/percentual.py`). É o dado puro, sem nenhum ajuste ou opinião ainda."
+        "**2. Percentual** -- para cada jogo do concurso a jogar, a chance de vitória do mandante, empate ou "
+        "vitória do visitante, calculada a partir do histórico de gols dos dois times já importado (método "
+        "Poisson, sem odds de mercado -- ver `stats/percentual.py`). Quando a varredura semanal de notícias já "
+        "rodou para este concurso, o ajuste (limitado a "
+        f"{config.AJUSTE_EXTERNO_TETO_PONTOS:.0f} pontos) já está aplicado: o número é o percentual final e o valor entre "
+        "parênteses mostra quantos pontos vieram das notícias. Sem varredura, é só o histórico."
     )
 
     linhas_pct = []
     dados_por_jogo = {}
+    ajustes = ajustes_do_concurso(conexao, numero_vigente)
+    calculos = {}
     for j in jogos_vigente:
-        pct = percentual_historico(conexao, j["casa_id"], j["fora_id"])
+        calculo = percentuais_do_jogo(conexao, j["casa_id"], j["fora_id"], ajustes)
+        calculos[j["id"]] = calculo
+        pct, historico = calculo["final"], calculo["historico"]
         maior = max(pct, key=pct.get)
-        dados_por_jogo[j["id"]] = {"jogo": j, "pct": pct}
+        dados_por_jogo[j["id"]] = {"jogo": j, "pct": pct, "historico": historico}
 
         linhas_pct.append(
             {
@@ -121,9 +175,9 @@ else:
                 "casa": j["casa"],
                 "fora": j["fora"],
                 "data": formatar_data_br(j["data_jogo"]),
-                "valor_casa": f"{pct['1']:.0f}%",
-                "valor_x": f"{pct['X']:.0f}%",
-                "valor_fora": f"{pct['2']:.0f}%",
+                "valor_casa": _texto_percentual(pct["1"], historico["1"]),
+                "valor_x": _texto_percentual(pct["X"], historico["X"]),
+                "valor_fora": _texto_percentual(pct["2"], historico["2"]),
                 "destaque_casa": maior == "1",
                 "destaque_x": maior == "X",
                 "destaque_fora": maior == "2",
@@ -131,16 +185,24 @@ else:
         )
 
     st.markdown(
-        renderizar_cartao(f"2. Percentual histórico -- concurso {numero_vigente}", linhas_pct),
+        renderizar_cartao(f"2. Percentual -- concurso {numero_vigente}", linhas_pct),
         unsafe_allow_html=True,
     )
+    if ajustes:
+        ultima = max(a["coletado_em"] for a in ajustes.values())
+        quando = dt.datetime.fromisoformat(ultima).strftime("%d/%m/%Y %H:%M")
+        n_ajustados = sum(1 for a in ajustes.values() if a["ajuste"])
+        st.caption(f"Última varredura de notícias: {quando} · {n_ajustados} de {len(ajustes)} participantes com ajuste.")
+    else:
+        st.caption("Sem varredura de notícias para este concurso: os percentuais são só o histórico.")
+    mostrar_motivos_do_ajuste(jogos_vigente, calculos)
 
     # Card 3 -- bilhete interativo: o usuário marca, comparando com o
     # percentual histórico e com o desempenho de cada time no ano em curso.
     st.info(
         "**3. Seu bilhete** -- marque abaixo como se fosse o volante de aposta de verdade (pode marcar "
         "mais de uma coluna por jogo, igual a duplo/triplo). Ao lado de cada jogo está o percentual "
-        f"histórico (card 2) e o desempenho de cada time só em {ano_atual} (o ano em curso), para você "
+        f"do card 2 e o desempenho de cada time só em {ano_atual} (o ano em curso), para você "
         "confrontar sua marcação com o dado antes de decidir -- a marcação já vem preenchida com uma "
         "sugestão de aposta simples (no máximo um duplo ou um triplo), mas você pode mudar "
         "qualquer jogo."
@@ -161,7 +223,7 @@ else:
     marcacoes = {}
     for j in jogos_vigente:
         dado = dados_por_jogo[j["id"]]
-        pct = dado["pct"]
+        pct, historico = dado["pct"], dado["historico"]
         forma_casa = resumo_curto(desempenho_no_ano(conexao, j["casa_id"], ano_atual))
         forma_fora = resumo_curto(desempenho_no_ano(conexao, j["fora_id"], ano_atual))
 
@@ -173,8 +235,9 @@ else:
         col_info, col_marca = st.columns([3, 2])
         with col_info:
             st.markdown(
-                f"**{j['num_jogo']}. {j['casa']}** ({pct['1']:.0f}% · {forma_casa}{extra_casa}) "
-                f"x **{j['fora']}** ({pct['2']:.0f}% · {forma_fora}{extra_fora}) — empate {pct['X']:.0f}%"
+                f"**{j['num_jogo']}. {j['casa']}** ({_texto_percentual(pct['1'], historico['1'])} · {forma_casa}{extra_casa}) "
+                f"x **{j['fora']}** ({_texto_percentual(pct['2'], historico['2'])} · {forma_fora}{extra_fora}) — "
+                f"empate {_texto_percentual(pct['X'], historico['X'])}"
             )
         with col_marca:
             escolha = st.multiselect(
@@ -204,7 +267,9 @@ else:
     if total_duplos + total_triplos == 0:
         st.warning("O volante da Loteca exige ao menos 1 duplo (mínimo de R$ 4,00). Marque duas colunas em algum jogo.")
     st.caption(
-        "Ainda sem ajuste de notícias para concursos futuros até a varredura semanal rodar."
+        "Percentuais com o ajuste da última varredura de notícias (o valor entre parênteses mostra o efeito em pontos)."
+        if ajustes
+        else "Sem varredura de notícias para este concurso: os percentuais são só o histórico."
     )
 
 conexao.close()

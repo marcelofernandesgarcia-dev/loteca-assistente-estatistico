@@ -1,0 +1,89 @@
+"""Executa a página 'Concurso atual' (Streamlit AppTest) sobre um banco SINTÉTICO:
+percentual com o ajuste de notícias aplicado, motivo do ajuste e tratamento de
+manchete vinda de fora."""
+import json
+import sys
+from pathlib import Path
+
+import pytest
+from streamlit.testing.v1 import AppTest
+
+import config
+import db
+
+RAIZ = Path(__file__).resolve().parent.parent
+PAGINA = RAIZ / "app" / "pages" / "1_Concurso_atual.py"
+
+
+@pytest.fixture()
+def banco(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "sintetico.db")
+    for pasta in (str(RAIZ), str(RAIZ / "app")):
+        if pasta not in sys.path:
+            sys.path.insert(0, pasta)
+    db.inicializar_schema()
+    with db.sessao() as c:
+        alfa = db.obter_ou_criar_participante(c, "ALFA", "clube", "SP")
+        beta = db.obter_ou_criar_participante(c, "BETA", "clube", "RJ")
+        c.execute("INSERT INTO concursos (numero, data_apuracao, data_limite_aposta) VALUES (9001, '2026-03-05', '2026-03-01')")
+        c.execute("INSERT INTO concursos (numero, data_limite_aposta, horario_fim_apostas) VALUES (9002, '2099-01-01', 15)")
+        historico = [(1, alfa, beta, 2, 0, "1"), (2, beta, alfa, 1, 1, "X"), (3, alfa, beta, 0, 1, "2")]
+        for num, casa, fora, gc, gf, res in historico:
+            c.execute(
+                "INSERT INTO jogos (concurso_numero, num_jogo, casa_id, fora_id, gols_casa, gols_fora, resultado, data_jogo)"
+                " VALUES (9001, ?, ?, ?, ?, ?, ?, '2026-03-02')", (num, casa, fora, gc, gf, res),
+            )
+        c.execute("INSERT INTO jogos (concurso_numero, num_jogo, casa_id, fora_id, data_jogo) VALUES (9002, 1, ?, ?, '2099-01-02')", (alfa, beta))
+        evidencias = [
+            {"sinal": "lesao_titular", "manchete": "Zagueiro lesionado [clique](http://malicioso) _agora_", "fonte": "Veículo Teste", "url": "https://exemplo.test/materia-1"},
+            {"sinal": "lesao_titular", "manchete": "Outra manchete", "fonte": "Outro", "url": "javascript:alert(1)"},
+        ]
+        c.execute(
+            "INSERT INTO fatores_externos (participante_id, concurso_numero, coletado_em, resumo, ajuste_aplicado, evidencias)"
+            " VALUES (?, 9002, '2026-09-24T10:00:00', 'lesao_titular (-4.0)', -4.0, ?)",
+            (alfa, json.dumps(evidencias, ensure_ascii=False)),
+        )
+    return True
+
+
+def _abrir() -> AppTest:
+    at = AppTest.from_file(str(PAGINA), default_timeout=90).run()
+    assert not at.exception, [e.value for e in at.exception]
+    return at
+
+
+def _cartao_2(at: AppTest) -> str:
+    return next(m.value for m in at.markdown if "2. Percentual -- concurso 9002" in m.value)
+
+
+def test_card_2_mostra_o_percentual_final_com_o_efeito_das_noticias(banco):
+    cartao = _cartao_2(_abrir())
+    assert "(-" in cartao or "(+" in cartao  # diferença entre o final e o histórico
+    assert "Percentual histórico" not in cartao
+
+
+def test_pagina_informa_a_ultima_varredura(banco):
+    at = _abrir()
+    legendas = " ".join(c.value for c in at.caption)
+    assert "Última varredura de notícias: 24/09/2026 10:00 · 1 de 1 participantes com ajuste." in legendas
+
+
+def test_motivo_do_ajuste_traz_manchete_veiculo_e_link_seguro(banco):
+    at = _abrir()
+    expansor = next(e for e in at.expander if "Por que os percentuais foram ajustados" in e.label)
+    texto = " ".join(m.value for m in expansor.markdown)
+    assert "ALFA: -4.0 pontos" in texto and "Veículo Teste" in texto
+    assert "lesao titular" in texto  # sublinhado vira espaço, não some
+    assert "[abrir](https://exemplo.test/materia-1)" in texto
+    assert "javascript:" not in texto  # link de esquema perigoso descartado
+    assert "(http://malicioso)" not in texto and "[clique]" not in texto  # manchete não vira link
+    assert "efeito líquido" in texto
+
+
+def test_sem_varredura_mostra_so_o_historico_e_sem_expansor(banco):
+    with db.sessao() as c:
+        c.execute("DELETE FROM fatores_externos")
+    at = _abrir()
+    assert "Sem varredura de notícias para este concurso" in " ".join(c.value for c in at.caption)
+    assert not [e for e in at.expander if "Por que os percentuais" in e.label]
+    assert "(-" not in _cartao_2(at) and "(+" not in _cartao_2(at)

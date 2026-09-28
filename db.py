@@ -70,7 +70,8 @@ CREATE TABLE IF NOT EXISTS fatores_externos (
     resumo TEXT,
     fontes TEXT,
     ajuste_aplicado REAL NOT NULL DEFAULT 0,
-    sinal TEXT
+    sinal TEXT,
+    evidencias TEXT
 );
 
 -- Dados lidos das páginas públicas da CBF (ver docs/cbf-fonte-de-dados.md).
@@ -182,6 +183,7 @@ def _garantir_colunas(conexao: sqlite3.Connection) -> None:
     novas = {
         "concursos": [("horario_fim_apostas", "INTEGER")],
         "cbf_classificacao": [("proximo_adversario_id", "INTEGER")],
+        "fatores_externos": [("evidencias", "TEXT")],
     }
     for tabela, colunas in novas.items():
         existentes = {linha["name"] for linha in conexao.execute(f"PRAGMA table_info({tabela})")}
