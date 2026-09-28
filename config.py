@@ -76,6 +76,11 @@ VARREDURA_PALAVRAS_CHAVE_PARA_SINAL = {
     "sem vencer": "sequencia_negativa_destacada",
 }
 
+# Sugestão de marcação (seco/duplo/triplo) -- ver stats/sugestao.py sobre
+# qual das 3 propostas conflitantes da pesquisa foi escolhida como padrão.
+SUGESTAO_LIMIAR_SECO = float(os.environ.get("LOTECA_LIMIAR_SECO", "65.0"))
+SUGESTAO_LIMIAR_DUPLO = float(os.environ.get("LOTECA_LIMIAR_DUPLO", "45.0"))
+
 # Forma recente -- quantidade de jogos considerados
 FORMA_JANELA_JOGOS = int(os.environ.get("LOTECA_FORMA_JANELA", "8"))
 
