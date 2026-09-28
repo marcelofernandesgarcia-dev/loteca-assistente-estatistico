@@ -285,3 +285,108 @@ def frases_visao_geral(evolucao: list[dict], jogos: list[dict]) -> list[str]:
     if sequencia:
         frases.append(f"Sequência atual: {sequencia}.")
     return frases
+
+
+def _resumo(jogos: list[dict]) -> dict:
+    n = len(jogos)
+    pontos = sum(j["pontos"] for j in jogos)
+    return {
+        "jogos": n,
+        "vitorias": sum(1 for j in jogos if j["resultado"] == "V"),
+        "empates": sum(1 for j in jogos if j["resultado"] == "E"),
+        "derrotas": sum(1 for j in jogos if j["resultado"] == "D"),
+        "pontos": pontos,
+        "aproveitamento": 100.0 * pontos / (PONTOS_VITORIA * n) if n else None,
+        "gols_pro_media": sum(j["gols_pro"] for j in jogos) / n if n else None,
+        "gols_contra_media": sum(j["gols_contra"] for j in jogos) / n if n else None,
+    }
+
+
+def resumo_por_mando(jogos: list[dict]) -> dict:
+    """Desempenho do time em casa e fora."""
+    return {
+        "casa": _resumo([j for j in jogos if j["mando"] == "casa"]),
+        "fora": _resumo([j for j in jogos if j["mando"] == "fora"]),
+    }
+
+
+def medias_da_liga(partidas: list[dict]) -> dict:
+    """Referências da série: gols por time por jogo e aproveitamento de quem
+    joga em casa e de quem joga fora."""
+    n = len(partidas)
+    if n == 0:
+        return {"jogos": 0, "gols_por_time_por_jogo": None, "aproveitamento_casa": None, "aproveitamento_fora": None}
+    gols = sum(p["gols_mandante"] + p["gols_visitante"] for p in partidas)
+    pontos_casa = sum(
+        PONTOS_VITORIA if p["gols_mandante"] > p["gols_visitante"] else PONTOS_EMPATE if p["gols_mandante"] == p["gols_visitante"] else 0
+        for p in partidas
+    )
+    pontos_fora = sum(
+        PONTOS_VITORIA if p["gols_visitante"] > p["gols_mandante"] else PONTOS_EMPATE if p["gols_mandante"] == p["gols_visitante"] else 0
+        for p in partidas
+    )
+    return {
+        "jogos": n,
+        "gols_por_time_por_jogo": gols / (2 * n),
+        "aproveitamento_casa": 100.0 * pontos_casa / (PONTOS_VITORIA * n),
+        "aproveitamento_fora": 100.0 * pontos_fora / (PONTOS_VITORIA * n),
+    }
+
+
+def _desvio(valores: list[int]) -> float | None:
+    if len(valores) < 2:
+        return None
+    media = sum(valores) / len(valores)
+    return (sum((v - media) ** 2 for v in valores) / (len(valores) - 1)) ** 0.5
+
+
+def perfil_de_gols(jogos: list[dict]) -> dict:
+    """Retrato dos gols do time na temporada: quanto marca e sofre, com que
+    regularidade e os extremos."""
+    n = len(jogos)
+    if n == 0:
+        return {"jogos": 0}
+    pro = [j["gols_pro"] for j in jogos]
+    contra = [j["gols_contra"] for j in jogos]
+    vitorias = [j for j in jogos if j["resultado"] == "V"]
+    derrotas = [j for j in jogos if j["resultado"] == "D"]
+
+    def extremo(lista, sinal):
+        if not lista:
+            return None
+        escolhido = max(lista, key=lambda j: (sinal * (j["gols_pro"] - j["gols_contra"]), j["gols_pro"]))
+        return {k: escolhido[k] for k in ("rodada", "adversario_id", "gols_pro", "gols_contra", "mando")}
+
+    return {
+        "jogos": n,
+        "gols_pro_media": sum(pro) / n,
+        "gols_contra_media": sum(contra) / n,
+        "desvio_gols_pro": _desvio(pro),
+        "desvio_gols_contra": _desvio(contra),
+        "jogos_marcando": sum(1 for g in pro if g > 0),
+        "jogos_sem_sofrer_gol": sum(1 for g in contra if g == 0),
+        "jogos_3_ou_mais_gols_marcados": sum(1 for g in pro if g >= 3),
+        "jogos_3_ou_mais_gols_sofridos": sum(1 for g in contra if g >= 3),
+        "maior_vitoria": extremo(vitorias, 1),
+        "pior_derrota": extremo(derrotas, -1),
+    }
+
+
+def gols_com_media_movel(jogos: list[dict], janela: int | None = None) -> list[dict]:
+    """Gols marcados e sofridos em cada jogo e a média dos últimos `janela`
+    jogos (ausente até a janela encher)."""
+    janela = janela or config.COMPETICAO_JANELA_MOVEL
+    linhas = []
+    for i, jogo in enumerate(jogos):
+        completa = i + 1 >= janela
+        trecho = jogos[i + 1 - janela:i + 1] if completa else []
+        linhas.append(
+            {
+                "rodada": jogo["rodada"],
+                "gols_pro": jogo["gols_pro"],
+                "gols_contra": jogo["gols_contra"],
+                "pro_movel": sum(j["gols_pro"] for j in trecho) / janela if completa else None,
+                "contra_movel": sum(j["gols_contra"] for j in trecho) / janela if completa else None,
+            }
+        )
+    return linhas

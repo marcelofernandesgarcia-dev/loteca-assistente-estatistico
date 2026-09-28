@@ -194,3 +194,65 @@ def test_frases_trazem_o_numero_que_as_sustenta():
 
 def test_frases_sem_dados_nao_inventam_nada():
     assert frases_visao_geral([], []) == []
+
+
+from stats.competicao import (  # noqa: E402
+    gols_com_media_movel,
+    medias_da_liga,
+    perfil_de_gols,
+    resumo_por_mando,
+)
+
+
+def _jg(rodada, mando, pro, contra, adv=9):
+    resultado = "V" if pro > contra else "E" if pro == contra else "D"
+    return {"rodada": rodada, "mando": mando, "gols_pro": pro, "gols_contra": contra, "resultado": resultado,
+            "pontos": {"V": 3, "E": 1, "D": 0}[resultado], "adversario_id": adv}
+
+
+JOGOS = [_jg(1, "casa", 2, 0), _jg(2, "fora", 0, 0), _jg(3, "casa", 1, 3), _jg(4, "fora", 4, 1, adv=7)]
+
+
+def test_resumo_por_mando():
+    resumo = resumo_por_mando(JOGOS)
+    assert resumo["casa"]["jogos"] == 2 and resumo["casa"]["pontos"] == 3
+    assert resumo["casa"]["aproveitamento"] == pytest.approx(50.0)
+    assert resumo["fora"]["pontos"] == 4 and resumo["fora"]["aproveitamento"] == pytest.approx(100 * 4 / 6)
+    assert resumo["fora"]["gols_pro_media"] == pytest.approx(2.0)
+
+
+def test_resumo_por_mando_sem_jogos_nao_inventa_numero():
+    resumo = resumo_por_mando([_jg(1, "casa", 1, 0)])
+    assert resumo["fora"]["jogos"] == 0 and resumo["fora"]["aproveitamento"] is None
+
+
+def test_medias_da_liga():
+    partidas = [_p(1, A, B, 2, 0), _p(1, C, D, 1, 1)]
+    m = medias_da_liga(partidas)
+    assert m["gols_por_time_por_jogo"] == pytest.approx(1.0)  # 4 gols / (2*2)
+    assert m["aproveitamento_casa"] == pytest.approx(100 * 4 / 6)  # 3 + 1 pontos
+    assert m["aproveitamento_fora"] == pytest.approx(100 * 1 / 6)
+    assert medias_da_liga([])["gols_por_time_por_jogo"] is None
+
+
+def test_perfil_de_gols_extremos_e_contagens():
+    perfil = perfil_de_gols(JOGOS)
+    assert perfil["jogos"] == 4 and perfil["gols_pro_media"] == pytest.approx(1.75)
+    assert perfil["jogos_marcando"] == 3 and perfil["jogos_sem_sofrer_gol"] == 2
+    assert perfil["jogos_3_ou_mais_gols_marcados"] == 1 and perfil["jogos_3_ou_mais_gols_sofridos"] == 1
+    assert perfil["maior_vitoria"]["rodada"] == 4 and perfil["maior_vitoria"]["adversario_id"] == 7
+    assert perfil["pior_derrota"]["rodada"] == 3
+    assert perfil["desvio_gols_pro"] > 0
+
+
+def test_perfil_de_gols_sem_vitorias_e_sem_jogos():
+    assert perfil_de_gols([]) == {"jogos": 0}
+    assert perfil_de_gols([_jg(1, "casa", 0, 1)])["maior_vitoria"] is None
+    assert perfil_de_gols([_jg(1, "casa", 0, 1)])["desvio_gols_pro"] is None
+
+
+def test_gols_com_media_movel_so_apos_encher_a_janela():
+    linhas = gols_com_media_movel(JOGOS, janela=2)
+    assert linhas[0]["pro_movel"] is None
+    assert linhas[1]["pro_movel"] == pytest.approx(1.0) and linhas[1]["contra_movel"] == pytest.approx(0.0)
+    assert linhas[3]["pro_movel"] == pytest.approx(2.5) and linhas[3]["contra_movel"] == pytest.approx(2.0)

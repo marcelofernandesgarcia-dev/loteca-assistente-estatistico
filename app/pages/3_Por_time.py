@@ -14,6 +14,7 @@ from stats.cbf import (
     classificacao_do_participante,
     cod_time_do_participante,
     estatisticas_do_participante,
+    nomes_dos_times,
     partidas_do_participante,
 )
 from stats.competicao import (
@@ -21,7 +22,11 @@ from stats.competicao import (
     carregar_partidas,
     evolucao_do_time,
     frases_visao_geral,
+    gols_com_media_movel,
     jogos_do_time,
+    medias_da_liga,
+    perfil_de_gols,
+    resumo_por_mando,
     serie_do_time,
     tabela_por_rodada,
     validar_temporada,
@@ -291,6 +296,141 @@ def renderizar_aba_loteca(conexao, participante_id):
         st.caption("Nenhuma varredura rodada para este participante ainda.")
 
 
+COR_RESULTADO = {"V": "#1e6b40", "E": "#5b6770", "D": "#b30010"}
+NOME_RESULTADO = {"V": "Vitória", "E": "Empate", "D": "Derrota"}
+
+
+def renderizar_jogo_a_jogo(jogos_time, nomes):
+    st.caption("Do primeiro ao último jogo da temporada. Cada quadrado traz a letra do resultado; passe o mouse para ver o jogo.")
+    quadrados = []
+    for j in jogos_time:
+        descricao = (
+            f"Rodada {j['rodada']}: {NOME_RESULTADO[j['resultado']].lower()} {'em casa' if j['mando'] == 'casa' else 'fora'} "
+            f"contra {nomes.get(j['adversario_id'], '?')} ({j['gols_pro']} x {j['gols_contra']})"
+        )
+        quadrados.append(
+            f'<span title="{descricao}" style="display:inline-block;min-width:1.9em;text-align:center;margin:2px;'
+            f'padding:3px 0;border-radius:4px;color:#fff;font-weight:700;background:{COR_RESULTADO[j["resultado"]]}">'
+            f'{j["resultado"]}</span>'
+        )
+    st.markdown("".join(quadrados), unsafe_allow_html=True)
+
+    col1, col2 = st.columns(2)
+    mando = col1.radio("Mando", ["Todos", "Em casa", "Fora"], horizontal=True, key="jj_mando")
+    resultados = col2.multiselect(
+        "Resultado", ["Vitória", "Empate", "Derrota"], default=["Vitória", "Empate", "Derrota"], key="jj_resultado"
+    )
+    aceitos = {chave for chave, nome in NOME_RESULTADO.items() if nome in resultados}
+    acumulado, linhas = 0, []
+    for j in jogos_time:
+        acumulado += j["pontos"]
+        if (mando == "Em casa" and j["mando"] != "casa") or (mando == "Fora" and j["mando"] != "fora"):
+            continue
+        if j["resultado"] not in aceitos:
+            continue
+        linhas.append(
+            {
+                "Rodada": j["rodada"], "Data": formatar_data_br(j["data"]), "Mando": j["mando"],
+                "Adversário": nomes.get(j["adversario_id"], "?"),
+                "Placar (feitos x sofridos)": f"{j['gols_pro']} x {j['gols_contra']}",
+                "Resultado": NOME_RESULTADO[j["resultado"]], "Pontos": j["pontos"], "Pontos acumulados": acumulado,
+            }
+        )
+    if linhas:
+        st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
+        st.caption(f"{len(linhas)} jogos nesta seleção.")
+    else:
+        st.caption("Nenhum jogo com esses filtros.")
+
+
+def _texto_extremo(extremo, nomes):
+    if not extremo:
+        return "nenhuma"
+    return (
+        f"{extremo['gols_pro']} x {extremo['gols_contra']} contra {nomes.get(extremo['adversario_id'], '?')} "
+        f"({extremo['mando']}, rodada {extremo['rodada']})"
+    )
+
+
+def renderizar_ataque_defesa_mando(jogos_time, partidas_liga, nomes):
+    liga = medias_da_liga(partidas_liga)
+    perfil = perfil_de_gols(jogos_time)
+    mando = resumo_por_mando(jogos_time)
+    media_liga = liga["gols_por_time_por_jogo"]
+
+    st.markdown("**Gols marcados e sofridos por jogo**")
+    st.caption(
+        f"Média de {perfil['gols_pro_media']:.2f} gols marcados e {perfil['gols_contra_media']:.2f} sofridos por jogo; "
+        f"a média da série é {media_liga:.2f} gols por time por jogo. As linhas mostram a média dos últimos "
+        f"{config.COMPETICAO_JANELA_MOVEL} jogos."
+    )
+    linhas = gols_com_media_movel(jogos_time)
+    rodadas = [x["rodada"] for x in linhas]
+    figura = go.Figure()
+    figura.add_trace(go.Bar(x=rodadas, y=[x["gols_pro"] for x in linhas], name="Marcados", marker_color=AZUL, opacity=0.6))
+    figura.add_trace(go.Bar(x=rodadas, y=[x["gols_contra"] for x in linhas], name="Sofridos", marker_color=VERMELHO,
+                            opacity=0.6, marker_pattern_shape="/"))
+    figura.add_trace(go.Scatter(x=rodadas, y=[x["pro_movel"] for x in linhas], mode="lines+markers",
+                                name="Marcados (média móvel)", line=dict(color=AZUL), marker=dict(symbol="circle")))
+    figura.add_trace(go.Scatter(x=rodadas, y=[x["contra_movel"] for x in linhas], mode="lines+markers",
+                                name="Sofridos (média móvel)", line=dict(color=VERMELHO, dash="dot"),
+                                marker=dict(symbol="diamond")))
+    figura.add_hline(y=media_liga, line_dash="dash", line_color=CINZA, annotation_text=f"média da série {media_liga:.2f}")
+    figura.update_layout(height=340, margin=dict(l=10, r=10, t=10, b=10), barmode="group",
+                         xaxis=dict(title="Rodada", dtick=2), yaxis=dict(title="Gols"), legend=dict(orientation="h"))
+    st.plotly_chart(figura, width="stretch")
+
+    st.markdown("**Em casa e fora**")
+    casa, fora = mando["casa"], mando["fora"]
+    if casa["jogos"] and fora["jogos"]:
+        dif = casa["aproveitamento"] - fora["aproveitamento"]
+        st.caption(
+            f"Aproveitamento de {casa['aproveitamento']:.0f}% em casa e {fora['aproveitamento']:.0f}% fora "
+            f"(diferença de {abs(dif):.0f} p.p.). Na série, os mandantes somam {liga['aproveitamento_casa']:.0f}% e os "
+            f"visitantes {liga['aproveitamento_fora']:.0f}%."
+        )
+    barras = go.Figure()
+    barras.add_trace(go.Bar(x=["Em casa", "Fora"], y=[casa["aproveitamento"] or 0, fora["aproveitamento"] or 0],
+                            name="Este time", marker_color=AZUL,
+                            text=[f"{casa['aproveitamento'] or 0:.0f}%", f"{fora['aproveitamento'] or 0:.0f}%"],
+                            textposition="outside"))
+    barras.add_trace(go.Bar(x=["Em casa", "Fora"], y=[liga["aproveitamento_casa"], liga["aproveitamento_fora"]],
+                            name="Média da série", marker_color=CINZA, marker_pattern_shape="x",
+                            text=[f"{liga['aproveitamento_casa']:.0f}%", f"{liga['aproveitamento_fora']:.0f}%"],
+                            textposition="outside"))
+    barras.update_layout(height=280, margin=dict(l=10, r=10, t=10, b=10), barmode="group",
+                         yaxis=dict(title="Aproveitamento (%)", range=[0, 110]), legend=dict(orientation="h"))
+    st.plotly_chart(barras, width="stretch")
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "Mando": nome, "Jogos": r["jogos"], "V": r["vitorias"], "E": r["empates"], "D": r["derrotas"],
+                    "Pontos": r["pontos"],
+                    "Gols marcados por jogo": round(r["gols_pro_media"], 2) if r["gols_pro_media"] is not None else None,
+                    "Gols sofridos por jogo": round(r["gols_contra_media"], 2) if r["gols_contra_media"] is not None else None,
+                }
+                for nome, r in (("Em casa", casa), ("Fora", fora))
+            ]
+        ),
+        width="stretch", hide_index=True,
+    )
+
+    st.markdown("**Regularidade**")
+    r1, r2, r3, r4 = st.columns(4)
+    r1.metric("Jogos marcando", f"{perfil['jogos_marcando']} de {perfil['jogos']}")
+    r2.metric("Jogos sem sofrer gol", f"{perfil['jogos_sem_sofrer_gol']} de {perfil['jogos']}")
+    r3.metric("3+ gols marcados", perfil["jogos_3_ou_mais_gols_marcados"])
+    r4.metric("3+ gols sofridos", perfil["jogos_3_ou_mais_gols_sofridos"])
+    desvio_pro = f"{perfil['desvio_gols_pro']:.2f}" if perfil["desvio_gols_pro"] is not None else "-"
+    desvio_contra = f"{perfil['desvio_gols_contra']:.2f}" if perfil["desvio_gols_contra"] is not None else "-"
+    st.write(
+        f"Maior vitória: **{_texto_extremo(perfil['maior_vitoria'], nomes)}**. "
+        f"Pior derrota: **{_texto_extremo(perfil['pior_derrota'], nomes)}**. "
+        f"Variação dos gols (desvio-padrão): {desvio_pro} marcados, {desvio_contra} sofridos -- quanto menor, mais regular."
+    )
+
+
 def _figura_base(titulo_y: str, altura: int = 300):
     figura = go.Figure()
     figura.update_layout(
@@ -420,7 +560,10 @@ if contexto:
             "defasados; a classificação oficial está na aba 'Visão geral'."
         )
 
-aba_visao, aba_evolucao, aba_loteca = st.tabs(["Visão geral", "Evolução na competição", "Na Loteca"])
+aba_visao, aba_evolucao, aba_jogos, aba_ataque, aba_loteca = st.tabs(
+    ["Visão geral", "Evolução na competição", "Jogo a jogo", "Ataque, defesa e mando", "Na Loteca"]
+)
+nomes = nomes_dos_times(conexao)
 
 with aba_visao:
     if contexto:
@@ -444,6 +587,18 @@ with aba_evolucao:
         renderizar_evolucao(evolucao, jogos_time, quantidade_times, aviso_divergencia)
     else:
         st.info("A evolução rodada a rodada só existe para clubes das Séries A e B, cujos jogos vêm da CBF.")
+
+with aba_jogos:
+    if jogos_time:
+        renderizar_jogo_a_jogo(jogos_time, nomes)
+    else:
+        st.info("O jogo a jogo da temporada existe para clubes das Séries A e B. Os jogos deste participante na Loteca estão na aba 'Na Loteca'.")
+
+with aba_ataque:
+    if jogos_time:
+        renderizar_ataque_defesa_mando(jogos_time, partidas_liga, nomes)
+    else:
+        st.info("Ataque, defesa e mando por temporada existem para clubes das Séries A e B. Para os demais, veja a aba 'Na Loteca'.")
 
 with aba_loteca:
     renderizar_aba_loteca(conexao, participante_id)
