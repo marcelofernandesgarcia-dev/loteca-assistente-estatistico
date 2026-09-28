@@ -1,4 +1,5 @@
 import datetime as dt
+import html
 import sys
 from pathlib import Path
 
@@ -7,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from paleta import AZUL, CINZA, COR_RESULTADO, VERDE, VERMELHO
 from util import formatar_data_br, mostrar_aviso_responsabilidade, obter_conexao
 
 import config
@@ -38,19 +40,18 @@ from stats.competicao import (
 from stats.desempenho import (
     aproveitamento_casa_fora,
     contagem_por_resultado,
+    frases_da_loteca,
     gerar_insight,
+    jogos_da_loteca,
     kpis,
     tendencia_por_ano,
 )
 from stats.forma import forma_recente
+from stats.frequencia import frequencia_global, frequencia_participante
 from stats.modelo_temporada import analisar_confronto, forcas_da_serie
 from stats.percentual import origem_do_percentual, percentual_historico
 from stats.temporada import desempenho_no_ano
 
-AZUL = "#1a4fa0"
-VERMELHO = "#e30613"
-VERDE = "#2e8b57"
-CINZA = "#9aa5b1"
 NOMES_SERIE = {"serie-a": "Série A", "serie-b": "Série B"}
 
 
@@ -103,7 +104,38 @@ def renderizar_classificacao_oficial(conexao, participante_id, classif):
             )
 
 
+def renderizar_resumo_loteca(conexao, participante_id):
+    st.subheader("Resumo na grade da Loteca")
+    jogos = jogos_da_loteca(conexao, participante_id)
+    if not jogos:
+        st.caption("Nenhum jogo apurado deste participante na Loteca ainda.")
+        return
+    por_mando = frequencia_participante(conexao, participante_id)
+    referencia = frequencia_global(conexao)
+    for frase in frases_da_loteca(jogos, por_mando, referencia):
+        st.write("- " + frase)
+
+    def linha(nome, dados):
+        total = dados["total"]
+        return {"Situação": nome, "Jogos": total,
+                **{coluna: (f"{dados[coluna]} ({100 * dados[coluna] / total:.0f}%)" if total else "-") for coluna in ("1", "X", "2")}}
+
+    st.dataframe(
+        pd.DataFrame(
+            [
+                linha("Como mandante", por_mando["mandante"]),
+                linha("Como visitante", por_mando["visitante"]),
+                {"Situação": "Todos os jogos da Loteca (referência)", "Jogos": referencia.get("total_jogos", 0),
+                 **{coluna: f"{100 * referencia[coluna]:.0f}%" for coluna in ("1", "X", "2")}},
+            ]
+        ),
+        width="stretch", hide_index=True,
+    )
+    st.caption("Colunas: 1 = vitória do mandante, X = empate, 2 = vitória do visitante.")
+
+
 def renderizar_aba_loteca(conexao, participante_id):
+    renderizar_resumo_loteca(conexao, participante_id)
     # Filtros -- aplicam-se a KPIs, gauges, contagem, insight e tabela
     anos_disponiveis = [
         linha["ano"]
@@ -302,24 +334,28 @@ def renderizar_aba_loteca(conexao, participante_id):
         st.caption("Nenhuma varredura rodada para este participante ainda.")
 
 
-COR_RESULTADO = {"V": "#1e6b40", "E": "#5b6770", "D": "#b30010"}
 NOME_RESULTADO = {"V": "Vitória", "E": "Empate", "D": "Derrota"}
 
 
-def renderizar_jogo_a_jogo(jogos_time, nomes):
-    st.caption("Do primeiro ao último jogo da temporada. Cada quadrado traz a letra do resultado; passe o mouse para ver o jogo.")
+def renderizar_jogo_a_jogo(jogos_time, nomes, rotulo="Rodada", recorte="da temporada"):
+    st.caption(f"Do primeiro ao último jogo {recorte}. Cada quadrado traz a letra do resultado (V, E ou D); passe o mouse para ver o jogo.")
     quadrados = []
     for j in jogos_time:
         descricao = (
-            f"Rodada {j['rodada']}: {NOME_RESULTADO[j['resultado']].lower()} {'em casa' if j['mando'] == 'casa' else 'fora'} "
+            f"{rotulo} {j['rodada']}: {NOME_RESULTADO[j['resultado']].lower()} {'em casa' if j['mando'] == 'casa' else 'fora'} "
             f"contra {nomes.get(j['adversario_id'], '?')} ({j['gols_pro']} x {j['gols_contra']})"
+            + (" (decidido por sorteio)" if j.get("sorteio") else "")
         )
+        descricao = html.escape(descricao, quote=True)
         quadrados.append(
-            f'<span title="{descricao}" style="display:inline-block;min-width:1.9em;text-align:center;margin:2px;'
+            f'<span role="listitem" aria-label="{descricao}" title="{descricao}" style="display:inline-block;min-width:1.9em;text-align:center;margin:2px;'
             f'padding:3px 0;border-radius:4px;color:#fff;font-weight:700;background:{COR_RESULTADO[j["resultado"]]}">'
             f'{j["resultado"]}</span>'
         )
-    st.markdown("".join(quadrados), unsafe_allow_html=True)
+    st.markdown(
+        '<div role="list" aria-label="Resultados, do primeiro ao último jogo">' + "".join(quadrados) + "</div>",
+        unsafe_allow_html=True,
+    )
 
     col1, col2 = st.columns(2)
     mando = col1.radio("Mando", ["Todos", "Em casa", "Fora"], horizontal=True, key="jj_mando")
@@ -336,10 +372,11 @@ def renderizar_jogo_a_jogo(jogos_time, nomes):
             continue
         linhas.append(
             {
-                "Rodada": j["rodada"], "Data": formatar_data_br(j["data"]), "Mando": j["mando"],
+                rotulo: j["rodada"], "Data": formatar_data_br(j["data"]), "Mando": j["mando"],
                 "Adversário": nomes.get(j["adversario_id"], "?"),
                 "Placar (feitos x sofridos)": f"{j['gols_pro']} x {j['gols_contra']}",
-                "Resultado": NOME_RESULTADO[j["resultado"]], "Pontos": j["pontos"], "Pontos acumulados": acumulado,
+                "Resultado": NOME_RESULTADO[j["resultado"]] + (" (sorteio)" if j.get("sorteio") else ""),
+                "Pontos": j["pontos"], "Pontos acumulados": acumulado,
             }
         )
     if linhas:
@@ -364,7 +401,7 @@ def renderizar_ataque_defesa_mando(jogos_time, partidas_liga, nomes):
     mando = resumo_por_mando(jogos_time)
     media_liga = liga["gols_por_time_por_jogo"]
 
-    st.markdown("**Gols marcados e sofridos por jogo**")
+    st.subheader("Gols marcados e sofridos por jogo")
     st.caption(
         f"Média de {perfil['gols_pro_media']:.2f} gols marcados e {perfil['gols_contra_media']:.2f} sofridos por jogo; "
         f"a média da série é {media_liga:.2f} gols por time por jogo. As linhas mostram a média dos últimos "
@@ -386,7 +423,7 @@ def renderizar_ataque_defesa_mando(jogos_time, partidas_liga, nomes):
                          xaxis=dict(title="Rodada", dtick=2), yaxis=dict(title="Gols"), legend=dict(orientation="h"))
     st.plotly_chart(figura, width="stretch")
 
-    st.markdown("**Em casa e fora**")
+    st.subheader("Em casa e fora")
     casa, fora = mando["casa"], mando["fora"]
     if casa["jogos"] and fora["jogos"]:
         dif = casa["aproveitamento"] - fora["aproveitamento"]
@@ -422,7 +459,7 @@ def renderizar_ataque_defesa_mando(jogos_time, partidas_liga, nomes):
         width="stretch", hide_index=True,
     )
 
-    st.markdown("**Regularidade**")
+    st.subheader("Regularidade")
     r1, r2, r3, r4 = st.columns(4)
     r1.metric("Jogos marcando", f"{perfil['jogos_marcando']} de {perfil['jogos']}")
     r2.metric("Jogos sem sofrer gol", f"{perfil['jogos_sem_sofrer_gol']} de {perfil['jogos']}")
@@ -455,7 +492,7 @@ def renderizar_comparacao_liga(comparacao, calendario):
         st.info("Sem jogos suficientes para comparar com a série.")
         return
     total = comparacao["aproveitamento"]["de"]
-    st.markdown("**Posição do time entre os da série**")
+    st.subheader("Posição do time entre os da série")
     st.caption(
         f"Cada linha compara o time com os {total} clubes da série. Posição 1 = melhor; em gols sofridos e cartões, "
         "menos é melhor. O gráfico usa o percentil (100 = melhor da série, 50 = meio da tabela)."
@@ -486,7 +523,7 @@ def renderizar_comparacao_liga(comparacao, calendario):
         )
     st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
 
-    st.markdown("**Força do calendário já enfrentado**")
+    st.subheader("Força do calendário já enfrentado")
     if not calendario:
         st.caption("Sem jogos suficientes para avaliar o calendário.")
         return
@@ -541,7 +578,7 @@ def _barra_resultado(nome_casa, nome_fora, analise):
         (f"Vitória {nome_fora}", analise["p_fora"], VERMELHO),
     ):
         figura.add_trace(go.Bar(y=[""], x=[valor * 100], name=nome, orientation="h", marker_color=cor,
-                                text=f"{valor * 100:.0f}%", textposition="inside"))
+                                text=f"{valor * 100:.0f}%", textposition="inside", textfont=dict(color="#ffffff")))
     figura.update_layout(barmode="stack", height=120, margin=dict(l=0, r=0, t=10, b=10),
                          xaxis=dict(range=[0, 100], showticklabels=False), legend=dict(orientation="h"))
     return figura
@@ -564,7 +601,11 @@ def renderizar_analise_de_confronto(nome_casa, nome_fora, analise):
     c2.metric(f"Gols esperados: {nome_fora}", f"{analise['gols_esperados_fora']:.2f}")
     c3.metric("Base de jogos", f"{analise['jogos_casa']} e {analise['jogos_fora']}")
     st.plotly_chart(_barra_resultado(nome_casa, nome_fora, analise), width="stretch")
-    st.markdown("**Placares mais prováveis**")
+    st.write(
+        f"Vitória {nome_casa}: **{analise['p_casa'] * 100:.0f}%** · Empate: **{analise['p_empate'] * 100:.0f}%** · "
+        f"Vitória {nome_fora}: **{analise['p_fora'] * 100:.0f}%**"
+    )
+    st.subheader("Placares mais prováveis")
     st.dataframe(
         pd.DataFrame(
             [
@@ -581,11 +622,20 @@ def renderizar_analise_de_confronto(nome_casa, nome_fora, analise):
     m4.metric("3 ou mais gols no jogo", f"{analise['p_3_ou_mais_gols'] * 100:.0f}%")
     with st.expander("Ver todos os placares (chance em %)"):
         st.plotly_chart(_mapa_de_placares(nome_casa, nome_fora, analise["matriz"]), width="stretch")
+        limite = 6
+        st.dataframe(
+            pd.DataFrame(
+                [[round(analise["matriz"][c][f] * 100, 1) for f in range(limite + 1)] for c in range(limite + 1)],
+                index=[f"{nome_casa}: {c} gols" for c in range(limite + 1)],
+                columns=[f"{nome_fora}: {f}" for f in range(limite + 1)],
+            ),
+            width="stretch",
+        )
 
 
 def renderizar_proximo_jogo(conexao, participante_id, cod_time, classif, partidas_liga, nomes):
     if cod_time and classif:
-        st.markdown("**Próximo adversário (CBF)**")
+        st.subheader("Próximo adversário (CBF)")
         if classif.get("proximo_adversario"):
             st.write(
                 f"Próximo adversário na tabela: **{classif['proximo_adversario']}**. A página da CBF não informa "
@@ -596,7 +646,7 @@ def renderizar_proximo_jogo(conexao, participante_id, cod_time, classif, partida
 
     forcas = forcas_da_serie(partidas_liga) if partidas_liga else None
     if cod_time and forcas and cod_time in forcas["jogos"]:
-        st.markdown("**Simulador de confronto (jogos da temporada)**")
+        st.subheader("Simulador de confronto (jogos da temporada)")
         st.caption(AVISO_MODELO_TEMPORADA)
         outros = [cod for cod in forcas["jogos"] if cod != cod_time]
         outros.sort(key=lambda cod: nomes.get(cod, ""))
@@ -612,7 +662,7 @@ def renderizar_proximo_jogo(conexao, participante_id, cod_time, classif, partida
     elif cod_time:
         st.info("Sem jogos suficientes da série para simular um confronto.")
 
-    st.markdown("**Jogo na Loteca (concurso a jogar)**")
+    st.subheader("Jogo na Loteca (concurso a jogar)")
     a_jogar = concurso_a_jogar(conexao)
     jogos_loteca = []
     if a_jogar:
@@ -676,7 +726,7 @@ def renderizar_evolucao(evolucao, jogos_time, quantidade_times, aviso_divergenci
     rodadas = [e["rodada"] for e in evolucao]
     ultimo = evolucao[-1]
 
-    st.markdown("**Posição na tabela, rodada a rodada**")
+    st.subheader("Posição na tabela, rodada a rodada")
     melhor = min(e["posicao"] for e in evolucao)
     pior = max(e["posicao"] for e in evolucao)
     st.caption(
@@ -691,7 +741,7 @@ def renderizar_evolucao(evolucao, jogos_time, quantidade_times, aviso_divergenci
     posicao.update_yaxes(autorange=False, range=[quantidade_times + 0.5, 0.5], dtick=1)
     st.plotly_chart(posicao, width="stretch")
 
-    st.markdown("**Pontos acumulados x média da série**")
+    st.subheader("Pontos acumulados x média da série")
     diferenca = ultimo["pontos"] - ultimo["pontos_media_serie"]
     st.caption(
         f"{ultimo['pontos']} pontos contra média de {ultimo['pontos_media_serie']:.1f} entre os times da série "
@@ -704,7 +754,7 @@ def renderizar_evolucao(evolucao, jogos_time, quantidade_times, aviso_divergenci
                                 line=dict(color=CINZA, dash="dash")))
     st.plotly_chart(pontos, width="stretch")
 
-    st.markdown("**Aproveitamento: temporada e últimos jogos**")
+    st.subheader("Aproveitamento: temporada e últimos jogos")
     movel = {m["rodada"]: m["aproveitamento_movel"] for m in aproveitamento_movel(jogos_time)}
     st.caption(
         f"Aproveitamento acumulado: {ultimo['aproveitamento']:.0f}%. "
@@ -720,7 +770,7 @@ def renderizar_evolucao(evolucao, jogos_time, quantidade_times, aviso_divergenci
                                    line=dict(color=VERMELHO, dash="dot"), marker=dict(symbol="diamond")))
     st.plotly_chart(aprov, width="stretch")
 
-    st.markdown("**Saldo de gols acumulado**")
+    st.subheader("Saldo de gols acumulado")
     saldo = _figura_base("Saldo de gols")
     saldo.add_trace(go.Bar(x=rodadas, y=[e["saldo"] for e in evolucao], name="Saldo", marker_color=AZUL,
                            text=[f"{e['saldo']:+d}" for e in evolucao], textposition="outside"))
@@ -795,8 +845,10 @@ aba_visao, aba_evolucao, aba_jogos, aba_ataque, aba_liga, aba_proximo, aba_lotec
      "Próximo jogo e resultados possíveis", "Na Loteca"]
 )
 nomes = nomes_dos_times(conexao)
+nomes_participantes = {p["id"]: p["nome"] for p in participantes}
 
 with aba_visao:
+    st.header("Visão geral")
     if contexto:
         st.success(
             f"Ficha completa: dados da CBF ({NOMES_SERIE.get(contexto[0], contexto[0])} {contexto[1]}, "
@@ -809,29 +861,41 @@ with aba_visao:
     else:
         st.info(
             "Ficha reduzida: este participante não tem dados da CBF (só clubes das Séries A e B são coletados). "
-            "As informações disponíveis estão na aba 'Na Loteca', com base apenas nos jogos que caíram na grade."
+            "Os números abaixo e as demais informações da aba 'Na Loteca' vêm apenas dos jogos que caíram na grade."
         )
+        jogos_loteca = jogos_da_loteca(conexao, participante_id)
+        for frase in frases_da_loteca(jogos_loteca, frequencia_participante(conexao, participante_id), frequencia_global(conexao)):
+            st.write("- " + frase)
     renderizar_classificacao_oficial(conexao, participante_id, classif)
 
 with aba_evolucao:
+    st.header("Evolução na competição")
     if evolucao:
         renderizar_evolucao(evolucao, jogos_time, quantidade_times, aviso_divergencia)
     else:
         st.info("A evolução rodada a rodada só existe para clubes das Séries A e B, cujos jogos vêm da CBF.")
 
 with aba_jogos:
+    st.header("Jogo a jogo")
     if jogos_time:
         renderizar_jogo_a_jogo(jogos_time, nomes)
     else:
-        st.info("O jogo a jogo da temporada existe para clubes das Séries A e B. Os jogos deste participante na Loteca estão na aba 'Na Loteca'.")
+        jogos_loteca = jogos_da_loteca(conexao, participante_id)
+        if jogos_loteca:
+            st.info("Ficha reduzida: aqui estão só os jogos deste participante na grade da Loteca, não a temporada completa.")
+            renderizar_jogo_a_jogo(jogos_loteca, nomes_participantes, rotulo="Concurso", recorte="deste participante na Loteca")
+        else:
+            st.info("Nenhum jogo apurado deste participante na Loteca ainda.")
 
 with aba_ataque:
+    st.header("Ataque, defesa e mando")
     if jogos_time:
         renderizar_ataque_defesa_mando(jogos_time, partidas_liga, nomes)
     else:
         st.info("Ataque, defesa e mando por temporada existem para clubes das Séries A e B. Para os demais, veja a aba 'Na Loteca'.")
 
 with aba_liga:
+    st.header("Comparação com a liga")
     if jogos_time:
         renderizar_comparacao_liga(
             comparar_com_liga(partidas_liga, cod_time, disciplina_da_liga(conexao, serie_time, ano_time)),
@@ -841,9 +905,11 @@ with aba_liga:
         st.info("A comparação com a série existe para clubes das Séries A e B. Para os demais, veja a aba 'Na Loteca'.")
 
 with aba_proximo:
+    st.header("Próximo jogo e resultados possíveis")
     renderizar_proximo_jogo(conexao, participante_id, cod_time, classif, partidas_liga, nomes)
 
 with aba_loteca:
+    st.header("Na Loteca")
     renderizar_aba_loteca(conexao, participante_id)
 
 conexao.close()

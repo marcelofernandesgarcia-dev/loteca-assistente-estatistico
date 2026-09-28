@@ -148,3 +148,70 @@ def gerar_insight(aproveitamento: dict, contagem: dict) -> str:
     if contagem["jogos"] >= LIMIAR_SEM_VITORIA_JOGOS and contagem["pct_vitorias"] >= 60:
         return f"Fase consistente: {contagem['pct_vitorias']:.0f}% de vitórias nos {contagem['jogos']} jogos deste filtro."
     return "Sem padrão forte o suficiente para destacar neste filtro -- veja a tabela detalhada abaixo."
+
+
+def jogos_da_loteca(conexao, participante_id: int) -> list[dict]:
+    """Jogos apurados do participante na grade da Loteca, do mais antigo ao mais
+    recente, no mesmo formato de `stats.competicao.jogos_do_time` (o campo
+    `rodada` traz o número do concurso; `adversario_id` é o id do participante)."""
+    linhas = conexao.execute(
+        """
+        SELECT concurso_numero, data_jogo, casa_id, fora_id, gols_casa, gols_fora, situacao
+        FROM jogos
+        WHERE (casa_id = ? OR fora_id = ?) AND gols_casa IS NOT NULL AND gols_fora IS NOT NULL
+        ORDER BY data_jogo, concurso_numero, num_jogo
+        """,
+        (participante_id, participante_id),
+    ).fetchall()
+    jogos = []
+    for linha in linhas:
+        em_casa = linha["casa_id"] == participante_id
+        pro = linha["gols_casa"] if em_casa else linha["gols_fora"]
+        contra = linha["gols_fora"] if em_casa else linha["gols_casa"]
+        resultado = "V" if pro > contra else "E" if pro == contra else "D"
+        jogos.append(
+            {
+                "rodada": linha["concurso_numero"],
+                "data": linha["data_jogo"],
+                "mando": "casa" if em_casa else "fora",
+                "adversario_id": linha["fora_id"] if em_casa else linha["casa_id"],
+                "gols_pro": pro,
+                "gols_contra": contra,
+                "resultado": resultado,
+                "pontos": {"V": 3, "E": 1, "D": 0}[resultado],
+                "sorteio": linha["situacao"] == "sorteio",
+            }
+        )
+    return jogos
+
+
+def frases_da_loteca(jogos: list[dict], por_mando: dict, global_: dict) -> list[str]:
+    """Leituras por regra para a ficha de quem só tem jogos da Loteca. `por_mando`
+    vem de `stats.frequencia.frequencia_participante`; `global_`, de `frequencia_global`."""
+    import config
+    from stats.competicao import descrever_sequencia, sequencia_atual
+
+    if not jogos:
+        return []
+    v = sum(1 for j in jogos if j["resultado"] == "V")
+    e = sum(1 for j in jogos if j["resultado"] == "E")
+    d = sum(1 for j in jogos if j["resultado"] == "D")
+    gp = sum(j["gols_pro"] for j in jogos)
+    gc = sum(j["gols_contra"] for j in jogos)
+    frases = [f"Na grade da Loteca: {len(jogos)} jogos, {v}V {e}E {d}D, {gp} gols marcados e {gc} sofridos."]
+    minimo = config.FICHA_AMOSTRA_PEQUENA
+    if len(jogos) < minimo:
+        frases.append(f"Amostra pequena (menos de {minimo} jogos): os números abaixo têm baixa confiança.")
+    for chave, nome, coluna in (("mandante", "mandante", "1"), ("visitante", "visitante", "2")):
+        dados = por_mando[chave]
+        if dados["total"] >= 5 and global_.get(coluna):
+            observado = 100.0 * dados[coluna] / dados["total"]
+            referencia = 100.0 * global_[coluna]
+            frases.append(
+                f"Como {nome}, a vitória saiu em {observado:.0f}% dos {dados['total']} jogos, contra {referencia:.0f}% "
+                "na média da Loteca."
+            )
+    sequencia = descrever_sequencia(sequencia_atual(jogos))
+    if sequencia:
+        frases.append(f"Sequência atual: {sequencia}.")
+    return frases

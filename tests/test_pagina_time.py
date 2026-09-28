@@ -1,0 +1,101 @@
+"""Executa a página 'Ficha do time' inteira (Streamlit AppTest) sobre um banco
+SINTÉTICO com times fictícios -- nunca toca no banco real."""
+import itertools
+import sys
+from pathlib import Path
+
+import pytest
+from streamlit.testing.v1 import AppTest
+
+import config
+import db
+from stats.competicao import tabela_por_rodada
+
+RAIZ = Path(__file__).resolve().parent.parent
+PAGINA = RAIZ / "app" / "pages" / "3_Por_time.py"
+ABAS = ["Visão geral", "Evolução na competição", "Jogo a jogo", "Ataque, defesa e mando",
+        "Comparação com a liga", "Próximo jogo e resultados possíveis", "Na Loteca"]
+
+PLACARES = [(2, 0), (1, 1), (0, 3), (1, 2), (0, 0), (3, 1), (2, 2), (1, 0), (0, 1), (4, 0), (1, 1), (2, 1)]
+
+
+@pytest.fixture()
+def banco(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "sintetico.db")
+    for pasta in (str(RAIZ), str(RAIZ / "app")):
+        if pasta not in sys.path:
+            sys.path.insert(0, pasta)
+    db.inicializar_schema()
+    with db.sessao() as c:
+        for cod, nome in ((1, "Time Alfa"), (2, "Time Beta"), (3, "Time Gama"), (4, "Time Delta")):
+            c.execute("INSERT INTO cbf_times (cod_time, nome) VALUES (?, ?)", (cod, nome))
+        partidas = []
+        for i, ((m, v), (gm, gv)) in enumerate(zip(itertools.permutations((1, 2, 3, 4), 2), PLACARES)):
+            partidas.append({"rodada": i // 2 + 1, "mandante_id": m, "visitante_id": v, "gols_mandante": gm, "gols_visitante": gv})
+            c.execute(
+                "INSERT INTO cbf_partidas (id_jogo, serie, ano, rodada, data_jogo, mandante_id, visitante_id,"
+                " gols_mandante, gols_visitante, coletado_em) VALUES (?, 'serie-a', 2026, ?, ?, ?, ?, ?, ?, '2026-09-27T10:00:00')",
+                (i + 1, i // 2 + 1, f"2026-03-{i + 1:02d}", m, v, gm, gv),
+            )
+        for linha in tabela_por_rodada(partidas)[max(p["rodada"] for p in partidas)]:
+            c.execute(
+                "INSERT INTO cbf_classificacao (serie, ano, cod_time, rodada, posicao, pontos, jogos, vitorias, empates,"
+                " derrotas, gols_pro, gols_contra, saldo, cartoes_amarelo, cartoes_vermelho, aproveitamento, ultimos_jogos,"
+                " proximo_adversario, proximo_adversario_id, coletado_em)"
+                " VALUES ('serie-a', 2026, ?, 6, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, 'V,E,D', 'Time Beta', 2, '2026-09-27T10:00:00')",
+                (linha["cod_time"], linha["posicao"], linha["pontos"], linha["jogos"], linha["vitorias"], linha["empates"],
+                 linha["derrotas"], linha["gols_pro"], linha["gols_contra"], linha["saldo"], linha["aproveitamento"]),
+            )
+            c.execute(
+                "INSERT INTO cbf_estatisticas_time (serie, ano, cod_time, jogos_disputados, gols_feitos, gols_sofridos,"
+                " jogos_sem_sofrer_gol, cartoes_amarelos, cartoes_vermelhos, coletado_em)"
+                " VALUES ('serie-a', 2026, ?, ?, ?, ?, 1, 5, 1, '2026-09-27T10:00:00')",
+                (linha["cod_time"], linha["jogos"], linha["gols_pro"], linha["gols_contra"]),
+            )
+        alfa = db.obter_ou_criar_participante(c, "ALFA", "clube", "SP")
+        beta = db.obter_ou_criar_participante(c, "BETA", "clube", "RJ")
+        italia = db.obter_ou_criar_participante(c, "ITALIA", "selecao", None)
+        c.execute("INSERT INTO mapa_cbf_participante (participante_id, cod_time, metodo) VALUES (?, 1, 'teste'), (?, 2, 'teste')", (alfa, beta))
+        c.execute("INSERT INTO concursos (numero, data_apuracao, data_limite_aposta) VALUES (9001, '2026-03-05', '2026-03-01')")
+        c.execute("INSERT INTO concursos (numero, data_limite_aposta, horario_fim_apostas) VALUES (9002, '2099-01-01', 15)")
+        jogos = [(9001, 1, alfa, beta, 2, 1, "1"), (9001, 2, italia, alfa, 0, 0, "X"), (9001, 3, beta, alfa, 1, 3, "2"),
+                 (9002, 1, alfa, beta, None, None, None)]
+        for concurso, num, casa, fora, gc, gf, res in jogos:
+            c.execute(
+                "INSERT INTO jogos (concurso_numero, num_jogo, casa_id, fora_id, gols_casa, gols_fora, resultado, data_jogo)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, '2026-03-02')", (concurso, num, casa, fora, gc, gf, res),
+            )
+    return True
+
+
+def _abrir(participante: str) -> AppTest:
+    at = AppTest.from_file(str(PAGINA), default_timeout=90).run()
+    assert not at.exception
+    at.selectbox[0].select(participante).run()
+    return at
+
+
+def test_clube_com_dados_da_cbf_abre_a_ficha_completa_sem_erro(banco):
+    at = _abrir("ALFA (clube)")
+    assert not at.exception, [e.value for e in at.exception]
+    assert [t.label for t in at.tabs] == ABAS
+    assert any("Ficha completa" in s.value for s in at.success)
+    assert [h.value for h in at.header] == [
+        "Visão geral", "Evolução na competição", "Jogo a jogo", "Ataque, defesa e mando", "Comparação com a liga",
+        "Próximo jogo e resultados possíveis", "Na Loteca"]
+
+
+def test_selecao_sem_cbf_abre_a_ficha_reduzida_com_dados_da_loteca(banco):
+    at = _abrir("ITALIA (selecao)")
+    assert not at.exception, [e.value for e in at.exception]
+    textos = " ".join(i.value for i in at.info)
+    assert "Ficha reduzida" in textos
+    assert "A evolução rodada a rodada só existe" in textos
+    marcadores = " ".join(m.value for m in at.markdown)
+    assert "Na grade da Loteca: 1 jogos" in marcadores
+
+
+def test_titulos_seguem_a_hierarquia_da_pagina(banco):
+    at = _abrir("ALFA (clube)")
+    assert [t.value for t in at.title] == ["Ficha do time"]
+    assert len(at.subheader) > 0  # seções dentro de cada aba
