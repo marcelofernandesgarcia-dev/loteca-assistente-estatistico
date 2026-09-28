@@ -16,7 +16,6 @@ from stats.bilhete import montar_bilhete
 from stats.fechamento import calcular
 from stats.percentual import percentual_historico
 from stats.prazo import formatar_restante, situacao_do_prazo
-from stats.sugestao import sugerir_marcacao
 from stats.temporada import desempenho_no_ano, resumo_curto
 
 st.title("Concurso atual")
@@ -114,8 +113,7 @@ else:
     for j in jogos_vigente:
         pct = percentual_historico(conexao, j["casa_id"], j["fora_id"])
         maior = max(pct, key=pct.get)
-        sugestao = sugerir_marcacao(pct)
-        dados_por_jogo[j["id"]] = {"jogo": j, "pct": pct, "sugestao": sugestao}
+        dados_por_jogo[j["id"]] = {"jogo": j, "pct": pct}
 
         linhas_pct.append(
             {
@@ -144,32 +142,26 @@ else:
         "mais de uma coluna por jogo, igual a duplo/triplo). Ao lado de cada jogo está o percentual "
         f"histórico (card 2) e o desempenho de cada time só em {ano_atual} (o ano em curso), para você "
         "confrontar sua marcação com o dado antes de decidir -- a marcação já vem preenchida com uma "
-        "sugestão que cabe no seu orçamento e no máximo oficial do volante, mas você pode mudar "
+        "sugestão de aposta simples (no máximo um duplo ou um triplo), mas você pode mudar "
         "qualquer jogo."
     )
     st.markdown(renderizar_titulo_cartao(f"3. Seu bilhete -- concurso {numero_vigente}"), unsafe_allow_html=True)
 
-    orcamento = st.number_input(
-        "Quanto quer gastar neste bilhete (R$)? A marcação inicial se ajusta a esse valor.",
-        min_value=4.0,
-        max_value=float(config.BILHETE_MAX_APOSTAS * 2),
-        value=config.BILHETE_ORCAMENTO_PADRAO,
-        step=2.0,
-        help="Mínimo oficial: R$ 4,00 (1 duplo). Máximo: R$ 1.728,00 (864 apostas). Cada aposta custa R$ 2,00.",
-    )
-    proposta = montar_bilhete([dados_por_jogo[j["id"]]["pct"] for j in jogos_vigente], orcamento=orcamento)
+    proposta = montar_bilhete([dados_por_jogo[j["id"]]["pct"] for j in jogos_vigente])
     marcacao_inicial = {j["id"]: proposta["marcacoes"][i] for i, j in enumerate(jogos_vigente)}
+    jogo_multiplo = jogos_vigente[proposta["jogo_multiplo"]]
+    tipo_multiplo = "triplo" if proposta["triplos"] else "duplo"
     st.caption(
-        f"Sugestão para R$ {orcamento:.2f}: {proposta['duplos']} duplo(s) e {proposta['triplos']} triplo(s), "
-        f"R$ {proposta['custo']:.2f}. Os duplos e triplos vão para os jogos em que cobrir mais uma coluna "
-        "rende mais chance por real gasto. É uma estimativa: não garante acerto."
+        f"Sugestão de partida: aposta simples em todos os jogos, com um único {tipo_multiplo} no jogo "
+        f"{jogo_multiplo['num_jogo']} ({jogo_multiplo['casa']} x {jogo_multiplo['fora']}), o mais incerto pelo "
+        f"histórico -- {proposta['apostas']} apostas, R$ {proposta['custo']:.2f}. É uma estimativa: não garante acerto."
     )
 
     total_triplos = total_duplos = 0
     marcacoes = {}
     for j in jogos_vigente:
         dado = dados_por_jogo[j["id"]]
-        pct, sugestao = dado["pct"], dado["sugestao"]
+        pct = dado["pct"]
         forma_casa = resumo_curto(desempenho_no_ano(conexao, j["casa_id"], ano_atual))
         forma_fora = resumo_curto(desempenho_no_ano(conexao, j["fora_id"], ano_atual))
 
@@ -189,7 +181,7 @@ else:
                 "Marcação",
                 options=["1", "X", "2"],
                 default=marcacao_inicial[j["id"]],
-                key=f"bilhete_{j['id']}_{orcamento}",
+                key=f"bilhete_{j['id']}",
                 label_visibility="collapsed",
             )
         marcacoes[j["id"]] = escolha or ["1"]
@@ -212,7 +204,6 @@ else:
     if total_duplos + total_triplos == 0:
         st.warning("O volante da Loteca exige ao menos 1 duplo (mínimo de R$ 4,00). Marque duas colunas em algum jogo.")
     st.caption(
-        "Mudar o valor do orçamento refaz a sugestão inicial (e descarta as alterações manuais). "
         "Ainda sem ajuste de notícias para concursos futuros até a varredura semanal rodar."
     )
 
