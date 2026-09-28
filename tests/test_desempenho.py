@@ -121,3 +121,26 @@ def test_insight_amostra_pequena_nao_inventa_padrao():
         {"jogos": 2, "vitorias": 1, "pct_vitorias": 50.0},
     )
     assert "Sem padrão forte" in texto
+
+
+def test_origem_do_percentual_diz_quando_cai_na_frequencia_global():
+    import sqlite3
+
+    import db
+    from stats.percentual import origem_do_percentual
+
+    conexao = sqlite3.connect(":memory:")
+    conexao.row_factory = sqlite3.Row
+    conexao.executescript(db.SCHEMA)
+    a = db.obter_ou_criar_participante(conexao, "TIME A", "clube", "SP")
+    b = db.obter_ou_criar_participante(conexao, "TIME B", "clube", "RJ")
+    conexao.execute("INSERT INTO concursos (numero) VALUES (1)")
+    origem = origem_do_percentual(conexao, a, b)
+    assert origem["metodo"] == "frequencia_global" and origem["menor_amostra"] == 0
+    for n in range(1, 7):
+        for casa, fora in ((a, b), (b, a)):
+            conexao.execute(
+                "INSERT INTO jogos (concurso_numero, num_jogo, casa_id, fora_id, gols_casa, gols_fora, resultado)"
+                " VALUES (1, ?, ?, ?, 1, 0, '1')", (n * 10 + (casa == a), casa, fora),
+            )
+    assert origem_do_percentual(conexao, a, b)["metodo"] == "poisson"

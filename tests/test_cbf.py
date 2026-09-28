@@ -162,3 +162,11 @@ def test_estrangeiro_e_selecao_nao_pareiam(conexao):
     db.obter_ou_criar_participante(conexao, "BARCELONA", "clube", "ESP")
     db.obter_ou_criar_participante(conexao, "ALEMANHA", "selecao", "GER")
     assert parear(conexao)["pareados"] == 0
+
+
+def test_classificacao_guarda_o_codigo_do_proximo_adversario(conexao):
+    gravar_classificacao(conexao, "serie-a", 2026, CLASSIFICACAO, "2026-09-27T10:00:00")
+    linha = conexao.execute(
+        "SELECT proximo_adversario, proximo_adversario_id FROM cbf_classificacao WHERE cod_time = 100"
+    ).fetchone()
+    assert (linha["proximo_adversario"], linha["proximo_adversario_id"]) == ("Time Beta", 200)

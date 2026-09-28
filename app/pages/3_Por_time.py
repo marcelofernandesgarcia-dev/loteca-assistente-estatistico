@@ -10,6 +10,7 @@ import streamlit as st
 from util import formatar_data_br, mostrar_aviso_responsabilidade, obter_conexao
 
 import config
+from stats.concursos import concurso_a_jogar
 from stats.cbf import (
     classificacao_do_participante,
     cod_time_do_participante,
@@ -42,6 +43,8 @@ from stats.desempenho import (
     tendencia_por_ano,
 )
 from stats.forma import forma_recente
+from stats.modelo_temporada import analisar_confronto, forcas_da_serie
+from stats.percentual import origem_do_percentual, percentual_historico
 from stats.temporada import desempenho_no_ano
 
 AZUL = "#1a4fa0"
@@ -522,6 +525,142 @@ def renderizar_comparacao_liga(comparacao, calendario):
     )
 
 
+AVISO_MODELO_TEMPORADA = (
+    "Modelo experimental da temporada: estima a força de ataque e de defesa de cada time com os jogos da série "
+    f"(com peso de {config.MODELO_TEMPORADA_PESO_PRIOR:g} jogos de um time médio para não exagerar em quem tem pouca amostra) "
+    "e calcula as chances de cada placar. Ainda não foi testado contra resultados passados (etapa de backtest) e é uma "
+    "estimativa para análise, não previsão nem garantia."
+)
+
+
+def _barra_resultado(nome_casa, nome_fora, analise):
+    figura = go.Figure()
+    for nome, valor, cor in (
+        (f"Vitória {nome_casa}", analise["p_casa"], AZUL),
+        ("Empate", analise["p_empate"], CINZA),
+        (f"Vitória {nome_fora}", analise["p_fora"], VERMELHO),
+    ):
+        figura.add_trace(go.Bar(y=[""], x=[valor * 100], name=nome, orientation="h", marker_color=cor,
+                                text=f"{valor * 100:.0f}%", textposition="inside"))
+    figura.update_layout(barmode="stack", height=120, margin=dict(l=0, r=0, t=10, b=10),
+                         xaxis=dict(range=[0, 100], showticklabels=False), legend=dict(orientation="h"))
+    return figura
+
+
+def _mapa_de_placares(nome_casa, nome_fora, matriz, limite=6):
+    z = [[matriz[c][f] * 100 for f in range(limite + 1)] for c in range(limite + 1)]
+    figura = go.Figure(
+        go.Heatmap(z=z, x=list(range(limite + 1)), y=list(range(limite + 1)), colorscale="Blues",
+                   text=[[f"{v:.1f}" for v in linha] for linha in z], texttemplate="%{text}", showscale=False)
+    )
+    figura.update_layout(height=380, margin=dict(l=10, r=10, t=10, b=10),
+                         xaxis=dict(title=f"Gols de {nome_fora}", dtick=1), yaxis=dict(title=f"Gols de {nome_casa}", dtick=1))
+    return figura
+
+
+def renderizar_analise_de_confronto(nome_casa, nome_fora, analise):
+    c1, c2, c3 = st.columns(3)
+    c1.metric(f"Gols esperados: {nome_casa}", f"{analise['gols_esperados_casa']:.2f}")
+    c2.metric(f"Gols esperados: {nome_fora}", f"{analise['gols_esperados_fora']:.2f}")
+    c3.metric("Base de jogos", f"{analise['jogos_casa']} e {analise['jogos_fora']}")
+    st.plotly_chart(_barra_resultado(nome_casa, nome_fora, analise), width="stretch")
+    st.markdown("**Placares mais prováveis**")
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {"Placar": f"{nome_casa} {x['gols_casa']} x {x['gols_fora']} {nome_fora}", "Chance": f"{x['probabilidade'] * 100:.1f}%"}
+                for x in analise["placares_mais_provaveis"]
+            ]
+        ),
+        width="stretch", hide_index=True,
+    )
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric(f"{nome_casa} marca", f"{analise['p_casa_marca'] * 100:.0f}%")
+    m2.metric(f"{nome_fora} marca", f"{analise['p_fora_marca'] * 100:.0f}%")
+    m3.metric("Os dois marcam", f"{analise['p_ambos_marcam'] * 100:.0f}%")
+    m4.metric("3 ou mais gols no jogo", f"{analise['p_3_ou_mais_gols'] * 100:.0f}%")
+    with st.expander("Ver todos os placares (chance em %)"):
+        st.plotly_chart(_mapa_de_placares(nome_casa, nome_fora, analise["matriz"]), width="stretch")
+
+
+def renderizar_proximo_jogo(conexao, participante_id, cod_time, classif, partidas_liga, nomes):
+    if cod_time and classif:
+        st.markdown("**Próximo adversário (CBF)**")
+        if classif.get("proximo_adversario"):
+            st.write(
+                f"Próximo adversário na tabela: **{classif['proximo_adversario']}**. A página da CBF não informa "
+                "mando nem data desse jogo; por isso o simulador abaixo deixa você escolher o mando."
+            )
+        else:
+            st.caption("A CBF não informou o próximo adversário (temporada encerrada ou rodada sem jogo definido).")
+
+    forcas = forcas_da_serie(partidas_liga) if partidas_liga else None
+    if cod_time and forcas and cod_time in forcas["jogos"]:
+        st.markdown("**Simulador de confronto (jogos da temporada)**")
+        st.caption(AVISO_MODELO_TEMPORADA)
+        outros = [cod for cod in forcas["jogos"] if cod != cod_time]
+        outros.sort(key=lambda cod: nomes.get(cod, ""))
+        padrao = classif.get("proximo_adversario_id") if classif else None
+        indice = outros.index(padrao) if padrao in outros else 0
+        col1, col2 = st.columns(2)
+        adversario = col1.selectbox("Adversário", outros, index=indice, format_func=lambda cod: nomes.get(cod, str(cod)), key="sim_adversario")
+        mando = col2.radio("Este time joga", ["Em casa", "Fora de casa"], horizontal=True, key="sim_mando")
+        casa, fora = (cod_time, adversario) if mando == "Em casa" else (adversario, cod_time)
+        analise = analisar_confronto(forcas, casa, fora)
+        if analise:
+            renderizar_analise_de_confronto(nomes.get(casa, "?"), nomes.get(fora, "?"), analise)
+    elif cod_time:
+        st.info("Sem jogos suficientes da série para simular um confronto.")
+
+    st.markdown("**Jogo na Loteca (concurso a jogar)**")
+    a_jogar = concurso_a_jogar(conexao)
+    jogos_loteca = []
+    if a_jogar:
+        jogos_loteca = conexao.execute(
+            """
+            SELECT j.num_jogo, j.data_jogo, j.casa_id, j.fora_id, pc.nome AS casa, pf.nome AS fora
+            FROM jogos j JOIN participantes pc ON pc.id = j.casa_id JOIN participantes pf ON pf.id = j.fora_id
+            WHERE j.concurso_numero = ? AND (j.casa_id = ? OR j.fora_id = ?) ORDER BY j.num_jogo
+            """,
+            (a_jogar["numero"], participante_id, participante_id),
+        ).fetchall()
+    if not jogos_loteca:
+        st.caption("Este participante não está na grade do concurso a jogar.")
+        return
+    for jogo in jogos_loteca:
+        st.write(f"**Concurso {a_jogar['numero']} · jogo {jogo['num_jogo']}: {jogo['casa']} x {jogo['fora']}** ({formatar_data_br(jogo['data_jogo'])})")
+        atual = percentual_historico(conexao, jogo["casa_id"], jogo["fora_id"])
+        origem = origem_do_percentual(conexao, jogo["casa_id"], jogo["fora_id"])
+        linhas = [{
+            "Modelo": "Atual (histórico da Loteca)",
+            f"Vitória {jogo['casa']}": f"{atual['1']:.0f}%", "Empate": f"{atual['X']:.0f}%", f"Vitória {jogo['fora']}": f"{atual['2']:.0f}%",
+        }]
+        cod_casa, cod_fora = cod_time_do_participante(conexao, jogo["casa_id"]), cod_time_do_participante(conexao, jogo["fora_id"])
+        analise = None
+        if cod_casa and cod_fora and forcas:
+            analise = analisar_confronto(forcas, cod_casa, cod_fora)
+        if analise:
+            linhas.append({
+                "Modelo": "Temporada (experimental)",
+                f"Vitória {jogo['casa']}": f"{analise['p_casa'] * 100:.0f}%", "Empate": f"{analise['p_empate'] * 100:.0f}%",
+                f"Vitória {jogo['fora']}": f"{analise['p_fora'] * 100:.0f}%",
+            })
+        st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
+        if origem["metodo"] == "frequencia_global":
+            st.caption(
+                f"Modelo atual: amostra pequena na base da Loteca (menor cenário com {origem['menor_amostra']} jogos, mínimo "
+                f"{origem['minimo_necessario']}); por isso o resultado é a frequência global de 1/X/2, igual para vários jogos, "
+                "e não diz nada específico sobre estes times."
+            )
+        else:
+            st.caption("Modelo atual: força de ataque e defesa dos times nos jogos que já caíram na Loteca.")
+        if analise:
+            st.caption(AVISO_MODELO_TEMPORADA)
+            renderizar_analise_de_confronto(jogo["casa"], jogo["fora"], analise)
+        else:
+            st.caption("Modelo da temporada indisponível: os dois times precisam estar na mesma série do Brasileirão coletada pela CBF.")
+
+
 def _figura_base(titulo_y: str, altura: int = 300):
     figura = go.Figure()
     figura.update_layout(
@@ -635,7 +774,7 @@ classif = classificacao_do_participante(conexao, participante_id)
 cod_time = cod_time_do_participante(conexao, participante_id)
 contexto = serie_do_time(conexao, cod_time) if cod_time else None
 
-evolucao, jogos_time, aviso_divergencia, quantidade_times = [], [], None, 0
+evolucao, jogos_time, aviso_divergencia, quantidade_times, partidas_liga = [], [], None, 0, []
 if contexto:
     serie_time, ano_time = contexto
     partidas_liga = carregar_partidas(conexao, serie_time, ano_time)
@@ -651,8 +790,9 @@ if contexto:
             "defasados; a classificação oficial está na aba 'Visão geral'."
         )
 
-aba_visao, aba_evolucao, aba_jogos, aba_ataque, aba_liga, aba_loteca = st.tabs(
-    ["Visão geral", "Evolução na competição", "Jogo a jogo", "Ataque, defesa e mando", "Comparação com a liga", "Na Loteca"]
+aba_visao, aba_evolucao, aba_jogos, aba_ataque, aba_liga, aba_proximo, aba_loteca = st.tabs(
+    ["Visão geral", "Evolução na competição", "Jogo a jogo", "Ataque, defesa e mando", "Comparação com a liga",
+     "Próximo jogo e resultados possíveis", "Na Loteca"]
 )
 nomes = nomes_dos_times(conexao)
 
@@ -699,6 +839,9 @@ with aba_liga:
         )
     else:
         st.info("A comparação com a série existe para clubes das Séries A e B. Para os demais, veja a aba 'Na Loteca'.")
+
+with aba_proximo:
+    renderizar_proximo_jogo(conexao, participante_id, cod_time, classif, partidas_liga, nomes)
 
 with aba_loteca:
     renderizar_aba_loteca(conexao, participante_id)

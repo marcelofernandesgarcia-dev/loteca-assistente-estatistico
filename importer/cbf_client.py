@@ -160,15 +160,16 @@ def gravar_classificacao(conexao, serie: str, ano: int, linhas: list[dict], cole
             """
             INSERT INTO cbf_classificacao (serie, ano, cod_time, rodada, posicao, pontos, jogos, vitorias, empates,
                 derrotas, gols_pro, gols_contra, saldo, cartoes_amarelo, cartoes_vermelho, aproveitamento,
-                ultimos_jogos, proximo_adversario, coletado_em)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ultimos_jogos, proximo_adversario, proximo_adversario_id, coletado_em)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(serie, ano, cod_time, rodada) DO UPDATE SET
                 posicao=excluded.posicao, pontos=excluded.pontos, jogos=excluded.jogos,
                 vitorias=excluded.vitorias, empates=excluded.empates, derrotas=excluded.derrotas,
                 gols_pro=excluded.gols_pro, gols_contra=excluded.gols_contra, saldo=excluded.saldo,
                 cartoes_amarelo=excluded.cartoes_amarelo, cartoes_vermelho=excluded.cartoes_vermelho,
                 aproveitamento=excluded.aproveitamento, ultimos_jogos=excluded.ultimos_jogos,
-                proximo_adversario=excluded.proximo_adversario, coletado_em=excluded.coletado_em
+                proximo_adversario=excluded.proximo_adversario,
+                proximo_adversario_id=excluded.proximo_adversario_id, coletado_em=excluded.coletado_em
             """,
             (
                 serie, ano, cod, _inteiro(linha.get("rodada")) or 0, _inteiro(linha.get("posicao")),
@@ -177,7 +178,7 @@ def gravar_classificacao(conexao, serie: str, ano: int, linhas: list[dict], cole
                 _inteiro(linha.get("gols_contra")), _inteiro(linha.get("gols_saldo")),
                 _inteiro(linha.get("cartoes_amarelo")), _inteiro(linha.get("cartoes_vermelho")),
                 _decimal(linha.get("aproveitamento")), ",".join(linha.get("ultimos_jogos") or []),
-                proximo.get("time"), coletado_em,
+                proximo.get("time"), _inteiro(proximo.get("id")), coletado_em,
             ),
         )
 

@@ -119,6 +119,10 @@ COMPETICAO_JANELA_MOVEL = int(os.environ.get("LOTECA_JANELA_MOVEL", "5"))  # jog
 COMPETICAO_SEQUENCIA_MINIMA = 3  # a partir de quantos jogos uma sequência vira destaque
 COMPETICAO_DIFERENCA_RELEVANTE_PP = 10.0  # p.p. entre aproveitamento recente e da temporada
 
+# Modelo experimental da temporada (stats/modelo_temporada.py): peso do prior, em
+# "jogos de um time médio"; parâmetro a calibrar no backtest (etapa B3).
+MODELO_TEMPORADA_PESO_PRIOR = float(os.environ.get("LOTECA_MODELO_PESO_PRIOR", "4.0"))
+
 # Forma recente -- quantidade de jogos considerados
 FORMA_JANELA_JOGOS = int(os.environ.get("LOTECA_FORMA_JANELA", "8"))
 

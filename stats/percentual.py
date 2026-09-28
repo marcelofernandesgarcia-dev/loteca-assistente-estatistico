@@ -114,3 +114,20 @@ def percentual_historico(conexao, casa_id: int, fora_id: int) -> dict:
         "X": (p_empate / total) * 100,
         "2": (p_fora_vence / total) * 100,
     }
+
+
+def origem_do_percentual(conexao, casa_id: int, fora_id: int) -> dict:
+    """Diz se `percentual_historico` usou a força própria dos times (Poisson) ou
+    caiu na frequência global por amostra pequena, e quantos jogos há na base
+    da Loteca no cenário mais escasso."""
+    menor_amostra = min(
+        _forca_ataque_casa(conexao, casa_id)[1],
+        _forca_defesa_fora(conexao, fora_id)[1],
+        _forca_ataque_fora(conexao, fora_id)[1],
+        _forca_defesa_casa(conexao, casa_id)[1],
+    )
+    return {
+        "metodo": "poisson" if menor_amostra >= JOGOS_MINIMOS_PARA_FORCA_PROPRIA else "frequencia_global",
+        "menor_amostra": menor_amostra,
+        "minimo_necessario": JOGOS_MINIMOS_PARA_FORCA_PROPRIA,
+    }

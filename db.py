@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS cbf_classificacao (
     aproveitamento REAL,
     ultimos_jogos TEXT,
     proximo_adversario TEXT,
+    proximo_adversario_id INTEGER,
     coletado_em TEXT NOT NULL,
     PRIMARY KEY (serie, ano, cod_time, rodada)
 );
@@ -178,7 +179,10 @@ def _migrar_participantes(conexao: sqlite3.Connection) -> None:
 
 def _garantir_colunas(conexao: sqlite3.Connection) -> None:
     """Bancos criados antes de uma coluna existir ganham a coluna sem perder dado."""
-    novas = {"concursos": [("horario_fim_apostas", "INTEGER")]}
+    novas = {
+        "concursos": [("horario_fim_apostas", "INTEGER")],
+        "cbf_classificacao": [("proximo_adversario_id", "INTEGER")],
+    }
     for tabela, colunas in novas.items():
         existentes = {linha["name"] for linha in conexao.execute(f"PRAGMA table_info({tabela})")}
         for nome, tipo in colunas:
