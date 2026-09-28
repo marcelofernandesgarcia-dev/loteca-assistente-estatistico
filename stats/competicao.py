@@ -12,6 +12,8 @@ RECONSTRUÍDA aqui a partir dos placares e conferida contra essa foto
 """
 from collections import defaultdict
 
+import config
+
 PONTOS_VITORIA = 3
 PONTOS_EMPATE = 1
 
@@ -195,3 +197,91 @@ def validar_temporada(conexao, serie: str, ano: int) -> dict:
         )
     ]
     return validar_contra_classificacao(tabelas[max(tabelas)], oficial)
+
+
+def sequencia_atual(jogos: list[dict]) -> dict:
+    """Quantos jogos seguidos, contando do último para trás, o time está
+    vencendo, sem perder, sem vencer e perdendo."""
+    resultados = [j["resultado"] for j in jogos]
+
+    def contar(aceitos: str) -> int:
+        n = 0
+        for resultado in reversed(resultados):
+            if resultado not in aceitos:
+                break
+            n += 1
+        return n
+
+    return {"vitorias": contar("V"), "sem_perder": contar("VE"), "sem_vencer": contar("ED"), "derrotas": contar("D")}
+
+
+def descrever_sequencia(sequencia: dict, minimo: int | None = None) -> str | None:
+    minimo = minimo if minimo is not None else config.COMPETICAO_SEQUENCIA_MINIMA
+    if sequencia["vitorias"] >= minimo:
+        return f"{sequencia['vitorias']} vitórias seguidas"
+    if sequencia["derrotas"] >= minimo:
+        return f"{sequencia['derrotas']} derrotas seguidas"
+    if sequencia["sem_perder"] >= minimo:
+        return f"{sequencia['sem_perder']} jogos sem perder"
+    if sequencia["sem_vencer"] >= minimo:
+        return f"{sequencia['sem_vencer']} jogos sem vencer"
+    return None
+
+
+def aproveitamento_movel(jogos: list[dict], janela: int | None = None) -> list[dict]:
+    """Aproveitamento (%) dos últimos `janela` jogos, a cada jogo a partir do
+    momento em que há jogos suficientes para preencher a janela."""
+    janela = janela or config.COMPETICAO_JANELA_MOVEL
+    return [
+        {
+            "rodada": jogos[i - 1]["rodada"],
+            "aproveitamento_movel": 100.0 * sum(j["pontos"] for j in jogos[i - janela:i]) / (PONTOS_VITORIA * janela),
+        }
+        for i in range(janela, len(jogos) + 1)
+    ]
+
+
+def variacao_de_posicao(evolucao: list[dict], rodadas: int | None = None) -> dict | None:
+    """Posição de `rodadas` rodadas atrás x atual. `variacao` positiva = subiu."""
+    rodadas = rodadas or config.COMPETICAO_JANELA_MOVEL
+    if len(evolucao) <= rodadas:
+        return None
+    antes, agora = evolucao[-1 - rodadas]["posicao"], evolucao[-1]["posicao"]
+    return {"de": antes, "para": agora, "variacao": antes - agora, "rodadas": rodadas}
+
+
+def frases_visao_geral(evolucao: list[dict], jogos: list[dict]) -> list[str]:
+    """Leituras automáticas por regra, cada uma com o número que a sustenta."""
+    if not evolucao:
+        return []
+    ultimo = evolucao[-1]
+    frases = [
+        f"Ocupa a {ultimo['posicao']}ª posição após a rodada {ultimo['rodada']}: {ultimo['pontos']} pontos em "
+        f"{ultimo['jogos']} jogos ({ultimo['aproveitamento']:.0f}% de aproveitamento)."
+    ]
+    diferenca_pontos = ultimo["pontos"] - ultimo["pontos_media_serie"]
+    if abs(diferenca_pontos) >= 1:
+        sentido = "a mais" if diferenca_pontos > 0 else "a menos"
+        frases.append(f"Tem {abs(diferenca_pontos):.0f} pontos {sentido} que a média da série ({ultimo['pontos_media_serie']:.0f}).")
+    variacao = variacao_de_posicao(evolucao)
+    if variacao:
+        if variacao["variacao"] > 0:
+            frases.append(f"Subiu {variacao['variacao']} posições nas últimas {variacao['rodadas']} rodadas (do {variacao['de']}º para o {variacao['para']}º).")
+        elif variacao["variacao"] < 0:
+            frases.append(f"Caiu {-variacao['variacao']} posições nas últimas {variacao['rodadas']} rodadas (do {variacao['de']}º para o {variacao['para']}º).")
+        else:
+            frases.append(f"Manteve a {variacao['para']}ª posição nas últimas {variacao['rodadas']} rodadas.")
+    movel = aproveitamento_movel(jogos)
+    if movel:
+        recente = movel[-1]["aproveitamento_movel"]
+        gap = recente - ultimo["aproveitamento"]
+        if abs(gap) >= config.COMPETICAO_DIFERENCA_RELEVANTE_PP:
+            sentido = "acima" if gap > 0 else "abaixo"
+            frases.append(
+                f"Nos últimos {config.COMPETICAO_JANELA_MOVEL} jogos o aproveitamento é {recente:.0f}%, {sentido} dos "
+                f"{ultimo['aproveitamento']:.0f}% da temporada."
+            )
+    sequencia = descrever_sequencia(sequencia_atual(jogos))
+    if sequencia:
+        frases.append(f"Sequência atual: {sequencia}.")
+    return frases

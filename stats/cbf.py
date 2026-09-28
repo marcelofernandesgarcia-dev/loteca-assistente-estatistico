@@ -87,3 +87,15 @@ def idade_da_coleta_horas(classificacao: dict | None) -> float | None:
     if not classificacao or not classificacao.get("coletado_em"):
         return None
     return (dt.datetime.now() - dt.datetime.fromisoformat(classificacao["coletado_em"])).total_seconds() / 3600
+
+
+def cod_time_do_participante(conexao, participante_id: int) -> int | None:
+    """Código do time na CBF pareado com o participante da Loteca, se houver."""
+    linha = conexao.execute(
+        "SELECT cod_time FROM mapa_cbf_participante WHERE participante_id = ?", (participante_id,)
+    ).fetchone()
+    return linha["cod_time"] if linha else None
+
+
+def nomes_dos_times(conexao) -> dict[int, str]:
+    return {linha["cod_time"]: linha["nome"] for linha in conexao.execute("SELECT cod_time, nome FROM cbf_times")}

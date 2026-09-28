@@ -114,6 +114,11 @@ SUGESTAO_LIMIAR_DUPLO = float(os.environ.get("LOTECA_LIMIAR_DUPLO", "45.0"))
 # Máximo oficial de apostas por bilhete (Manual de Produtos v21, item 6.3.3).
 BILHETE_MAX_APOSTAS = 864
 
+# Ficha do time (stats/competicao.py)
+COMPETICAO_JANELA_MOVEL = int(os.environ.get("LOTECA_JANELA_MOVEL", "5"))  # jogos da média móvel
+COMPETICAO_SEQUENCIA_MINIMA = 3  # a partir de quantos jogos uma sequência vira destaque
+COMPETICAO_DIFERENCA_RELEVANTE_PP = 10.0  # p.p. entre aproveitamento recente e da temporada
+
 # Forma recente -- quantidade de jogos considerados
 FORMA_JANELA_JOGOS = int(os.environ.get("LOTECA_FORMA_JANELA", "8"))
 

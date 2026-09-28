@@ -127,3 +127,70 @@ def test_carregar_partidas_e_serie_do_time_leem_o_banco():
     assert [p["id_jogo"] for p in carregar_partidas(conexao, "serie-a", 2026)] == [1]
     assert serie_do_time(conexao, A) == ("serie-a", 2026)
     assert serie_do_time(conexao, 999) is None
+
+
+from stats.competicao import (  # noqa: E402
+    aproveitamento_movel,
+    descrever_sequencia,
+    frases_visao_geral,
+    sequencia_atual,
+    variacao_de_posicao,
+)
+
+
+def _jogos(resultados: str):
+    pontos = {"V": 3, "E": 1, "D": 0}
+    return [
+        {"rodada": i + 1, "resultado": r, "pontos": pontos[r], "gols_pro": 1, "gols_contra": 0}
+        for i, r in enumerate(resultados)
+    ]
+
+
+def test_sequencia_atual_conta_do_ultimo_para_tras():
+    assert sequencia_atual(_jogos("DVVE")) == {"vitorias": 0, "sem_perder": 3, "sem_vencer": 1, "derrotas": 0}
+    assert sequencia_atual(_jogos("VEDD")) == {"vitorias": 0, "sem_perder": 0, "sem_vencer": 3, "derrotas": 2}
+    assert sequencia_atual([]) == {"vitorias": 0, "sem_perder": 0, "sem_vencer": 0, "derrotas": 0}
+
+
+def test_descrever_sequencia_respeita_o_minimo():
+    assert descrever_sequencia(sequencia_atual(_jogos("EVVV")), minimo=3) == "3 vitórias seguidas"
+    assert descrever_sequencia(sequencia_atual(_jogos("VEEV")), minimo=3) == "4 jogos sem perder"
+    assert descrever_sequencia(sequencia_atual(_jogos("VEDV")), minimo=3) is None
+    assert descrever_sequencia(sequencia_atual(_jogos("VDEDE")), minimo=3) == "4 jogos sem vencer"
+
+
+def test_aproveitamento_movel_so_comeca_com_a_janela_cheia():
+    movel = aproveitamento_movel(_jogos("VVVEDD"), janela=3)
+    assert [m["rodada"] for m in movel] == [3, 4, 5, 6]
+    assert movel[0]["aproveitamento_movel"] == pytest.approx(100.0)
+    assert movel[3]["aproveitamento_movel"] == pytest.approx(100 * 1 / 9)
+    assert aproveitamento_movel(_jogos("VV"), janela=3) == []
+
+
+def _evo(posicoes):
+    return [
+        {"rodada": i + 1, "posicao": p, "pontos": 10 + i, "jogos": i + 1, "aproveitamento": 50.0,
+         "saldo": 0, "pontos_media_serie": 10 + i}
+        for i, p in enumerate(posicoes)
+    ]
+
+
+def test_variacao_de_posicao_positiva_quando_sobe():
+    assert variacao_de_posicao(_evo([10, 9, 8, 7, 6, 4]), rodadas=5) == {"de": 10, "para": 4, "variacao": 6, "rodadas": 5}
+    assert variacao_de_posicao(_evo([3, 2]), rodadas=5) is None
+
+
+def test_frases_trazem_o_numero_que_as_sustenta():
+    evolucao = _evo([10, 9, 8, 7, 6, 4])
+    evolucao[-1].update(pontos=20, pontos_media_serie=14.0, aproveitamento=40.0, jogos=6)
+    frases = frases_visao_geral(evolucao, _jogos("DDVVVV"))
+    texto = " ".join(frases)
+    assert "4ª posição após a rodada 6" in texto and "20 pontos em 6 jogos" in texto
+    assert "6 pontos a mais que a média da série" in texto
+    assert "Subiu 6 posições" in texto
+    assert "4 vitórias seguidas" in texto
+    assert "acima dos 40%" in texto  # últimos 5 jogos: 4V+1D = 80%
+
+
+def test_frases_sem_dados_nao_inventam_nada():
+    assert frases_visao_geral([], []) == []
