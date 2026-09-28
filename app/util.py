@@ -29,3 +29,15 @@ def obter_conexao():
 
 def mostrar_aviso_responsabilidade():
     st.caption(config.AVISO_RESPONSABILIDADE)
+
+
+def formatar_data_br(data_iso: str | None) -> str:
+    """Datas ficam em ISO (AAAA-MM-DD) no banco -- mais fácil de ordenar e
+    comparar -- e só são formatadas para dia/mês/ano na hora de exibir."""
+    if not data_iso:
+        return "-"
+    try:
+        ano, mes, dia = data_iso.split("-")
+        return f"{dia}/{mes}/{ano}"
+    except ValueError:
+        return data_iso

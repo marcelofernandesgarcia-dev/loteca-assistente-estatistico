@@ -1,16 +1,19 @@
+import datetime as dt
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import streamlit as st
-from estilo_caixa import renderizar_cartao
-from util import mostrar_aviso_responsabilidade, obter_conexao
+from estilo_caixa import renderizar_cartao, renderizar_titulo_cartao
+from util import formatar_data_br, mostrar_aviso_responsabilidade, obter_conexao
 
 import config
 from importer.caixa_client import ErroImportacaoLoteca, importar_concurso
+from stats.fechamento import calcular
 from stats.percentual import percentual_historico
 from stats.sugestao import sugerir_marcacao
+from stats.temporada import desempenho_no_ano, resumo_curto
 
 st.title("Concurso atual")
 mostrar_aviso_responsabilidade()
@@ -62,7 +65,7 @@ else:
                     "num_jogo": j["num_jogo"],
                     "casa": j["casa"],
                     "fora": j["fora"],
-                    "data": j["data_jogo"] or "-",
+                    "data": formatar_data_br(j["data_jogo"]),
                     "valor_casa": str(j["gols_casa"]) if j["gols_casa"] is not None else "-",
                     "valor_x": "" if not venceu_x else "X",
                     "valor_fora": str(j["gols_fora"]) if j["gols_fora"] is not None else "-",
@@ -72,26 +75,37 @@ else:
                 }
             )
         st.markdown(
-            renderizar_cartao(f"Resultado do concurso {ultimo_encerrado['concurso_numero']} (encerrado)", linhas),
+            renderizar_cartao(f"1. Resultado do concurso {ultimo_encerrado['concurso_numero']} (encerrado)", linhas),
             unsafe_allow_html=True,
         )
+        st.caption("O que já aconteceu de fato -- o placar real, tal como saiu. Serve de referência para conferir contra os dois cards abaixo.")
 
-    # Cards 2 e 3 -- percentual histórico e marcação sugerida do concurso vigente
+    # Card 2 -- percentual histórico do concurso vigente
     numero_vigente = concurso_vigente["numero"]
     jogos_vigente = _jogos_do_concurso(numero_vigente)
+    ano_atual = dt.date.today().year
 
-    linhas_pct, linhas_sugestao = [], []
+    st.info(
+        "**2. Percentual histórico** -- para cada jogo do concurso vigente, a chance de vitória do "
+        "mandante, empate ou vitória do visitante, calculada a partir de todo o histórico de gols "
+        "desse mandante e desse visitante já importado (método Poisson, sem depender de odds de "
+        "mercado -- ver `stats/percentual.py`). É o dado puro, sem nenhum ajuste ou opinião ainda."
+    )
+
+    linhas_pct = []
+    dados_por_jogo = {}
     for j in jogos_vigente:
         pct = percentual_historico(conexao, j["casa_id"], j["fora_id"])
         maior = max(pct, key=pct.get)
         sugestao = sugerir_marcacao(pct)
+        dados_por_jogo[j["id"]] = {"jogo": j, "pct": pct, "sugestao": sugestao}
 
         linhas_pct.append(
             {
                 "num_jogo": j["num_jogo"],
                 "casa": j["casa"],
                 "fora": j["fora"],
-                "data": j["data_jogo"] or "-",
+                "data": formatar_data_br(j["data_jogo"]),
                 "valor_casa": f"{pct['1']:.0f}%",
                 "valor_x": f"{pct['X']:.0f}%",
                 "valor_fora": f"{pct['2']:.0f}%",
@@ -100,35 +114,68 @@ else:
                 "destaque_fora": maior == "2",
             }
         )
-        linhas_sugestao.append(
-            {
-                "num_jogo": j["num_jogo"],
-                "casa": j["casa"],
-                "fora": j["fora"],
-                "data": j["data_jogo"] or "-",
-                "valor_casa": f"{pct['1']:.0f}%",
-                "valor_x": f"{pct['X']:.0f}%",
-                "valor_fora": f"{pct['2']:.0f}%",
-                "destaque_casa": "1" in sugestao["colunas"],
-                "destaque_x": "X" in sugestao["colunas"],
-                "destaque_fora": "2" in sugestao["colunas"],
-            }
-        )
 
     st.markdown(
-        renderizar_cartao(f"Percentual histórico -- concurso {numero_vigente}", linhas_pct),
+        renderizar_cartao(f"2. Percentual histórico -- concurso {numero_vigente}", linhas_pct),
         unsafe_allow_html=True,
     )
-    st.markdown(
-        renderizar_cartao(f"Marcação sugerida -- concurso {numero_vigente}", linhas_sugestao),
-        unsafe_allow_html=True,
+
+    # Card 3 -- bilhete interativo: o usuário marca, comparando com o
+    # percentual histórico e com o desempenho de cada time no ano em curso.
+    st.info(
+        "**3. Seu bilhete** -- marque abaixo como se fosse o volante de aposta de verdade (pode marcar "
+        "mais de uma coluna por jogo, igual a duplo/triplo). Ao lado de cada jogo está o percentual "
+        f"histórico (card 2) e o desempenho de cada time só em {ano_atual} (o ano em curso), para você "
+        "confrontar sua marcação com o dado antes de decidir -- a marcação já vem preenchida com a "
+        "sugestão estatística (seco/duplo/triplo pelos limiares de `config.py`), mas você pode mudar "
+        "qualquer jogo."
     )
+    st.markdown(renderizar_titulo_cartao(f"3. Seu bilhete -- concurso {numero_vigente}"), unsafe_allow_html=True)
+
+    total_triplos = total_duplos = 0
+    marcacoes = {}
+    for j in jogos_vigente:
+        dado = dados_por_jogo[j["id"]]
+        pct, sugestao = dado["pct"], dado["sugestao"]
+        forma_casa = resumo_curto(desempenho_no_ano(conexao, j["casa_id"], ano_atual))
+        forma_fora = resumo_curto(desempenho_no_ano(conexao, j["fora_id"], ano_atual))
+
+        col_info, col_marca = st.columns([3, 2])
+        with col_info:
+            st.markdown(
+                f"**{j['num_jogo']}. {j['casa']}** ({pct['1']:.0f}% · {forma_casa}) "
+                f"x **{j['fora']}** ({pct['2']:.0f}% · {forma_fora}) — empate {pct['X']:.0f}%"
+            )
+        with col_marca:
+            escolha = st.multiselect(
+                "Marcação",
+                options=["1", "X", "2"],
+                default=sugestao["colunas"],
+                key=f"bilhete_{j['id']}",
+                label_visibility="collapsed",
+            )
+        marcacoes[j["id"]] = escolha or ["1"]
+        if len(escolha) == 2:
+            total_duplos += 1
+        elif len(escolha) == 3:
+            total_triplos += 1
+
+    custo = calcular(total_triplos, total_duplos)
+    st.success(
+        f"Seu bilhete: {total_duplos} duplo(s) e {total_triplos} triplo(s) -- "
+        f"{custo['apostas']} combinações, R$ {custo['valor_reais']:.2f} "
+        "(ver página 'Fechamento de bolão' para organizar como Bolão CAIXA)."
+    )
+    if custo["apostas"] > 864:
+        st.warning(
+            "Esse bilhete passa do máximo oficial da Loteca (864 apostas = 5 duplos + 3 triplos) -- "
+            "não seria aceito num volante de verdade. Remova algum duplo/triplo para caber no limite."
+        )
     st.caption(
-        "Marcação sugerida: seco quando o favorito passa de "
-        f"{config.SUGESTAO_LIMIAR_SECO:.0f}%, duplo entre "
-        f"{config.SUGESTAO_LIMIAR_DUPLO:.0f}% e {config.SUGESTAO_LIMIAR_SECO:.0f}%, "
-        "triplo abaixo disso -- limiares ajustáveis em config.py. Ainda sem ajuste de "
-        "notícias para concursos futuros até a varredura semanal rodar."
+        "Marcação sugerida de partida: seco quando o favorito passa de "
+        f"{config.SUGESTAO_LIMIAR_SECO:.0f}%, duplo entre {config.SUGESTAO_LIMIAR_DUPLO:.0f}% e "
+        f"{config.SUGESTAO_LIMIAR_SECO:.0f}%, triplo abaixo disso. Ainda sem ajuste de notícias para "
+        "concursos futuros até a varredura semanal rodar."
     )
 
 conexao.close()

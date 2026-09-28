@@ -5,7 +5,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import pandas as pd
 import streamlit as st
-from util import mostrar_aviso_responsabilidade, obter_conexao
+from util import formatar_data_br, mostrar_aviso_responsabilidade, obter_conexao
 
 st.title("Por concurso")
 mostrar_aviso_responsabilidade()
@@ -20,14 +20,14 @@ else:
 
     concurso = conexao.execute("SELECT * FROM concursos WHERE numero = ?", (numero,)).fetchone()
     st.caption(
-        f"Apuração: {concurso['data_apuracao'] or '-'} · "
-        f"Prazo de aposta (aproximado): {concurso['data_limite_aposta'] or '-'} · "
+        f"Apuração: {formatar_data_br(concurso['data_apuracao'])} · "
+        f"Prazo de aposta (aproximado): {formatar_data_br(concurso['data_limite_aposta'])} · "
         f"Acumulou: {'sim' if concurso['acumulado'] else 'não'}"
     )
 
     jogos = conexao.execute(
         """
-        SELECT j.num_jogo, j.gols_casa, j.gols_fora, j.resultado, j.campeonato, j.situacao,
+        SELECT j.num_jogo, j.gols_casa, j.gols_fora, j.resultado, j.campeonato, j.situacao, j.data_jogo,
                pc.nome AS casa, pf.nome AS fora
         FROM jogos j
         JOIN participantes pc ON pc.id = j.casa_id
@@ -44,6 +44,7 @@ else:
             "Placar": f"{j['gols_casa']} x {j['gols_fora']}" if j["gols_casa"] is not None else "-",
             "Visitante": j["fora"],
             "Coluna": j["resultado"] or "-",
+            "Data": formatar_data_br(j["data_jogo"]),
             "Campeonato": j["campeonato"] or "-",
             "Situação": j["situacao"],
         }

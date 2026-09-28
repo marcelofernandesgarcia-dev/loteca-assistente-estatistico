@@ -5,10 +5,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import pandas as pd
 import streamlit as st
-from util import mostrar_aviso_responsabilidade, obter_conexao
+from util import formatar_data_br, mostrar_aviso_responsabilidade, obter_conexao
 
 from stats.forma import forma_recente
 from stats.frequencia import frequencia_participante
+from stats.temporada import desempenho_no_ano
 
 st.title("Por time")
 mostrar_aviso_responsabilidade()
@@ -38,12 +39,23 @@ else:
         st.write(f"{freq['visitante']['total']} jogos")
         st.write(f"Vitória: {100*freq['visitante']['2']/t:.1f}% · Empate: {100*freq['visitante']['X']/t:.1f}% · Derrota: {100*freq['visitante']['1']/t:.1f}%")
 
-    st.subheader("Forma recente")
+    st.subheader("Forma recente (últimos jogos, qualquer ano)")
     forma = forma_recente(conexao, participante_id)
     st.write(
         f"Últimos {forma['jogos_considerados']} jogos: {forma['vitorias']}V {forma['empates']}E {forma['derrotas']}D · "
         f"{forma['gols_marcados']} gols marcados, {forma['gols_sofridos']} sofridos, {forma['clean_sheets']} clean sheets."
     )
+
+    st.subheader("Desempenho no ano em curso")
+    st.caption("Só os jogos deste ano civil -- é a base usada no card 'Seu bilhete' da página Concurso atual para confrontar com sua marcação.")
+    desempenho = desempenho_no_ano(conexao, participante_id)
+    if desempenho["jogos"] == 0:
+        st.write(f"Nenhum jogo importado em {desempenho['ano']} para este participante ainda.")
+    else:
+        st.write(
+            f"{desempenho['ano']}: {desempenho['jogos']} jogos · {desempenho['vitorias']}V {desempenho['empates']}E {desempenho['derrotas']}D · "
+            f"{desempenho['gols_marcados']} gols marcados, {desempenho['gols_sofridos']} sofridos."
+        )
 
     st.subheader("Histórico de aparições na Loteca")
     jogos = conexao.execute(
@@ -63,7 +75,7 @@ else:
             [
                 {
                     "Concurso": j["concurso_numero"],
-                    "Data": j["data_jogo"],
+                    "Data": formatar_data_br(j["data_jogo"]),
                     "Mandante": j["casa"],
                     "Placar": f"{j['gols_casa']} x {j['gols_fora']}" if j["gols_casa"] is not None else "-",
                     "Visitante": j["fora"],

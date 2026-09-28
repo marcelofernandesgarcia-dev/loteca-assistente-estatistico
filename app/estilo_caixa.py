@@ -28,6 +28,13 @@ def _badge(valor: str, destacado: bool) -> str:
     return f'<span class="{classe}">{valor}</span>'
 
 
+def renderizar_titulo_cartao(titulo: str) -> str:
+    """Só a barra de título do card, para quando o corpo é feito de widgets
+    interativos do Streamlit (não dá para colocar widget dentro de HTML
+    estático) -- usado no card 3 (bilhete)."""
+    return _CSS + '<div class="loteca-card"><div class="loteca-titulo">' + titulo + "</div></div>"
+
+
 def renderizar_cartao(titulo: str, linhas: list[dict]) -> str:
     """`linhas`: cada item precisa de num_jogo, casa, fora, data,
     valor_casa, valor_x, valor_fora (strings a exibir), e
