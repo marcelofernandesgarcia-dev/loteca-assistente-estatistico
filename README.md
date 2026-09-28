@@ -38,9 +38,9 @@ with db.sessao() as conexao:
 ## Estrutura
 
 - `importer/` — cliente da API da CAIXA (rate-limited, incremental) e bootstrap do dataset ValorFinal.
-- `stats/` — regra de negócio pura: cálculo de resultado, frequência, forma, percentual histórico (Poisson), fechamento de bolão.
+- `stats/` — regra de negócio pura: cálculo de resultado, frequência, forma, percentual histórico (Poisson), sugestão seco/duplo/triplo, desempenho no ano, painel de desempenho por time (`desempenho.py`), fechamento de bolão.
 - `externo/` — varredura semanal de notícias (RSS público, sem chave de API) e cálculo do ajuste externo limitado.
-- `app/` — páginas Streamlit (Concurso atual, Por concurso, Por time, Fechamento de bolão), sem lógica de negócio própria.
+- `app/` — páginas Streamlit (Concurso atual com 3 cards, Por concurso, Por time como painel com gráficos, Fechamento de bolão), sem lógica de negócio própria.
 - `tests/` — pytest para `stats/`, `externo/` e um teste de integração leve contra a API real.
 - `scripts/varredura_semanal.py` — ponto de entrada para o Agendador de Tarefas do Windows.
 - `config.py` — todos os parâmetros (rate-limit, pesos do ajuste externo, janela de forma, lista de seleções nacionais).
