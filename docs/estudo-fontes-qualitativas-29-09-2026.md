@@ -26,6 +26,7 @@
 | 14 | Analisar e verificar a simulação prática do desdobramento reduzido com garantia (16 volantes, R$ 32, "garante" 13 pontos) | Seção "Simulação numérica do fechamento reduzido" (Q9) | ✅ Verificado -- **reivindicação central refutada por prova matemática** (16 linhas cobrem no máximo 22% do espaço; mínimo real comprovado é 72 linhas / R$ 144) |
 | 15 | Analisar descrição de planilha externa (`calculadora_desdobramento_loteca.xlsx`, "100% de garantia" com 16 volantes) | Seção "Complemento -- planilha externa" (Q9) | ✅ Verificado -- **repete a mesma alegação já refutada no item 14**; frequência de colunas da planilha bate com nossa base real, garantia de 100% não |
 | 16 | Respostas às 12 perguntas de validação (elenco, BID, YouTube, sites oficiais, skill, dashboard, aviso de coluna confirmados; redes sociais/dado tático, modelo sofisticado e fechamento reduzido pedidos de explicação) | Seção "Respostas de validação do usuário (rodada 7)" | ✅ Registrado -- 9 itens aprovados, 3 aguardando decisão final após explicação |
+| 17 | Decisão final sobre os 3 itens em aberto: redes sociais/dado tático (descartar), modelo sofisticado/Game Data Science (descartar de vez), fechamento reduzido com garantia real (manter -- pesquisar e construir) | Seção "Decisões finais (rodada 8)" | ✅ Decidido -- roteiro atualizado, nenhuma pergunta em aberto |
 
 Este documento (`docs/estudo-fontes-qualitativas-29-09-2026.md`) passa a ser o **registro único** de solicitações de melhoria em aberto -- toda vez que eu propuser algo novo por minha conta ou você pedir algo novo, eu atualizo esta tabela, para nada se perder mesmo com o projeto crescendo aos poucos.
 
@@ -83,9 +84,8 @@ Cada linha foi checada nesta sessão (não é suposição) ou fica marcada como 
 
 ## O que fica fora, e por quê
 
-- **Sentimento de torcida via rede social:** custo, ToS, e principalmente risco metodológico -- amostra de quem posta não representa a torcida toda, e o projeto já tem o princípio de "proibido fabricar dado" quando a amostra é fraca.
-- **Dado tático fino (xG, passes, entrosamento):** exigiria contratar um provedor pago -- decisão financeira do usuário, não técnica.
-- **Elenco/idade dos jogadores:** contraria a decisão de minimização já tomada; só entra se o usuário reverter essa decisão de propósito.
+- **Sentimento de torcida via rede social e dado tático fino (xG, passes, entrosamento medido): DESCARTADO DEFINITIVAMENTE (decisão do usuário, 29/09/2026, rodada 8).** Custo de API, risco metodológico (amostra de quem posta não representa a torcida toda -- "proibido fabricar dado"), e dado tático fino exigiria provedor pago. O usuário optou por descartar, não por assumir o risco -- este item não é mais reavaliado a menos que o usuário peça de propósito no futuro.
+- **Elenco/idade dos jogadores:** ver Fase Q2d -- reaberto e aprovado em 29/09/2026, condicionado à leitura dos termos de uso do Transfermarkt.
 
 ## Complemento (mesmo dia): sites oficiais, canais/influencers, jornalistas, sites específicos
 
@@ -170,8 +170,8 @@ Busquei 3 das citações mais checáveis:
 
 - **Q6 -- Aviso de faixa por coluna (heurística de distribuição):** dá para fazer AGORA, sem fonte nova -- os números já saíram da nossa própria base. Vira um aviso informativo no bilhete ("este bilhete tem 11 jogos na coluna 1; historicamente, 79% dos concursos ficam entre 5 e 9"), nunca um bloqueio.
 - **Q7 -- Estudo anti-manada:** formalizar como módulo (`stats/premiacoes.py` ou similar) usando `premiacoes` + `jogos`, que já temos -- sem fonte nova. Precisa de mais rigor estatístico (o -0,13 é fraco) antes de virar recomendação na tela.
-- **Q8 -- Classificação de risco por jogo via modelo mais sofisticado (Random Forest/SVM):** só depois do B2 e com o MESMO backtest do B3 -- não entra por causa de uma citação de outro domínio. Fica registrado como ideia, condicionado a medir, igual ao resto do projeto.
-- **Q9 -- Fechamento reduzido com garantia condicional:** conceito real de matemática de loteria (sistemas reduzidos com garantia), diferente do fechamento cheio que já existe. Qualquer "garantia" precisa ser **provada matematicamente** (testada de forma exaustiva em casos pequenos), com o mesmo rigor que `stats/fechamento.py` já tem contra a tabela oficial -- não vou implementar uma garantia sem verificar que ela realmente garante o que promete. **Ver refutação da simulação numérica abaixo -- a conta específica de "16 linhas garantem 13 pontos" está matematicamente errada, não só não comprovada.**
+- **Q8 -- Classificação de risco por jogo via modelo mais sofisticado (Random Forest/SVM): DESCARTADO DEFINITIVAMENTE (decisão do usuário, 29/09/2026, rodada 8).** Não entra no roteiro nem como ideia futura registrada -- a proposta e os números do texto de "Game Data Science" saem do escopo do projeto.
+- **Q9 -- Fechamento reduzido com garantia condicional: MANTIDO E APROVADO (decisão do usuário, 29/09/2026, rodada 8) -- pesquisar e construir.** Conceito real de matemática de loteria (sistemas reduzidos com garantia), diferente do fechamento cheio que já existe. Qualquer "garantia" precisa ser **provada matematicamente** (testada de forma exaustiva em casos pequenos), com o mesmo rigor que `stats/fechamento.py` já tem contra a tabela oficial -- não vou implementar uma garantia sem verificar que ela realmente garante o que promete. Ver refutação da simulação numérica abaixo (a conta específica de "16 linhas garantem 13 pontos" está matematicamente errada) e o plano de trabalho aprovado na seção "Decisões finais (rodada 8)".
 
 ## Simulação numérica do fechamento reduzido (mesmo dia, 5ª rodada) -- a conta não fecha
 
@@ -261,10 +261,18 @@ O texto pedia para transpor 4 técnicas de análise de jogos digitais para a Lot
 
 **O que falta para isso ir ao app -- e por que ainda não fiz:** eu só provei o **piso teórico** (72 é o mínimo possível, por uma conta de cobertura). Eu **não construí** um conjunto de 72 (ou próximo) linhas que comprovadamente cubra as 864 combinações -- isso é um problema de desenho combinatório separado (existe uma área de pesquisa chamada "covering design" com repositórios que catalogam soluções conhecidas para vários parâmetros; não verifiquei se o nosso caso específico -- 5 posições de 2 opções + 3 posições de 3 opções, raio de erro 1 -- já tem solução catalogada, ou se eu precisaria construir e verificar computacionalmente). O trabalho, se você autorizar, seria: (1) pesquisar se existe solução conhecida para este formato exato; (2) se não houver, construir um conjunto candidato (por algoritmo guloso de cobertura de conjuntos ou busca) e **verificar exaustivamente**, por computador, que ele realmente cobre as 864 combinações -- as 864 são poucas, então a verificação em si é rápida e confiável; (3) só depois disso, integrar como uma opção nova em `stats/fechamento.py`, testada com o mesmo rigor que a matriz cheia já tem contra a tabela oficial da CAIXA, e rotulada na tela exatamente pelo que garante, nada além.
 
+## Decisões finais (mesmo dia, rodada 8) -- as 3 perguntas em aberto foram respondidas
+
+O usuário respondeu, item por item (via 3 perguntas separadas, para evitar erro de interpretação numa mensagem anterior que tinha uma contradição aparente -- "descarte" seguido de "(mantenha e incorpore)"):
+
+| Item | Decisão | O que muda no roteiro |
+|---|---|---|
+| 1. Sentimento de rede social / dado tático fino | **Descartar** | Sai definitivamente do escopo -- não é mais reavaliado, nem com risco registrado (diferente da CBF). Ver "O que fica fora, e por quê" acima. |
+| 2. Modelo mais sofisticado / conceitos do texto de Game Data Science (Q8) | **Descartar de vez** | Sai do roteiro inteiramente -- nem como ideia futura registrada. **Não afeta** Q6 (aviso de faixa por coluna, já aprovado na rodada 7) nem Q7 (estudo anti-manada, ainda registrado como precisa de mais rigor) -- esses dois usam só a nossa própria base real, são itens distintos do Q8. |
+| 3. Fechamento reduzido com garantia real (Q9) | **Manter -- pesquisar e construir** | Vira item do roteiro: pesquisar se existe solução conhecida para o formato exato (5 posições de 2 opções + 3 de 3 opções, raio 1); se não houver, construir um conjunto candidato e verificar exaustivamente contra as 864 combinações; só depois integrar a `stats/fechamento.py` com o mesmo rigor já aplicado à matriz cheia. |
+
+**Ordem entre o dashboard (Q5, já priorizado na rodada 7) e o fechamento reduzido (Q9, aprovado agora):** por padrão, mantenho o dashboard como próxima entrega de código (já era a prioridade explícita), com o fechamento reduzido entrando depois, como o item de pesquisa/construção mais demorado do roteiro. Aviso se quiser inverter essa ordem.
+
 ## Perguntas para sua validação
 
-**Status em 29/09/2026 (rodada 7):** as perguntas 1-6, 8, 9, 11 já foram respondidas (ver "Respostas de validação" acima) e viraram plano aprovado. Restam 3 em aberto, aguardando sua decisão após as explicações que dei:
-
-1. **Sentimento de rede social / dado tático fino (pergunta 7):** depois da explicação (custo de API, amostra não confiável nas redes, dado tático granular exige provedor pago) -- confirma que fica fora por ora, ou quer que eu trate como fiz com a CBF (leio os termos de uso de uma rede específica, registro o risco, você decide se assume)?
-2. **Modelo mais sofisticado / Game Data Science (pergunta 10):** depois da explicação -- confirma que sigo só com o que já testei contra nossa base real (heurística de coluna, anti-manada), deixando Random Forest/SVM registrado como ideia condicionada a um backtest futuro (igual ao B2/B3), em vez dos números do texto original?
-3. **Fechamento reduzido com garantia de verdade (pergunta 12):** depois da explicação (o que é, por que ajudaria, e o que falta) -- quer que eu pesquise/construa um conjunto de ≥72 linhas com garantia comprovada (item de trabalho novo, separado), ou prefere deixar isso fora de escopo por enquanto?
+**Todas as perguntas deste documento foram respondidas (rodadas 7 e 8).** Nenhuma pergunta em aberto no momento. Novas perguntas, se surgirem, são adicionadas aqui conforme o projeto avança.
