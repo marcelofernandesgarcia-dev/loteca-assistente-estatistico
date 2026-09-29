@@ -148,3 +148,47 @@ def test_listar_bilhetes_filtra_por_concurso(conexao):
     conexao.execute("INSERT INTO concursos (numero) VALUES (1272)")
     assert len(listar_bilhetes(conexao, concurso_numero=1271)) == 1
     assert listar_bilhetes(conexao, concurso_numero=1272) == []
+
+
+# --- Análise do palpite guardada com o bilhete (item 20) ---
+from stats.analise_palpite import analisar_palpite
+from stats.bilhetes_salvos import jogos_conferidos_para_historico
+
+
+def test_salvar_com_analise_e_motivos_guarda_para_aprendizado(conexao):
+    marcacoes, percentuais = _marcacoes_e_percentuais(conexao, jogo1=("1", "X"), jogo2=("2",))
+    ids = list(marcacoes)
+    analise = analisar_palpite(
+        [
+            {"jogo_id": ids[0], "num_jogo": 1, "casa": "ALFA", "fora": "BETA", "pct": percentuais[ids[0]], "marcacoes": marcacoes[ids[0]]},
+            {"jogo_id": ids[1], "num_jogo": 2, "casa": "DELTA", "fora": "EPSILON", "pct": percentuais[ids[1]],
+             "marcacoes": marcacoes[ids[1]], "sem_base_propria": True},
+        ]
+    )
+    motivos = {ids[0]: ["Clássico ou rivalidade", "motivo inventado"], ids[1]: []}
+    bilhete_id = salvar_bilhete(conexao, 1271, marcacoes, percentuais, analise=analise, motivos=motivos)
+
+    bilhete = conexao.execute("SELECT * FROM bilhetes WHERE id = ?", (bilhete_id,)).fetchone()
+    assert bilhete["chance_todos"] == pytest.approx(0.8 * 0.33)
+    assert bilhete["acertos_esperados"] == pytest.approx(0.8 + 0.33)
+    linhas = conexao.execute("SELECT * FROM bilhete_jogos WHERE bilhete_id = ? ORDER BY id", (bilhete_id,)).fetchall()
+    assert [r["categoria"] for r in linhas] == ["a_favor", "equilibrado"]
+    assert [r["sem_base_propria"] for r in linhas] == [0, 1]
+    assert linhas[0]["motivos"] == '["Clássico ou rivalidade"]'  # motivo fora da lista é descartado
+    assert linhas[1]["motivos"] is None
+
+
+def test_salvar_sem_analise_continua_funcionando(conexao):
+    marcacoes, percentuais = _marcacoes_e_percentuais(conexao)
+    bilhete_id = salvar_bilhete(conexao, 1271, marcacoes, percentuais)
+    assert conexao.execute("SELECT chance_todos FROM bilhetes WHERE id = ?", (bilhete_id,)).fetchone()[0] is None
+
+
+def test_historico_so_traz_bilhetes_conferidos(conexao):
+    marcacoes, percentuais = _marcacoes_e_percentuais(conexao)
+    conferido = salvar_bilhete(conexao, 1271, marcacoes, percentuais, motivos={list(marcacoes)[0]: ["Intuição"]})
+    salvar_bilhete(conexao, 1271, marcacoes, percentuais)  # não conferido
+    conferir_bilhete(conexao, conferido)
+    historico = jogos_conferidos_para_historico(conexao)
+    assert len(historico) == 1 and len(historico[0]) == 2
+    assert historico[0][0]["motivos"] == ["Intuição"] and historico[0][0]["resultado"] == "1"

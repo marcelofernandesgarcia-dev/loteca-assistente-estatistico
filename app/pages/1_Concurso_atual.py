@@ -16,8 +16,10 @@ from importer.caixa_client import ErroImportacaoLoteca, importar_concurso, impor
 from stats.cbf import classificacao_do_participante, resumo_curto_cbf
 from stats.contexto import selo_da_posicao
 from stats.concursos import concurso_a_jogar, ultimo_encerrado as buscar_ultimo_encerrado
+from stats.analise_palpite import NOME_CATEGORIA, ZEBRA, analisar_palpite, formatar_uma_em
 from stats.bilhete import montar_bilhete, validar_volante
 from stats.bilhetes_salvos import salvar_bilhete
+from stats.percentual import origem_do_percentual
 from stats.prazo import formatar_restante, situacao_do_prazo
 from stats.temporada import desempenho_no_ano, resumo_curto
 
@@ -90,6 +92,66 @@ def mostrar_motivos_do_ajuste(jogos, calculos):
                     linha += f" — publicada em {quando}" if quando else ""
                     linha += f" — [abrir]({link})" if link else ""
                     st.markdown(linha)
+
+def _celula(texto: str) -> str:
+    """Texto de fora (nome de time) seguro dentro da tabela HTML."""
+    return html.escape(str(texto))
+
+
+def mostrar_analise(analise: dict) -> None:
+    """Só apresentação: as regras estão em stats/analise_palpite.py."""
+    with st.container(border=True):
+        st.markdown("#### Análise do seu palpite")
+        st.caption(
+            "Leitura por regra sobre os percentuais do app. Não diz se a marcação está certa: loteria é jogo de "
+            "azar e, pelo teste da página 'Confiabilidade do modelo', esses percentuais são uma estimativa fraca."
+        )
+        chance, n = analise["chance"], analise["chance"]["jogos"]
+        c1, c2, c3 = st.columns(3)
+        c1.metric(f"Chance de {n} acertos", formatar_uma_em(chance["chance_todos"]))
+        c2.metric(f"Chance de {n - 1} ou mais", formatar_uma_em(chance["chance_todos_menos_um_ou_mais"]))
+        c3.metric("Acertos esperados", f"{chance['acertos_esperados']:.1f}".replace(".", ","))
+        for frase in analise["frases"]:
+            st.markdown(f"- {frase}")
+
+        # Tabela em HTML dentro de um contêiner com rolagem própria: no celular
+        # ela rola para o lado em vez de ser cortada.
+        linhas = []
+        for j in analise["jogos"]:
+            leitura = NOME_CATEGORIA[j["categoria"]]
+            if j["zebras"] and j["categoria"] != ZEBRA:
+                leitura += f" · inclui zebra ({', '.join(j['zebras'])})"
+            if j["sem_base_propria"]:
+                leitura += " · sem base própria"
+            linhas.append(
+                f"<tr><td>{j['num_jogo']}. {_celula(j['casa'])} x {_celula(j['fora'])}</td>"
+                f"<td>{', '.join(j['marcacoes'])}</td><td>{min(j['chance_coberta'], 100):.0f}%</td>"
+                f"<td>{j['favorito']} ({j['pct_favorito']:.0f}%)</td><td>{html.escape(leitura)}</td></tr>"
+            )
+        st.markdown(
+            "<div style='overflow-x:auto'><table style='min-width:560px'>"
+            "<caption style='text-align:left;font-weight:600'>Jogo a jogo</caption>"
+            "<thead><tr><th scope='col'>Jogo</th><th scope='col'>Você marcou</th><th scope='col'>Chance coberta</th>"
+            "<th scope='col'>Favorito dos dados</th><th scope='col'>Leitura</th></tr></thead>"
+            f"<tbody>{''.join(linhas)}</tbody></table></div>",
+            unsafe_allow_html=True,
+        )
+
+        if analise["multiplos"]:
+            st.markdown("**Seus duplos e triplos**")
+            for m in analise["multiplos"]:
+                vezes = 3 if m["tipo"] == "triplo" else 2
+                st.markdown(
+                    f"- Jogo {m['num_jogo']} ({m['tipo']}): a chance do jogo vai de {m['chance_antes']:.0f}% para "
+                    f"{min(m['chance_depois'], 100):.0f}% (+{m['ganho']:.0f} pontos); o custo do bilhete é multiplicado por {vezes}."
+                )
+        if analise["melhores_duplos"]:
+            st.markdown("**Onde um duplo rende mais** (entre os jogos marcados com um só resultado)")
+            for d in analise["melhores_duplos"]:
+                st.markdown(
+                    f"- Jogo {d['num_jogo']}: acrescentar a coluna {d['coluna_extra']} soma {d['ganho']:.0f} pontos de chance."
+                )
+
 
 conexao = obter_conexao()
 
@@ -292,6 +354,44 @@ else:
     if volante["apostas"] > config.BILHETE_MAX_APOSTAS:
         st.warning(f"Passa do máximo oficial de {config.BILHETE_MAX_APOSTAS} apostas. Tire algum duplo ou triplo.")
 
+    # Análise do palpite (item 20): por regra, sob demanda, e guardada ao salvar.
+    with st.expander("Anotar o motivo das marcações (opcional)"):
+        st.caption(
+            "O que você sabe e o app não coleta. Fica guardado com o bilhete para, com o tempo, mostrar em "
+            "'Meus bilhetes' se esses motivos acertam mais ou menos."
+        )
+        for j in jogos_vigente:
+            st.multiselect(
+                f"{j['num_jogo']}. {j['casa']} x {j['fora']}",
+                options=config.ANALISE_MOTIVOS,
+                key=f"motivo_{numero_vigente}_{j['id']}",
+                placeholder="Sem motivo anotado",
+            )
+
+    analise = None
+    if not volante["jogos_sem_marcacao"]:
+        analise = analisar_palpite(
+            [
+                {
+                    "jogo_id": j["id"], "num_jogo": j["num_jogo"], "casa": j["casa"], "fora": j["fora"],
+                    "pct": dados_por_jogo[j["id"]]["pct"], "marcacoes": marcadas,
+                    "sem_base_propria": origem_do_percentual(conexao, j["casa_id"], j["fora_id"])["metodo"] == "frequencia_global",
+                }
+                for j, marcadas in zip(jogos_vigente, marcacoes_lista)
+            ]
+        )
+
+    chave_analise = f"analise_aberta_{numero_vigente}"
+    if not st.session_state.get(chave_analise):
+        st.button("Analisar meu palpite", on_click=lambda: st.session_state.update({chave_analise: True}))
+    else:
+        if analise is None:
+            faltam = ", ".join(map(str, volante["jogos_sem_marcacao"]))
+            st.info(f"Para analisar, marque todos os jogos. Falta(m): {faltam}.")
+        else:
+            mostrar_analise(analise)
+        st.button("Fechar análise", on_click=lambda: st.session_state.update({chave_analise: False}))
+
     with st.expander(f"Ver detalhes dos jogos (desempenho em {ano_atual}, classificação na CBF e zona)"):
         for j in jogos_vigente:
             dado = dados_por_jogo[j["id"]]
@@ -317,7 +417,12 @@ else:
         else:
             marcacoes = {j["id"]: m for j, m in zip(jogos_vigente, marcacoes_lista)}
             percentuais_por_jogo = {j["id"]: dados_por_jogo[j["id"]]["pct"] for j in jogos_vigente}
-            bilhete_id = salvar_bilhete(conexao, numero_vigente, marcacoes, percentuais_por_jogo)
+            motivos = {j["id"]: st.session_state.get(f"motivo_{numero_vigente}_{j['id']}", []) for j in jogos_vigente}
+            # A análise é guardada mesmo se não foi aberta: o aprendizado precisa
+            # de todos os bilhetes, não só dos que foram analisados.
+            bilhete_id = salvar_bilhete(
+                conexao, numero_vigente, marcacoes, percentuais_por_jogo, analise=analise, motivos=motivos
+            )
             conexao.commit()
             st.success(
                 f"Bilhete salvo (nº {bilhete_id}) -- {volante['apostas']} apostas, R$ {volante['custo']:.2f}. "

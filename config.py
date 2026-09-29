@@ -129,6 +129,24 @@ SUGESTAO_LIMIAR_DUPLO = float(os.environ.get("LOTECA_LIMIAR_DUPLO", "45.0"))
 # Máximo oficial de apostas por bilhete (Manual de Produtos v21, item 6.3.3).
 BILHETE_MAX_APOSTAS = 864
 
+# Análise do palpite (stats/analise_palpite.py; item 20, aprovado pelo usuário
+# em 29/09/2026). Tudo por regra sobre os percentuais já calculados.
+ANALISE_LIMIAR_ZEBRA = float(os.environ.get("LOTECA_LIMIAR_ZEBRA", "25.0"))  # % abaixo do qual a marcação é zebra (decisão do usuário)
+ANALISE_LIMIAR_EQUILIBRADO = SUGESTAO_LIMIAR_DUPLO  # favorito abaixo disso = jogo equilibrado (mesmo corte que vira triplo na sugestão)
+ANALISE_QUANTOS_MELHORES_DUPLOS = 3  # quantos jogos mostrar em "onde um duplo rende mais"
+ANALISE_DIFERENCA_PARA_TROCA_PP = 10.0  # p.p. a mais de chance para sugerir mudar um duplo de jogo
+ANALISE_AMOSTRA_MINIMA = 30  # marcações conferidas antes de mostrar uma taxa de acerto no histórico
+# Motivos opcionais da marcação: o que o usuário sabe e o app não coleta.
+ANALISE_MOTIVOS = (
+    "Técnico novo",
+    "Clássico ou rivalidade",
+    "Time poupado",
+    "Desfalque ou lesão",
+    "Mando de campo",
+    "Fase do time",
+    "Intuição",
+)
+
 # Ficha do time (stats/competicao.py)
 COMPETICAO_JANELA_MOVEL = int(os.environ.get("LOTECA_JANELA_MOVEL", "5"))  # jogos da média móvel
 COMPETICAO_SEQUENCIA_MINIMA = 3  # a partir de quantos jogos uma sequência vira destaque

@@ -131,3 +131,42 @@ def test_salvar_com_duplo_marcado_grava_as_colunas_escolhidas(banco):
     assert not at.exception and not at.error
     with db.sessao() as c:
         assert c.execute("SELECT marcacoes FROM bilhete_jogos").fetchone()[0] == "1,2"
+
+
+# --- Análise do palpite (item 20) ---
+
+def _marcar_duplo_1_2(at: AppTest) -> AppTest:
+    quadrados = {q.key.rsplit("_", 1)[1]: q for q in _quadrados(at)}
+    quadrados["1"].check()
+    return quadrados["2"].check().run()
+
+
+def test_analisar_com_volante_incompleto_pede_para_marcar_tudo(banco):
+    at = _abrir()
+    next(b for b in at.button if b.label == "Analisar meu palpite").click().run()
+    assert not at.exception
+    assert any("Para analisar, marque todos os jogos. Falta(m): 1." in i.value for i in at.info)
+
+
+def test_analisar_mostra_leitura_chance_e_duplo(banco):
+    at = _marcar_duplo_1_2(_abrir())
+    next(b for b in at.button if b.label == "Analisar meu palpite").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    textos = " ".join(m.value for m in at.markdown)
+    assert "Análise do seu palpite" in textos
+    assert "Jogo 1 (duplo): a chance do jogo vai de" in textos
+    assert "sem base própria" in textos  # ALFA x BETA tem só 3 jogos na base sintética
+    assert any(m.label == "Chance de 1 acertos" for m in at.metric)
+    next(b for b in at.button if b.label == "Fechar análise").click().run()
+    assert "Análise do seu palpite" not in " ".join(m.value for m in at.markdown)
+
+
+def test_salvar_guarda_a_analise_e_o_motivo(banco):
+    at = _marcar_duplo_1_2(_abrir())
+    at.multiselect(key=next(k for k in (w.key for w in at.multiselect) if k.startswith("motivo_9002_"))).select("Intuição").run()
+    next(b for b in at.button if b.label == "Salvar bilhete").click().run()
+    assert not at.exception and not at.error
+    with db.sessao() as c:
+        linha = c.execute("SELECT categoria, motivos, sem_base_propria FROM bilhete_jogos").fetchone()
+        assert linha["categoria"] is not None and linha["motivos"] == '["Intuição"]' and linha["sem_base_propria"] == 1
+        assert c.execute("SELECT acertos_esperados FROM bilhetes").fetchone()[0] is not None

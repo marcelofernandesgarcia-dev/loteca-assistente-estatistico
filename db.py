@@ -170,7 +170,10 @@ CREATE TABLE IF NOT EXISTS bilhetes (
     custo REAL NOT NULL,
     conferido_em TEXT,
     acertos INTEGER,
-    premio_informado REAL
+    premio_informado REAL,
+    chance_todos REAL,
+    chance_todos_menos_um REAL,
+    acertos_esperados REAL
 );
 
 CREATE TABLE IF NOT EXISTS bilhete_jogos (
@@ -182,6 +185,10 @@ CREATE TABLE IF NOT EXISTS bilhete_jogos (
     percentual_x REAL,
     percentual_2 REAL,
     acertou INTEGER,
+    categoria TEXT,
+    chance_coberta REAL,
+    sem_base_propria INTEGER,
+    motivos TEXT,
     UNIQUE(bilhete_id, jogo_id)
 );
 
@@ -223,6 +230,9 @@ def _garantir_colunas(conexao: sqlite3.Connection) -> None:
         "concursos": [("horario_fim_apostas", "INTEGER")],
         "cbf_classificacao": [("proximo_adversario_id", "INTEGER")],
         "fatores_externos": [("evidencias", "TEXT")],
+        # Análise do palpite (item 20): guardada com o bilhete para aprendizado.
+        "bilhetes": [("chance_todos", "REAL"), ("chance_todos_menos_um", "REAL"), ("acertos_esperados", "REAL")],
+        "bilhete_jogos": [("categoria", "TEXT"), ("chance_coberta", "REAL"), ("sem_base_propria", "INTEGER"), ("motivos", "TEXT")],
     }
     for tabela, colunas in novas.items():
         existentes = {linha["name"] for linha in conexao.execute(f"PRAGMA table_info({tabela})")}

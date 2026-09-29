@@ -52,3 +52,15 @@ def test_bilhete_apurado_pode_ser_conferido_e_mostra_acerto(conexao_pronta):
     at.button[0].click().run()  # "Conferir"
     assert not at.exception, [e.value for e in at.exception]
     assert any("1 de 1 acertos" in w.value for w in at.markdown)
+
+
+def test_historico_aparece_so_depois_de_conferir_e_bilhete_mostra_o_que_ensina(conexao_pronta):
+    at = AppTest.from_file(str(PAGINA), default_timeout=60).run()
+    assert any("Aparece depois do primeiro bilhete conferido" in i.value for i in at.info)
+    at.button[0].click().run()  # "Conferir"
+    assert not at.exception, [e.value for e in at.exception]
+    textos = " ".join(m.value for m in at.markdown)
+    assert "O que este bilhete ensina" in textos
+    assert "o app esperava cerca de 0,5 acertos; você fez 1." in textos
+    assert "aguardando amostra (1 de 30)" in textos
+    assert any(m.label == "Seus acertos por bilhete (média)" for m in at.metric)

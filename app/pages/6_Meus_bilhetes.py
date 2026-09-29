@@ -10,8 +10,17 @@ import pandas as pd
 import streamlit as st
 from util import formatar_data_br, mostrar_aviso_responsabilidade, obter_conexao
 
+from stats.analise_palpite import (
+    NAO_BASTOU,
+    NAO_FEZ_DIFERENCA,
+    NOME_CATEGORIA,
+    SALVOU,
+    agregar_historico,
+    avaliar_depois_do_resultado,
+)
 from stats.bilhetes_salvos import (
     conferir_bilhete,
+    jogos_conferidos_para_historico,
     listar_bilhetes,
     pode_conferir,
     registrar_premio,
@@ -19,6 +28,85 @@ from stats.bilhetes_salvos import (
 )
 
 NOME_RESULTADO = {"V": "Vitória", "E": "Empate", "D": "Derrota"}
+
+
+def _decimal(valor: float) -> str:
+    return f"{valor:.1f}".replace(".", ",")
+
+
+def _taxa_ou_espera(registro: dict, minimo: int) -> str:
+    if registro["taxa"] is not None:
+        return f"{registro['taxa']:.0f}%"
+    return f"aguardando amostra ({registro['marcacoes']} de {minimo})"
+
+
+def mostrar_historico(historico: dict) -> None:
+    """Só apresentação: as contas estão em stats/analise_palpite.py."""
+    st.subheader("Meu histórico de palpites")
+    if historico["bilhetes"] == 0:
+        st.info("Aparece depois do primeiro bilhete conferido. Cada bilhete salvo guarda a análise do palpite.")
+        return
+    minimo = historico["amostra_minima"]
+    st.caption(
+        f"{historico['bilhetes']} bilhete(s) conferido(s). Uma taxa de acerto só aparece com pelo menos {minimo} "
+        "marcações, para não tirar conclusão de poucos jogos. Isto mede os seus palpites e o app; não muda o modelo."
+    )
+    c1, c2 = st.columns(2)
+    c1.metric("Seus acertos por bilhete (média)", _decimal(historico["acertos_medios"]))
+    c2.metric("O que o app esperava (média)", _decimal(historico["acertos_esperados_medios"]))
+
+    linhas = ["| Tipo de marcação | Marcações | Acertos | Taxa |", "|---|---|---|---|"]
+    for categoria, registro in historico["por_categoria"].items():
+        if registro["marcacoes"]:
+            linhas.append(
+                f"| {NOME_CATEGORIA[categoria]} | {registro['marcacoes']} | {registro['acertos']} "
+                f"| {_taxa_ou_espera(registro, minimo)} |"
+            )
+    st.markdown("\n".join(linhas))
+
+    if historico["por_motivo"]:
+        linhas = ["| Motivo anotado | Marcações | Acertos | Taxa |", "|---|---|---|---|"]
+        for motivo, registro in sorted(historico["por_motivo"].items()):
+            linhas.append(f"| {motivo} | {registro['marcacoes']} | {registro['acertos']} | {_taxa_ou_espera(registro, minimo)} |")
+        st.markdown("\n".join(linhas))
+
+    divergencias = historico["divergencias"]
+    if divergencias["jogos"]:
+        texto = (
+            f"Nos {divergencias['jogos']} jogos em que você marcou diferente da sugestão do app, você acertou "
+            f"{divergencias['voce_acertou']} e a sugestão teria acertado {divergencias['app_acertou']}."
+        )
+        if divergencias["taxa_voce"] is not None:
+            texto += f" Taxas: você {divergencias['taxa_voce']:.0f}%, app {divergencias['taxa_app']:.0f}%."
+        st.markdown(texto)
+    multiplos = historico["multiplos"]
+    if sum(multiplos.values()):
+        st.markdown(
+            f"Duplos e triplos: {multiplos[SALVOU]} salvaram o jogo, {multiplos[NAO_FEZ_DIFERENCA]} não fizeram "
+            f"diferença e {multiplos[NAO_BASTOU]} não bastaram."
+        )
+
+
+def mostrar_aprendizado_do_bilhete(jogos: list[dict]) -> None:
+    """O que este bilhete conferido ensina (análise depois do resultado)."""
+    avaliacao = avaliar_depois_do_resultado(jogos)
+    st.markdown("**O que este bilhete ensina**")
+    itens = [
+        f"Pelos percentuais do momento, o app esperava cerca de {_decimal(avaliacao['acertos_esperados'])} "
+        f"acertos; você fez {avaliacao['acertos']}."
+    ]
+    for categoria, registro in avaliacao["por_categoria"].items():
+        if registro["marcacoes"]:
+            itens.append(f"{NOME_CATEGORIA[categoria]}: {registro['acertos']} de {registro['marcacoes']}.")
+    multiplos = avaliacao["multiplos"]
+    if sum(multiplos.values()):
+        itens.append(
+            f"Duplos e triplos: {multiplos[SALVOU]} salvaram o jogo, {multiplos[NAO_FEZ_DIFERENCA]} não fizeram "
+            f"diferença e {multiplos[NAO_BASTOU]} não bastaram."
+        )
+    for zebra in avaliacao["zebras_que_aconteceram"]:
+        itens.append(f"Zebra no jogo {zebra['num_jogo']}: {'você marcou' if zebra['marcou'] else 'você não marcou'}.")
+    st.markdown("\n".join(f"- {item}" for item in itens))
 
 st.title("Meus bilhetes")
 mostrar_aviso_responsabilidade()
@@ -46,6 +134,9 @@ st.caption(
     "O prêmio só entra aqui se você informar (abaixo, em cada bilhete apurado) -- o app não consulta a CAIXA "
     "para saber se você ganhou."
 )
+
+mostrar_historico(agregar_historico(jogos_conferidos_para_historico(conexao)))
+st.subheader("Bilhetes")
 
 for bilhete in bilhetes:
     linhas_bilhete = conexao.execute(
@@ -87,6 +178,17 @@ for bilhete in bilhetes:
                 for j in resultado["jogos"]
             ]
             st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
+            if all(j["percentual_1"] is not None for j in resultado["jogos"]):
+                mostrar_aprendizado_do_bilhete(
+                    [
+                        {
+                            "num_jogo": j["num_jogo"], "marcacoes": j["marcacoes"], "resultado": j["resultado"],
+                            "categoria": j["categoria"],
+                            "pct": {"1": j["percentual_1"], "X": j["percentual_x"], "2": j["percentual_2"]},
+                        }
+                        for j in resultado["jogos"]
+                    ]
+                )
 
             premio = st.number_input(
                 "Prêmio recebido (R$, 0 se não ganhou)", min_value=0.0, step=0.01,
