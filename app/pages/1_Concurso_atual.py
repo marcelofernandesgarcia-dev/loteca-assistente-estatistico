@@ -16,6 +16,7 @@ from stats.cbf import classificacao_do_participante, resumo_curto_cbf
 from stats.contexto import selo_da_posicao
 from stats.concursos import concurso_a_jogar, ultimo_encerrado as buscar_ultimo_encerrado
 from stats.bilhete import montar_bilhete
+from stats.bilhetes_salvos import salvar_bilhete
 from stats.fechamento import calcular
 from stats.prazo import formatar_restante, situacao_do_prazo
 from stats.temporada import desempenho_no_ano, resumo_curto
@@ -289,6 +290,15 @@ else:
         )
     if total_duplos + total_triplos == 0:
         st.warning("O volante da Loteca exige ao menos 1 duplo (mínimo de R$ 4,00). Marque duas colunas em algum jogo.")
+
+    if st.button("Salvar bilhete"):
+        percentuais_por_jogo = {j["id"]: dados_por_jogo[j["id"]]["pct"] for j in jogos_vigente}
+        bilhete_id = salvar_bilhete(conexao, numero_vigente, marcacoes, percentuais_por_jogo)
+        conexao.commit()
+        st.success(
+            f"Bilhete salvo (nº {bilhete_id}) -- {custo['apostas']} apostas, R$ {custo['valor_reais']:.2f}. "
+            "Veja e confira depois em 'Meus bilhetes'. Fica só neste computador."
+        )
     st.caption(
         "Percentuais com o ajuste da última varredura de notícias (o valor entre parênteses mostra o efeito em pontos)."
         if ajustes

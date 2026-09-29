@@ -159,6 +159,32 @@ CREATE TABLE IF NOT EXISTS execucoes (
     erro TEXT
 );
 
+-- Bilhetes salvos pelo usuário (etapa A3). Só neste computador -- loteca.db
+-- não vai ao GitHub. Sem dado pessoal: não há nome, CPF nem qualquer
+-- identificação de quem marcou, só a marcação em si e o gasto.
+CREATE TABLE IF NOT EXISTS bilhetes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    concurso_numero INTEGER NOT NULL REFERENCES concursos(numero),
+    criado_em TEXT NOT NULL,
+    apostas INTEGER NOT NULL,
+    custo REAL NOT NULL,
+    conferido_em TEXT,
+    acertos INTEGER,
+    premio_informado REAL
+);
+
+CREATE TABLE IF NOT EXISTS bilhete_jogos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bilhete_id INTEGER NOT NULL REFERENCES bilhetes(id),
+    jogo_id INTEGER NOT NULL REFERENCES jogos(id),
+    marcacoes TEXT NOT NULL,
+    percentual_1 REAL,
+    percentual_x REAL,
+    percentual_2 REAL,
+    acertou INTEGER,
+    UNIQUE(bilhete_id, jogo_id)
+);
+
 CREATE TABLE IF NOT EXISTS historico_valorfinal (
     concurso INTEGER NOT NULL,
     num_jogo INTEGER NOT NULL,
