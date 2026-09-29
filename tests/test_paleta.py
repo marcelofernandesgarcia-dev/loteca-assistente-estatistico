@@ -22,3 +22,16 @@ def test_texto_branco_sobre_as_cores_tem_contraste_de_texto_normal(cor):
 @pytest.mark.parametrize("cor", [AZUL, VERMELHO, VERDE, CINZA])
 def test_linhas_e_barras_sobre_fundo_branco_tem_contraste_de_elemento_grafico(cor):
     assert razao_de_contraste(cor, BRANCO) >= 3.0, cor
+
+
+from paleta import CORES_LINHAS, MARCADORES_LINHAS, TRACOS_LINHAS  # noqa: E402
+
+
+@pytest.mark.parametrize("cor", CORES_LINHAS)
+def test_cores_das_linhas_do_painel_tem_contraste_de_elemento_grafico(cor):
+    assert razao_de_contraste(cor, BRANCO) >= 3.0, cor
+
+
+def test_cada_linha_do_painel_tem_cor_traco_e_marcador_diferentes():
+    combinacoes = set(zip(CORES_LINHAS, TRACOS_LINHAS, MARCADORES_LINHAS))
+    assert len(set(CORES_LINHAS)) == len(set(MARCADORES_LINHAS)) == len(combinacoes) == 8

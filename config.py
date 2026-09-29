@@ -170,6 +170,26 @@ ZONAS_CBF = {
     },
 }
 
+# Jogos de cada time na temporada, por (série, ano), lido no regulamento --
+# nunca suposto. Sem cadastro, o painel não projeta o fim da temporada.
+# REC Série A 2026, Art. 14, e REC Série B 2026, Art. 11: pontos corridos,
+# turno e returno, 19 jogos de ida e 19 de volta.
+TEMPORADA_JOGOS_POR_TIME = {
+    ("serie-a", 2026): 38,
+    ("serie-b", 2026): 38,
+}
+
+# Painel comparativo (stats/painel.py; plano v2 aprovado em 29/09/2026).
+# Mínimo de jogos na Loteca para um participante entrar no modo livre do
+# histórico. Decisão do usuário: 10 por enquanto, podendo aumentar se mais
+# informação favorecer a análise.
+PAINEL_MIN_JOGOS_LOTECA = 10
+PAINEL_MIN_JOGOS_ANO = 3  # ano com menos jogos que isso é sinal fraco na tendência anual
+PAINEL_LINHAS_SOBREPOSTAS_MAX = 8  # acima disso, mini-gráficos (um por time) em vez de linhas sobrepostas
+PAINEL_JANELA_RECENTE_LOTECA = 10  # jogos do "ritmo recente" no histórico da Loteca
+PAINEL_RODADA_TESTE_PROJECAO = 19  # rodada de onde se mede quanto a projeção por ritmo teria errado
+PAINEL_ANOS_MINIMOS_RETA = 3  # anos com base mínima para desenhar a reta de tendência anual
+
 # Ficha do time: abaixo disso, a amostra é sinalizada como pequena (baixa confiança)
 FICHA_AMOSTRA_PEQUENA = 10
 

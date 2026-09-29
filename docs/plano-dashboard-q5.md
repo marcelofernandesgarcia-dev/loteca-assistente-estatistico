@@ -1,6 +1,6 @@
 # Plano: painel comparativo de times e seleções (Fase Q5, 29/09/2026)
 
-Pedido do usuário: "dashboard com informações visuais detalhadas por times, seleções, classificações, vitórias, empates, derrotas entre outras métricas", **com linhas de tendência**, **priorizado para agora**. Status: **versão 2 do plano, revisada com as respostas do usuário; nenhum código escrito.**
+Pedido do usuário: "dashboard com informações visuais detalhadas por times, seleções, classificações, vitórias, empates, derrotas entre outras métricas", **com linhas de tendência**, **priorizado para agora**. Status: **implementado em 29/09/2026** (autorização do usuário: "pode implementar"). Ver `stats/painel.py` e `app/pages/7_Painel_comparativo.py`.
 
 ## 0. Respostas do usuário à versão 1 (29/09/2026)
 

@@ -10,6 +10,14 @@ BRANCO = "#ffffff"
 
 COR_RESULTADO = {"V": "#1e6b40", "E": "#5b6770", "D": "#b30010"}
 
+# Painel comparativo: uma cor por time, todas com contraste de elemento
+# gráfico (3:1) sobre fundo branco. A cor nunca vem sozinha: cada linha tem
+# também traço e marcador próprios (TRACOS_LINHAS, MARCADORES_LINHAS).
+CORES_LINHAS = ["#1a4fa0", "#b30010", "#1e6b40", "#8a4b00", "#6b2c91", "#00707a", "#a3006b", "#4d5963"]
+TRACOS_LINHAS = ["solid", "dot", "dash", "longdash", "dashdot", "solid", "dot", "dash"]
+MARCADORES_LINHAS = ["circle", "square", "diamond", "triangle-up", "x", "star", "triangle-down", "cross"]
+CINZA_CLARO = "#c3c9cf"  # times de fundo (não selecionados) no gráfico ataque x defesa
+
 
 def _canal(valor: int) -> float:
     v = valor / 255
