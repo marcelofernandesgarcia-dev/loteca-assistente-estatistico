@@ -23,6 +23,7 @@
 | 11 | Reavaliar a conclusão sobre coletividade/talento individual/artilharia/melhor em campo sem base paga, e manter rastreabilidade de todas as solicitações | Esta atualização (abaixo) | 🔲 Reavaliado agora |
 | 12 | Dashboard visual comparando vários times/seleções (classificação, V-E-D, métricas) | Novo item **Q5**, ver abaixo | 🔲 Novo, planejado agora |
 | 13 | Analisar e incorporar texto sobre "Game Data Science" transposto para risco em loteria (SVM, Random Forest, heurística de colunas, anti-manada, fechamento reduzido) | Nova seção abaixo -- itens **Q6-Q9** | 🔲 Analisado com verificação; plano em aberto |
+| 14 | Analisar e verificar a simulação prática do desdobramento reduzido com garantia (16 volantes, R$ 32, "garante" 13 pontos) | Seção "Simulação numérica do fechamento reduzido" (Q9) | ✅ Verificado -- **reivindicação central refutada por prova matemática** (16 linhas cobrem no máximo 22% do espaço; mínimo real comprovado é 72 linhas / R$ 144) |
 
 Este documento (`docs/estudo-fontes-qualitativas-29-09-2026.md`) passa a ser o **registro único** de solicitações de melhoria em aberto -- toda vez que eu propuser algo novo por minha conta ou você pedir algo novo, eu atualizo esta tabela, para nada se perder mesmo com o projeto crescendo aos poucos.
 
@@ -168,7 +169,29 @@ Busquei 3 das citações mais checáveis:
 - **Q6 -- Aviso de faixa por coluna (heurística de distribuição):** dá para fazer AGORA, sem fonte nova -- os números já saíram da nossa própria base. Vira um aviso informativo no bilhete ("este bilhete tem 11 jogos na coluna 1; historicamente, 79% dos concursos ficam entre 5 e 9"), nunca um bloqueio.
 - **Q7 -- Estudo anti-manada:** formalizar como módulo (`stats/premiacoes.py` ou similar) usando `premiacoes` + `jogos`, que já temos -- sem fonte nova. Precisa de mais rigor estatístico (o -0,13 é fraco) antes de virar recomendação na tela.
 - **Q8 -- Classificação de risco por jogo via modelo mais sofisticado (Random Forest/SVM):** só depois do B2 e com o MESMO backtest do B3 -- não entra por causa de uma citação de outro domínio. Fica registrado como ideia, condicionado a medir, igual ao resto do projeto.
-- **Q9 -- Fechamento reduzido com garantia condicional:** conceito real de matemática de loteria (sistemas reduzidos com garantia), diferente do fechamento cheio que já existe. Qualquer "garantia" precisa ser **provada matematicamente** (testada de forma exaustiva em casos pequenos), com o mesmo rigor que `stats/fechamento.py` já tem contra a tabela oficial -- não vou implementar uma garantia sem verificar que ela realmente garante o que promete.
+- **Q9 -- Fechamento reduzido com garantia condicional:** conceito real de matemática de loteria (sistemas reduzidos com garantia), diferente do fechamento cheio que já existe. Qualquer "garantia" precisa ser **provada matematicamente** (testada de forma exaustiva em casos pequenos), com o mesmo rigor que `stats/fechamento.py` já tem contra a tabela oficial -- não vou implementar uma garantia sem verificar que ela realmente garante o que promete. **Ver refutação da simulação numérica abaixo -- a conta específica de "16 linhas garantem 13 pontos" está matematicamente errada, não só não comprovada.**
+
+## Simulação numérica do fechamento reduzido (mesmo dia, 5ª rodada) -- a conta não fecha
+
+O usuário colou uma simulação com números específicos: 6 secos, 5 duplos, 3 triplos (864 combinações, R$ 1.728,00 -- **essa parte bate exatamente** com `stats/fechamento.py`, já validado contra a tabela oficial), reduzidos por "3 filtros" a **16 volantes (R$ 32,00)**, com a afirmação de que isso **"garante matematicamente"** pelo menos 13 acertos, desde que os 6 secos se confirmem.
+
+Essa é uma afirmação matemática verificável -- não uma opinião -- e eu a testei com uma prova de contagem (não uma suposição):
+
+**A pergunta, em termos exatos:** os 8 jogos "de risco" (5 duplos, 2 opções cada; 3 triplos, 3 opções cada) têm **864 combinações possíveis** de resultado real. "Garantir 13 pontos" significa que TODA combinação possível precisa cair a, no máximo, 1 jogo de distância de alguma das linhas escolhidas (errar no máximo 1 desses 8 jogos).
+
+**A prova (cota de contagem / *sphere-covering bound*):** cada linha, na melhor das hipóteses, só consegue "cobrir" ela mesma mais as variações de errar exatamente 1 jogo -- ou seja, no máximo `1 + 5×(2-1) + 3×(3-1) = 12` combinações por linha. Rodei essa conta:
+
+```
+Espaço total de combinações dos 8 jogos de risco: 864
+Cada linha cobre, no máximo: 12 combinações
+16 linhas cobrem, no máximo: 16 × 12 = 192 combinações (22,2% de 864)
+Mínimo de linhas necessário para cobrir as 864 de verdade: 72 (⌈864/12⌉)
+Custo do mínimo real (72 linhas): R$ 144,00
+```
+
+**Conclusão: é matematicamente impossível 16 linhas garantirem 13 pontos.** Não é "não comprovado" -- é **refutado por contagem**: 16 linhas cobrem no máximo 22% das combinações possíveis dos 8 jogos de risco; nos outros 78% dos casos, o bilhete de R$ 32,00 teria 12 pontos ou menos (2 ou mais erros), não os 13 garantidos. O número mínimo real para uma garantia de 13 pontos de verdade é **pelo menos 72 linhas (R$ 144,00)** -- ainda 12x mais barato que a matriz cheia, mas 4,5x mais caro que os R$ 32,00 afirmados, e **72 é só o piso teórico**: construir de fato um conjunto de 72 (ou perto disso) que cubra tudo é um problema de desenho combinatório real, que eu ainda não resolvi, não simplesmente "escolher 72 ao acaso".
+
+**O que fica de pé:** a ideia geral (reduzir uma matriz cheia mantendo alguma garantia é matematicamente possível e mais barato que apostar tudo) é válida e vale a pena perseguir -- só os números específicos dessa simulação (16 linhas, R$ 32, garantia de 13) não se sustentam. Isso não seria implementado no app enquanto não houver uma prova de cobertura de verdade, do mesmo jeito que `stats/fechamento.py` só foi ao app depois de bater com a tabela oficial linha a linha.
 
 ## Avaliação: skills e agentes
 
@@ -190,3 +213,4 @@ Busquei 3 das citações mais checáveis:
 9. **Dashboard (Q5):** confirma que é uma visão comparando VÁRIOS times/seleções ao mesmo tempo (diferente da Ficha do time, que é um time só)? Prefere que entre logo (não depende de nenhuma fonte nova) ou junto com as demais fases?
 10. **Sobre o texto de Game Data Science:** ciente de que os números específicos (acurácia, faixa de coluna, probabilidade conjunta) não se confirmaram na transposição literal -- concorda em seguir só com o que testei contra nossa base real (Q6-Q9), em vez dos números do texto original?
 11. **Q6 (aviso de faixa por coluna):** confirma que deve ser só um aviso informativo, nunca um bloqueio que impeça salvar o bilhete?
+12. **Sobre a simulação numérica (16 volantes/R$32):** ciente de que essa alegação específica está matematicamente refutada (não apenas "não comprovada") -- quer que eu estude, como item futuro separado, a construção de verdade de um fechamento reduzido com garantia (mínimo comprovado de 72 linhas / R$ 144, ainda a construir e testar), ou prefere deixar essa linha de trabalho fora do escopo por enquanto?
