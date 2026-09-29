@@ -4,8 +4,10 @@ Sem dependência de framework, sem I/O -- só matemática e as regras oficiais
 da Loteca (ver docs/manual-produtos-caixa-v21.md, item 10, e
 docs/grade-real-e-prazos-confirmados.md).
 """
+import csv
 import re
 import unicodedata
+from functools import lru_cache
 
 import config
 
@@ -36,7 +38,24 @@ def limpar_nome(nome: str) -> str:
     """A API às vezes anexa um código ao nome ('SERVIA/SER', 'ESCOCIA/SCT').
     Sem tirar isso, a seleção não bate com a lista de seleções e o mesmo
     time vira participantes diferentes conforme o endpoint."""
-    return _SUFIXO_CODIGO.sub("", nome.strip())
+    return " ".join(_SUFIXO_CODIGO.sub("", nome.strip()).split())
+
+
+@lru_cache(maxsize=4)
+def carregar_apelidos(caminho: str | None = None) -> dict:
+    """{(variante, UF ou None): nome canônico}, do arquivo data/apelidos-participantes.csv.
+    Une grafias diferentes do MESMO time na CAIXA ao longo dos anos (ex.: 'S. PAULO'
+    e 'SAO PAULO'); cada linha traz a justificativa e só vale para a UF indicada."""
+    arquivo = caminho or str(config.APELIDOS_PARTICIPANTES_CSV)
+    apelidos = {}
+    try:
+        with open(arquivo, encoding="utf-8") as f:
+            for linha in csv.DictReader((l for l in f if not l.startswith("#")), delimiter=";"):
+                chave = (limpar_nome(linha["variante"]).upper(), (linha["uf"] or "").strip().upper() or None)
+                apelidos[chave] = limpar_nome(linha["canonico"]).upper()
+    except FileNotFoundError:
+        return {}
+    return apelidos
 
 
 def identidade_participante(nome: str, sigla_uf: str | None) -> dict:
@@ -44,8 +63,9 @@ def identidade_participante(nome: str, sigla_uf: str | None) -> dict:
     só a UF de clube brasileiro. Código de país NÃO entra na identidade -- o
     endpoint da programação não o preenche e o histórico sim, o que
     quebraria a continuidade das estatísticas do mesmo time."""
-    nome_limpo = limpar_nome(nome)
     uf = (sigla_uf or "").strip().upper() or None
+    nome_limpo = limpar_nome(nome)
+    nome_limpo = carregar_apelidos().get((nome_limpo.upper(), uf), nome_limpo)
     return {"nome": nome_limpo, "tipo": classificar_participante(nome_limpo, uf), "uf": uf}
 
 

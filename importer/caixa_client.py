@@ -210,23 +210,40 @@ def importar_programacao(conexao) -> list[int]:
     return numeros
 
 
-def importar_historico(conexao, inicio: int | None = None, fim: int | None = None, refazer: bool = False) -> None:
+def importar_historico(conexao, inicio: int | None = None, fim: int | None = None, refazer: bool = False) -> dict:
     """Importa concurso a concurso, do mais antigo confirmado (1) até `fim`
     (ou até o último apurado). Sequencial, com espaçamento entre chamadas.
-    Retomável: pula concursos que já têm placar, a menos que `refazer`.
-    """
+    Retomável: pula concursos que já têm placar, a menos que `refazer`. Grava
+    (commit) a cada concurso, para uma queda no meio não perder o que já veio, e
+    tenta uma segunda vez se a primeira falhar. Retorna o resumo:
+    {'importados': n, 'ja_existiam': n, 'falhas': {numero: motivo}}."""
     inicio = inicio or config.PRIMEIRO_CONCURSO
     if fim is None:
         fim = importar_concurso(None, conexao)
+        conexao.commit()
+    resumo = {"importados": 0, "ja_existiam": 0, "falhas": {}}
     for numero in range(inicio, fim + 1):
         if not refazer:
             ja_existe = conexao.execute(
                 "SELECT 1 FROM jogos WHERE concurso_numero = ? AND resultado IS NOT NULL LIMIT 1", (numero,)
             ).fetchone()
             if ja_existe:
+                resumo["ja_existiam"] += 1
                 continue
-        try:
-            importar_concurso(numero, conexao)
-        except ErroImportacaoLoteca as erro:
-            logger.warning("Concurso %s não importado: %s", numero, erro)
+        for tentativa in (1, 2):
+            try:
+                importar_concurso(numero, conexao)
+                conexao.commit()
+                resumo["importados"] += 1
+                break
+            except (ErroImportacaoLoteca, KeyError, TypeError) as erro:
+                conexao.rollback()
+                if tentativa == 2:
+                    logger.warning("Concurso %s não importado: %s", numero, erro)
+                    resumo["falhas"][numero] = str(erro)
+                else:
+                    time.sleep(config.CAIXA_REQUEST_INTERVAL_SEGUNDOS * 3)
+        if numero % 50 == 0:
+            logger.info("Importados até o concurso %s (%s novos, %s falhas)", numero, resumo["importados"], len(resumo["falhas"]))
         time.sleep(config.CAIXA_REQUEST_INTERVAL_SEGUNDOS)
+    return resumo

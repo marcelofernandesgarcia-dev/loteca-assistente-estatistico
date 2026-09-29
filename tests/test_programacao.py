@@ -133,3 +133,22 @@ def test_banco_antigo_sem_coluna_de_horario_ganha_a_coluna(tmp_path, monkeypatch
         colunas = {r["name"] for r in conexao.execute("PRAGMA table_info(concursos)")}
         assert "horario_fim_apostas" in colunas
         assert conexao.execute("SELECT COUNT(*) FROM concursos").fetchone()[0] == 1
+
+
+def test_importar_historico_pula_o_que_existe_grava_a_cada_concurso_e_relata_falhas(conexao, monkeypatch):
+    def falso(sufixo=""):
+        numero = int(sufixo.strip("/"))
+        if numero == 3:
+            raise caixa.ErroImportacaoLoteca("HTTP 404")
+        return {
+            "numero": numero, "dataApuracao": "01/01/2020", "acumulado": False,
+            "listaResultadoEquipeEsportiva": [_jogo(1, f"TIME {numero}", "OUTRO", uf1="SP", uf2="RJ", gols=(1, 0))],
+        }
+
+    monkeypatch.setattr(caixa, "_buscar_json", falso)
+    monkeypatch.setattr(caixa.time, "sleep", lambda s: None)
+    caixa.importar_concurso(1, conexao)
+    resumo = caixa.importar_historico(conexao, inicio=1, fim=4)
+    assert resumo["ja_existiam"] == 1 and resumo["importados"] == 2
+    assert list(resumo["falhas"]) == [3] and "404" in resumo["falhas"][3]
+    assert conexao.execute("SELECT COUNT(*) FROM concursos").fetchone()[0] == 3

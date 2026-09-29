@@ -36,6 +36,7 @@ CBF_TOKENS_IGNORADOS = {"SAF", "FC", "S", "A", "F", "DE", "DA", "DO", "EC"}
 # Regras de apuração (ver docs/manual-produtos-caixa-v21.md, item 10)
 # Concurso mais antigo confirmado na API é o nº 1 (18/02/2002).
 PRIMEIRO_CONCURSO = 1
+APELIDOS_PARTICIPANTES_CSV = BASE_DIR / "data" / "apelidos-participantes.csv"
 
 # Modelo estatístico -- pesos e tetos do ajuste externo (ver docs/plano do app)
 AJUSTE_EXTERNO_TETO_PONTOS = float(os.environ.get("LOTECA_AJUSTE_TETO", "8.0"))
