@@ -22,6 +22,7 @@
 | 10 | Sites oficiais de clube/seleção, canais/influencers, jornalistas, sites específicos | Complemento do estudo -- Q2b/Q2c | 🔲 Estudado, plano em aberto |
 | 11 | Reavaliar a conclusão sobre coletividade/talento individual/artilharia/melhor em campo sem base paga, e manter rastreabilidade de todas as solicitações | Esta atualização (abaixo) | 🔲 Reavaliado agora |
 | 12 | Dashboard visual comparando vários times/seleções (classificação, V-E-D, métricas) | Novo item **Q5**, ver abaixo | 🔲 Novo, planejado agora |
+| 13 | Analisar e incorporar texto sobre "Game Data Science" transposto para risco em loteria (SVM, Random Forest, heurística de colunas, anti-manada, fechamento reduzido) | Nova seção abaixo -- itens **Q6-Q9** | 🔲 Analisado com verificação; plano em aberto |
 
 Este documento (`docs/estudo-fontes-qualitativas-29-09-2026.md`) passa a ser o **registro único** de solicitações de melhoria em aberto -- toda vez que eu propuser algo novo por minha conta ou você pedir algo novo, eu atualizo esta tabela, para nada se perder mesmo com o projeto crescendo aos poucos.
 
@@ -140,6 +141,35 @@ Só depois de Q0-Q3 trazerem dado, testar estatisticamente (mesmo método do bac
 ### Fase Q5 -- dashboard comparando vários times/seleções (NOVO)
 Página nova (ex. "Painel geral"), com filtro por série/ano, mostrando vários participantes lado a lado: posição, pontos, V-E-D, saldo, aproveitamento -- reaproveitando `stats/competicao.py` e `stats/desempenho.py`, sem fonte nova. Complementa a Ficha do time (que é funda num time só) com uma visão comparativa.
 
+## Análise do texto "Game Data Science → risco em loteria" (mesmo dia, 4ª rodada)
+
+O usuário colou um texto propondo transpor técnicas de análise de jogos digitais (SVM, Random Forest, árvores podadas, ajuste dinâmico de dificuldade) para risco na Loteca, citando estudos (Su et al. 2021; Silva 2025; Rothmeier et al. 2018; Drachen et al. 2016; Karmakar et al. 2021; CBS 2023) e afirmando números de acurácia, faixas históricas de coluna e uma probabilidade conjunta.
+
+Segui o mesmo processo de todo documento externo nesta sessão: **verificar antes de incorporar**, não aceitar por já vir com citação.
+
+### As citações são reais -- mas o número não viaja com elas
+Busquei 3 das citações mais checáveis:
+- **Rothmeier et al.** -- existe, é real, mas é de **2020** (não 2018 como citado) e é sobre **previsão de abandono/desengajamento de JOGADOR** num jogo de estratégia (*The Settlers Online*), não sobre prever RESULTADO DE PARTIDA. A cifra de 97% é de acurácia em prever se um jogador vai parar de jogar -- um problema com sinal comportamental forte, muito diferente de prever resultado de futebol.
+- **Drachen et al.** -- existe, método real ("*fast and frugal trees*", árvores podadas a 3-4 regras), mas não encontrei confirmação do número exato de 78,6-79,2% nas fontes que achei.
+- **Su et al. 2021** -- existe, é sobre classificar a cadeia de valor de dados em jogos, uso genérico e correto como referência de enquadramento (não traz número transponível).
+
+**Conclusão:** os estudos citados são reais, mas resolvem problemas diferentes (abandono de jogador, previsão de vitória em e-sport com telemetria *ao vivo* da partida) de prever o resultado de uma partida de futebol ANTES dela começar, só com histórico. Aplicar a acurácia de um domínio ao outro sem medir é exatamente o que o parecer técnico de 28/09 e o nosso próprio backtest (B3) já mostraram ser arriscado -- e o B3 já mostrou, com dado nosso, que o modelo atual mal empata com a frequência simples. Um Random Forest ou SVM **não herda** 80-97% de acurácia só por ser um algoritmo citado num paper de outro domínio -- precisaria do mesmo backtest walk-forward já usado no B3, com o risco real de overajuste dado o tamanho pequeno da amostra por confronto específico (`JOGOS_MINIMOS_PARA_FORCA_PROPRIA=5`).
+
+### O que testei contra os nossos 1.261 concursos reais (não contra o texto)
+
+| Afirmação do texto | O que os NOSSOS dados reais mostram |
+|---|---|
+| Coluna 1: aceitar 5-9 acertos · Coluna X: 2-5 · Coluna 2: 2-5 | Cada faixa isolada bate bem: **79,2% / 77,3% / 74,8%** dos 1.261 concursos reais caem dentro. Mas **as três ao mesmo tempo** (o que um bilhete de verdade precisa) só acontece em **54,6%** dos concursos -- é uma heurística útil, mas descarta quase metade dos resultados reais se aplicada como filtro rígido. Proponho usar como **aviso**, não bloqueio. |
+| "Probabilidade conjunta de todos os 14 favoritos vencerem é mínima (~0,5%)" | **Não bate.** Com a frequência real da coluna 1 no nosso histórico (47,2%), a conta dá **0,0028%** -- 1 em ~36.200, não 1 em 200. É quase 200 vezes mais raro do que o texto afirma. Nenhum dos 1.261 concursos reais teve os 14 jogos na coluna 1. |
+| Estratégia "anti-manada" (evitar só favoritos, para não dividir o prêmio) | Testei com o que já temos (`premiacoes`, faixa de 14 pontos): concursos com mais "zebras" (jogos fora da coluna 1) tendem a ter **menos** ganhadores no prêmio máximo (correlação fraca, -0,13, com todos os 1.261 concursos). É uma direção real, mas fraca -- vale estudar melhor, não vale como regra pronta. |
+
+### Avaliação das 4 ideias do texto, com a correção acima
+
+- **Q6 -- Aviso de faixa por coluna (heurística de distribuição):** dá para fazer AGORA, sem fonte nova -- os números já saíram da nossa própria base. Vira um aviso informativo no bilhete ("este bilhete tem 11 jogos na coluna 1; historicamente, 79% dos concursos ficam entre 5 e 9"), nunca um bloqueio.
+- **Q7 -- Estudo anti-manada:** formalizar como módulo (`stats/premiacoes.py` ou similar) usando `premiacoes` + `jogos`, que já temos -- sem fonte nova. Precisa de mais rigor estatístico (o -0,13 é fraco) antes de virar recomendação na tela.
+- **Q8 -- Classificação de risco por jogo via modelo mais sofisticado (Random Forest/SVM):** só depois do B2 e com o MESMO backtest do B3 -- não entra por causa de uma citação de outro domínio. Fica registrado como ideia, condicionado a medir, igual ao resto do projeto.
+- **Q9 -- Fechamento reduzido com garantia condicional:** conceito real de matemática de loteria (sistemas reduzidos com garantia), diferente do fechamento cheio que já existe. Qualquer "garantia" precisa ser **provada matematicamente** (testada de forma exaustiva em casos pequenos), com o mesmo rigor que `stats/fechamento.py` já tem contra a tabela oficial -- não vou implementar uma garantia sem verificar que ela realmente garante o que promete.
+
 ## Avaliação: skills e agentes
 
 - **Skill de pesquisa de fonte oficial** ("ler antes de codificar"): já é o que eu faço manualmente a cada nova fonte (REC, agora o BID). Formalizar como skill deste projeto tem valor -- padroniza o registro em `docs/` e no cofre, evita pular a checagem. Proponho criar `loteca-pesquisar-fonte-oficial` no seu `~/.claude/skills/` (ou escopada ao projeto).
@@ -149,7 +179,7 @@ Página nova (ex. "Painel geral"), com filtro por série/ano, mostrando vários 
 
 ## Perguntas para sua validação
 
-1. Aprova a ordem Q0 → Q1 → Q2 → Q2b → Q2c → Q2d → Q3 → Q4 → Q5?
+1. Aprova a ordem Q0 → Q1 → Q2 → Q2b → Q2c → Q2d → Q3 → Q4 → Q5 → Q6 → Q7? (Q8 fica condicionado ao B2/B3; Q9 só depois de eu provar a garantia matematicamente)
 2. **Elenco (Q2d):** autoriza reabrir a decisão de não coletar elenco, para idade e valor de mercado via Transfermarkt, depois de eu ler os termos de uso completos? (pergunta separada de propósito, por mudar um princípio já registrado)
 3. Aprova a pesquisa do BID (Q2) como primeiro passo com fonte nova?
 4. Para os canais do YouTube (Q2b): confirma CazéTV, TNT Sports Brasil, Desimpedidos e Canal GOAT, ou tem outros/quer tirar algum?
@@ -158,3 +188,5 @@ Página nova (ex. "Painel geral"), com filtro por série/ano, mostrando vários 
 7. Confirma que sentimento de rede social e dado tático fino (passe, xG) ficam fora do escopo por ora?
 8. Tem sites específicos em mente para eu avaliar (além dos já estudados antes: Driblab, UFMG, ValorFinal)?
 9. **Dashboard (Q5):** confirma que é uma visão comparando VÁRIOS times/seleções ao mesmo tempo (diferente da Ficha do time, que é um time só)? Prefere que entre logo (não depende de nenhuma fonte nova) ou junto com as demais fases?
+10. **Sobre o texto de Game Data Science:** ciente de que os números específicos (acurácia, faixa de coluna, probabilidade conjunta) não se confirmaram na transposição literal -- concorda em seguir só com o que testei contra nossa base real (Q6-Q9), em vez dos números do texto original?
+11. **Q6 (aviso de faixa por coluna):** confirma que deve ser só um aviso informativo, nunca um bloqueio que impeça salvar o bilhete?
