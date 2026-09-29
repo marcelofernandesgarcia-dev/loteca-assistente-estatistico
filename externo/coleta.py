@@ -38,6 +38,7 @@ def _buscar_rss(consulta: str, max_itens: int, prioritaria: bool) -> list[dict]:
                 "titulo": (item.findtext("title") or "").strip(),
                 "url": (item.findtext("link") or "").strip(),
                 "fonte": fonte_elem.text if fonte_elem is not None else "",
+                "publicado_em": (item.findtext("pubDate") or "").strip(),
                 "prioritaria": prioritaria,
             }
         )

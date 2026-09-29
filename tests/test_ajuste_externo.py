@@ -114,7 +114,7 @@ def test_montar_evidencias_tira_repeticao_e_guarda_manchete_veiculo_e_link():
     ]
     evidencias = montar_evidencias(sinais)
     assert len(evidencias) == 2
-    assert evidencias[0] == {"sinal": "lesao_titular", "manchete": "Zagueiro lesionado", "fonte": "Veículo A", "url": "http://a"}
+    assert evidencias[0] == {"sinal": "lesao_titular", "manchete": "Zagueiro lesionado", "fonte": "Veículo A", "url": "http://a", "publicado_em": ""}
     assert evidencias[1]["url"] == ""
 
 
@@ -137,7 +137,7 @@ def banco():
 def test_varredura_grava_evidencias_e_percentual_final_que_soma_100(banco, monkeypatch):
     conexao, casa, fora = banco
     noticias = {
-        "TIME A": [{"titulo": "Atacante lesionado desfalca o time", "fonte": "Veículo X", "url": "http://x/1"}],
+        "TIME A": [{"titulo": "Atacante do Time A está lesionado e desfalca o time", "fonte": "Veículo X", "url": "http://x/1"}],
         "TIME B": [],
     }
     monkeypatch.setattr(varredura, "buscar_noticias", lambda nome, **kw: noticias[nome])
@@ -145,7 +145,7 @@ def test_varredura_grava_evidencias_e_percentual_final_que_soma_100(banco, monke
 
     ajustes = ajustes_do_concurso(conexao, 7)
     assert ajustes[casa]["ajuste"] < 0 and ajustes[fora]["ajuste"] == 0
-    assert ajustes[casa]["evidencias"][0]["manchete"] == "Atacante lesionado desfalca o time"
+    assert ajustes[casa]["evidencias"][0]["manchete"] == "Atacante do Time A está lesionado e desfalca o time"
     assert ajustes[casa]["evidencias"][0]["url"] == "http://x/1"
 
     linhas = {r["participante_id"]: r for r in conexao.execute("SELECT * FROM percentuais")}

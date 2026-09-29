@@ -58,7 +58,7 @@ def executar_para_concurso(conexao, numero_concurso: int) -> list[dict]:
 
     for participante in participantes_do_concurso(conexao, numero_concurso):
         noticias = buscar_noticias(participante["nome"])
-        sinais = extrair_sinais(noticias)
+        sinais = extrair_sinais(noticias, participante_nome=participante["nome"])
         ajuste = calcular_ajuste(sinais)
 
         conexao.execute(

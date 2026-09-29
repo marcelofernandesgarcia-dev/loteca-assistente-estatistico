@@ -1,4 +1,5 @@
 import datetime as dt
+import email.utils
 import sys
 from pathlib import Path
 
@@ -35,6 +36,17 @@ def _texto_seguro(texto: str) -> str:
     return limpo.replace("_", " ")[:200]
 
 
+def _data_publicacao_br(texto_rfc822: str) -> str | None:
+    """RSS traz a data em RFC 822 ('Mon, 29 Sep 2026 10:00:00 GMT'); mostra
+    dd/mm/aaaa. None se vazio ou não reconhecido -- não inventa data."""
+    if not texto_rfc822:
+        return None
+    try:
+        return email.utils.parsedate_to_datetime(texto_rfc822).strftime("%d/%m/%Y")
+    except (TypeError, ValueError):
+        return None
+
+
 def _link_seguro(url: str) -> str | None:
     if url and url.startswith(("http://", "https://")) and not any(c in url for c in " ()<>\""):
         return url
@@ -68,7 +80,11 @@ def mostrar_motivos_do_ajuste(jogos, calculos):
                     link = _link_seguro(evidencia.get("url", ""))
                     veiculo = _texto_seguro(evidencia.get("fonte", "")) or "veículo não informado"
                     manchete = _texto_seguro(evidencia.get("manchete", ""))
-                    st.markdown(f"    - «{manchete}» — {veiculo}" + (f" — [abrir]({link})" if link else ""))
+                    quando = _data_publicacao_br(evidencia.get("publicado_em", ""))
+                    linha = f"    - «{manchete}» — {veiculo}"
+                    linha += f" — publicada em {quando}" if quando else ""
+                    linha += f" — [abrir]({link})" if link else ""
+                    st.markdown(linha)
 
 conexao = obter_conexao()
 

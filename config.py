@@ -107,6 +107,20 @@ VARREDURA_PALAVRAS_CHAVE_PARA_SINAL = {
     "sem vencer": "sequencia_negativa_destacada",
 }
 
+# Se qualquer uma dessas expressões aparece no título, a notícia inteira é
+# descartada como sinal -- ela nega ou reverte o problema, em vez de
+# confirmá-lo (ex.: "sem lesão" contém a palavra-chave "lesão", mas quer dizer
+# o oposto de lesao_titular). Lista deliberadamente simples (substring, não
+# NLP) -- ver docs/avaliacao-plano-tecnico-29-09-2026.md sobre a escolha de
+# não usar modelo de linguagem pago na v1.
+VARREDURA_PALAVRAS_DE_NEGACAO = (
+    "sem lesao", "sem lesão", "recuperado", "recuperada", "volta aos treinos",
+    "de volta aos treinos", "esta de volta", "está de volta", "liberado",
+    "liberada", "reintegrado", "reintegrada", "treina normalmente",
+    "treinou normalmente", "nao e duvida", "não é dúvida", "descarta lesao",
+    "descarta lesão", "fora de duvida", "fora de dúvida",
+)
+
 # Sugestão de marcação (seco/duplo/triplo) -- ver stats/sugestao.py sobre
 # qual das 3 propostas conflitantes da pesquisa foi escolhida como padrão.
 SUGESTAO_LIMIAR_SECO = float(os.environ.get("LOTECA_LIMIAR_SECO", "65.0"))

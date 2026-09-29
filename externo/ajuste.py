@@ -33,7 +33,10 @@ def montar_evidencias(sinais: list[dict]) -> list[dict]:
             continue
         vistos.add(chave)
         saida.append(
-            {"sinal": sinal["sinal"], "manchete": sinal["evidencia"], "fonte": sinal.get("fonte", ""), "url": sinal.get("url", "")}
+            {
+                "sinal": sinal["sinal"], "manchete": sinal["evidencia"], "fonte": sinal.get("fonte", ""),
+                "url": sinal.get("url", ""), "publicado_em": sinal.get("publicado_em", ""),
+            }
         )
     return saida
 
