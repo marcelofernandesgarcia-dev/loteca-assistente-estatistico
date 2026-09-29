@@ -1,5 +1,52 @@
 # Estudo: fontes qualitativas de desempenho e potencialização do projeto (29/09/2026)
 
+> **Atualização (mesmo dia, 3ª rodada):** o usuário pediu para eu reavaliar uma
+> conclusão minha (coletividade/talento individual não precisam de base paga
+> em tudo) e para eu manter, neste documento, o rastreamento de TODAS as
+> solicitações de melhoria feitas na sessão, para nenhuma se perder. As duas
+> seções abaixo, antes do restante do documento original, respondem a isso.
+
+## Rastreabilidade das solicitações do usuário (todas, nesta sessão)
+
+| # | Solicitação (resumo) | Onde entra no plano | Status |
+|---|---|---|---|
+| 1 | Continuar as etapas que faltam (B1-D2) e disponibilizar o app para teste | Fase 3 original | ✅ Feito |
+| 2 | Analisar o parecer técnico externo e planejar melhorias | Resposta ao parecer | ✅ Feito |
+| 3 | Analisar o segundo documento (plano técnico em camadas) e atualizar o plano | Avaliação do plano técnico | ✅ Feito |
+| 4 | Seguir para C1 e C2 | C1, C2 | ✅ Feito |
+| 5 | Seguir para D1 e D2 | D1, D2 | ✅ Feito |
+| 6 | Seguir com o A3 (bilhete salvo) | A3 | ✅ Feito |
+| 7 | Visualização gráfica do bilhete sugerido (percentuais e variações) | Melhoria 1 (mensagem "Ficou bom, porém...") | 🔲 Planejado, **não implementado** -- aguardando validação |
+| 8 | Análises mais detalhadas para identificar o que impacta o desempenho | Melhoria 2 → depois detalhada nos itens 9-11 | 🔲 Planejado (painel "o que costuma vir junto") |
+| 9 | Contratações, lesão, suspensão, satisfação da torcida (elenco/classificação), coletividade, entrosamento, talento individual, idade, técnico, comissão técnica, presidentes, torcida, situação financeira, atraso de pagamento | Estudo de fontes qualitativas -- Q1-Q4 | 🔲 Estudado, plano em aberto |
+| 10 | Sites oficiais de clube/seleção, canais/influencers, jornalistas, sites específicos | Complemento do estudo -- Q2b/Q2c | 🔲 Estudado, plano em aberto |
+| 11 | Reavaliar a conclusão sobre coletividade/talento individual/artilharia/melhor em campo sem base paga, e manter rastreabilidade de todas as solicitações | Esta atualização (abaixo) | 🔲 Reavaliado agora |
+| 12 | Dashboard visual comparando vários times/seleções (classificação, V-E-D, métricas) | Novo item **Q5**, ver abaixo | 🔲 Novo, planejado agora |
+
+Este documento (`docs/estudo-fontes-qualitativas-29-09-2026.md`) passa a ser o **registro único** de solicitações de melhoria em aberto -- toda vez que eu propuser algo novo por minha conta ou você pedir algo novo, eu atualizo esta tabela, para nada se perder mesmo com o projeto crescendo aos poucos.
+
+## Reavaliação: coletividade, talento individual, artilharia, "melhor em campo" -- eu generalizei rápido demais
+
+Você está certo em me corrigir. Eu agrupei "dado tático fino" (passes, xG, distância percorrida -- isso sim exige provedor pago) com outras coisas que **não exigem**. Separando de novo, com o que checei nesta sessão:
+
+| Referência | Fonte livre, sem pagar | Situação real |
+|---|---|---|
+| **Artilharia** (gols por jogador) | **Já está na mesma página da CBF que o app já lê** para a classificação (Série A/B) -- vi isso ao vivo nesta sessão, antes até do C1 ("Kevin Viveros 18 gols, Pedro 16..."). | **Zero fonte nova.** Só falta eu estender o parser (`importer/cbf_client.py`) para extrair esse bloco também -- é o mesmo HTML, a mesma coleta. |
+| **Cartões por time** (amarelo/vermelho) | Já coletado -- `cbf_estatisticas_time.cartoes_amarelos/cartoes_vermelhos`. | **Já existe**, só ainda não aparece destacado como "referência de desempenho" na ficha. |
+| **"Melhor em campo" / prêmio de melhor jogador da partida** | Não achei fonte oficial centralizada e gratuita nesta checagem -- pode existir por competição/patrocinador (ex. "Craque do Jogo" de algum patrocinador), mas não confirmei. | **A pesquisar**, não afirmo que existe sem checar direito. |
+| **Idade do elenco, valor de mercado (proxy de talento/coletividade)** | **Transfermarkt** (`transfermarkt.com.br`) -- checado nesta sessão: `robots.txt` permite acesso geral (`User-agent: * / Allow: /`), só bloqueia ferramentas de download em massa (`wget`). Não é base paga para consulta manual/moderada. | **Viável tecnicamente**, mas reabre a decisão de não coletar elenco (ver pergunta 2 abaixo) -- e eu ainda não li os termos de uso completos (só o robots.txt), então preciso ler antes de propor coletar de verdade, mesma disciplina do CBF. |
+| **Dado tático fino** (passes, xG, distância, mapas de calor) | Não encontrei fonte gratuita -- isso sim é território de provedor pago (Opta, Sofascore API paga, Driblab). | **Mantenho a avaliação anterior** só para este item específico. |
+
+**Correção do meu erro:** eu escrevi antes "coletividade e talento individual (exigiria dado tático pago)" como se fosse um bloco só. Não é -- **artilharia e cartões já são coletáveis sem nada novo**, e **elenco/idade/valor de mercado são coletáveis sem pagar** (via Transfermarkt, com a mesma cautela de leitura que já uso na CBF). Só o dado tático fino de verdade (passe, xG) continua exigindo provedor pago.
+
+## Novo pedido: dashboard comparando vários times/seleções
+
+Hoje a "Ficha do time" é funda num time só. Você pediu um **dashboard comparando vários participantes ao mesmo tempo** -- classificação, vitórias, empates, derrotas e outras métricas lado a lado. Isso é diferente e complementar.
+
+**Viabilidade:** alta, sem fonte nova -- é reaproveitar `stats/competicao.py` (tabela por rodada) e `stats/desempenho.py` (KPIs) numa tela só, em formato de tabela/gráfico comparável. Vira uma página nova, por exemplo "Painel geral", com filtro por série/ano.
+
+## Plano revisado (substitui a lista Q1-Q4 anterior)
+
 ## Contexto
 
 O usuário pediu, depois de testar o app, que as análises considerem "referências reais de melhorias ou pioras": contratações bem feitas, jogadores machucados, suspensos, satisfação da torcida com o elenco e com a classificação, coletividade/entrosamento/talento individual, idade de jogadores, técnicos, comissão técnica, presidentes, torcidas, situação financeira e atraso de pagamento — reconhecendo que futebol é complexo (jogo coletivo, contato físico, múltiplas variáveis). Pediu para estudar melhorias em coleta, registro, análise e metodologia, e avaliar a criação de skills/agentes.
@@ -64,7 +111,10 @@ Se o jornalista publica em `ge.globo.com`, `espn.com.br` ou no site oficial de u
 
 Pedido genérico demais para avaliar sem exemplo concreto -- mesmo processo já usado neste projeto (você traz o link, eu leio e avalio antes de propor, como fiz com o REC e o BID). Se tiver sites específicos em mente, me diga quais.
 
-## Plano em fases (atualizado com o complemento)
+## Plano em fases (revisado, ordenado do mais barato/certo para o mais caro/incerto)
+
+### Fase Q0 -- artilharia e cartões (NOVO -- mais barato de todos, zero fonte nova)
+Estender `importer/cbf_client.py` para extrair também o bloco de artilharia (já visto na mesma página da classificação) e destacar cartões por time (já coletados em `cbf_estatisticas_time`, hoje sem uso na tela) na Ficha do time. Nenhuma página nova, nenhum termo de uso novo -- é a mesma fonte já autorizada.
 
 ### Fase Q1 -- estender a infraestrutura de notícia já existente (barato, sem fonte nova)
 Adicionar categorias de sinal em `config.VARREDURA_PALAVRAS_CHAVE_PARA_SINAL`: troca de técnico, atraso de pagamento/crise financeira, giro de elenco (via notícia de contratação/saída, complementar ao BID). Mesmas barreiras do C2 (nome no título, negação anula). Nenhuma tabela nova -- reaproveita `fatores_externos`.
@@ -72,17 +122,23 @@ Adicionar categorias de sinal em `config.VARREDURA_PALAVRAS_CHAVE_PARA_SINAL`: t
 ### Fase Q2 -- pesquisar e, se der, integrar o BID como fonte oficial de contratações
 Antes de codificar: ler a página pública do BID com mais profundidade (que dado exatamente aparece por consulta, formato, se dá para automatizar sem login), documentar em `docs/` como fiz com o REC, e **te trazer o achado antes de decidir coletar**. Se viável: uma tabela nova (`bid_movimentacoes` ou similar) e uma métrica de "giro de elenco" (contratações + saídas numa janela) por participante.
 
-### Fase Q3 -- pesquisar RSSF/ANRESF
-Mesma disciplina: ler antes de propor. Ainda não confirmei se existe painel público de situação financeira -- essa fase só decide o que fazer depois dessa leitura.
-
 ### Fase Q2b -- canais do YouTube como mais um "veículo" de notícia
 Levantar `channel_id` dos canais que você já tinha indicado (CazéTV, TNT Sports Brasil, Desimpedidos, Canal GOAT), incluir como fonte na varredura com o MESMO filtro do C2 (nome + palavra-chave de fato, nunca palpite/opinião). Barato -- reaproveita tudo, só soma feeds.
 
 ### Fase Q2c -- sites oficiais de clube, começando pelos de maior amostra
 Mapear, um clube de cada vez (começando pelos que mais aparecem na Loteca), o endereço da categoria de notícia/boletim médico. Prioriza qualidade da fonte (o próprio clube) sobre cobertura total dos 40+ clubes de uma vez.
 
-### Fase Q4 -- ligar os novos fatores à análise de associação (a mesma do plano anterior, "o que costuma vir junto")
-Só depois de Q1-Q3 trazerem dado, testar estatisticamente (mesmo método do backtest: comparação pareada, com significância, sem promessa causal) se cada fator novo está de fato associado a melhora ou piora no desempenho seguinte. Fator sem diferença perceptível é mostrado como tal, não escondido.
+### Fase Q2d -- elenco (idade, valor de mercado) via Transfermarkt (NOVO -- só com autorização explícita)
+Antes de qualquer coleta: ler os termos de uso completos do Transfermarkt (só conferi o `robots.txt` agora, que permite acesso geral mas não é o mesmo que os termos de uso) e trazer o achado. **Esta fase reabre a decisão de não coletar elenco, tomada no início do projeto** -- só avança com sua confirmação explícita e separada das demais (pergunta 2 abaixo), porque muda o princípio de minimização de dado que o projeto seguia até aqui.
+
+### Fase Q3 -- pesquisar RSSF/ANRESF
+Mesma disciplina: ler antes de propor. Ainda não confirmei se existe painel público de situação financeira -- essa fase só decide o que fazer depois dessa leitura.
+
+### Fase Q4 -- ligar os novos fatores à análise de associação ("o que costuma vir junto")
+Só depois de Q0-Q3 trazerem dado, testar estatisticamente (mesmo método do backtest: comparação pareada, com significância, sem promessa causal) se cada fator novo está de fato associado a melhora ou piora no desempenho seguinte. Fator sem diferença perceptível é mostrado como tal, não escondido.
+
+### Fase Q5 -- dashboard comparando vários times/seleções (NOVO)
+Página nova (ex. "Painel geral"), com filtro por série/ano, mostrando vários participantes lado a lado: posição, pontos, V-E-D, saldo, aproveitamento -- reaproveitando `stats/competicao.py` e `stats/desempenho.py`, sem fonte nova. Complementa a Ficha do time (que é funda num time só) com uma visão comparativa.
 
 ## Avaliação: skills e agentes
 
@@ -93,11 +149,12 @@ Só depois de Q1-Q3 trazerem dado, testar estatisticamente (mesmo método do bac
 
 ## Perguntas para sua validação
 
-1. Aprova a ordem Q1 → Q2 → Q2b → Q2c → Q3 → Q4?
-2. Sobre a decisão antiga de não coletar elenco (idade de jogadores): mantém a decisão, ou quer que eu reavalie com você?
+1. Aprova a ordem Q0 → Q1 → Q2 → Q2b → Q2c → Q2d → Q3 → Q4 → Q5?
+2. **Elenco (Q2d):** autoriza reabrir a decisão de não coletar elenco, para idade e valor de mercado via Transfermarkt, depois de eu ler os termos de uso completos? (pergunta separada de propósito, por mudar um princípio já registrado)
 3. Aprova a pesquisa do BID (Q2) como primeiro passo com fonte nova?
 4. Para os canais do YouTube (Q2b): confirma CazéTV, TNT Sports Brasil, Desimpedidos e Canal GOAT, ou tem outros/quer tirar algum?
 5. Para os sites oficiais de clube (Q2c): concorda em começar pelos clubes de maior amostra em vez de tentar os 40+ de uma vez? Tem algum específico que quer priorizar?
 6. Quer que eu crie a skill de pesquisa de fonte oficial no seu `~/.claude/skills/`?
-7. Confirma que sentimento de rede social e dado tático pago ficam fora do escopo por ora?
+7. Confirma que sentimento de rede social e dado tático fino (passe, xG) ficam fora do escopo por ora?
 8. Tem sites específicos em mente para eu avaliar (além dos já estudados antes: Driblab, UFMG, ValorFinal)?
+9. **Dashboard (Q5):** confirma que é uma visão comparando VÁRIOS times/seleções ao mesmo tempo (diferente da Ficha do time, que é um time só)? Prefere que entre logo (não depende de nenhuma fonte nova) ou junto com as demais fases?
