@@ -21,10 +21,11 @@
 | 9 | Contratações, lesão, suspensão, satisfação da torcida (elenco/classificação), coletividade, entrosamento, talento individual, idade, técnico, comissão técnica, presidentes, torcida, situação financeira, atraso de pagamento | Estudo de fontes qualitativas -- Q1-Q4 | 🔲 Estudado, plano em aberto |
 | 10 | Sites oficiais de clube/seleção, canais/influencers, jornalistas, sites específicos | Complemento do estudo -- Q2b/Q2c | 🔲 Estudado, plano em aberto |
 | 11 | Reavaliar a conclusão sobre coletividade/talento individual/artilharia/melhor em campo sem base paga, e manter rastreabilidade de todas as solicitações | Esta atualização (abaixo) | 🔲 Reavaliado agora |
-| 12 | Dashboard visual comparando vários times/seleções (classificação, V-E-D, métricas) | Novo item **Q5**, ver abaixo | 🔲 Novo, planejado agora |
-| 13 | Analisar e incorporar texto sobre "Game Data Science" transposto para risco em loteria (SVM, Random Forest, heurística de colunas, anti-manada, fechamento reduzido) | Nova seção abaixo -- itens **Q6-Q9** | 🔲 Analisado com verificação; plano em aberto |
+| 12 | Dashboard visual comparando vários times/seleções (classificação, V-E-D, métricas) | Fase **Q5** | ✅ Aprovado, **priorizado para agora** (com linhas de tendência) -- próxima entrega de código |
+| 13 | Analisar e incorporar texto sobre "Game Data Science" transposto para risco em loteria (SVM, Random Forest, heurística de colunas, anti-manada, fechamento reduzido) | Nova seção abaixo -- itens **Q6-Q9** | 🔲 Analisado com verificação; Q6 aprovado, Q8 pendente de sua decisão final (pergunta 2 da rodada 7) |
 | 14 | Analisar e verificar a simulação prática do desdobramento reduzido com garantia (16 volantes, R$ 32, "garante" 13 pontos) | Seção "Simulação numérica do fechamento reduzido" (Q9) | ✅ Verificado -- **reivindicação central refutada por prova matemática** (16 linhas cobrem no máximo 22% do espaço; mínimo real comprovado é 72 linhas / R$ 144) |
 | 15 | Analisar descrição de planilha externa (`calculadora_desdobramento_loteca.xlsx`, "100% de garantia" com 16 volantes) | Seção "Complemento -- planilha externa" (Q9) | ✅ Verificado -- **repete a mesma alegação já refutada no item 14**; frequência de colunas da planilha bate com nossa base real, garantia de 100% não |
+| 16 | Respostas às 12 perguntas de validação (elenco, BID, YouTube, sites oficiais, skill, dashboard, aviso de coluna confirmados; redes sociais/dado tático, modelo sofisticado e fechamento reduzido pedidos de explicação) | Seção "Respostas de validação do usuário (rodada 7)" | ✅ Registrado -- 9 itens aprovados, 3 aguardando decisão final após explicação |
 
 Este documento (`docs/estudo-fontes-qualitativas-29-09-2026.md`) passa a ser o **registro único** de solicitações de melhoria em aberto -- toda vez que eu propuser algo novo por minha conta ou você pedir algo novo, eu atualizo esta tabela, para nada se perder mesmo com o projeto crescendo aos poucos.
 
@@ -96,7 +97,7 @@ Pedido do usuário, na sequência do estudo acima. Cada fonte foi checada ao viv
 
 **Viabilidade:** alta em valor, **cara em escala** -- são mais de 40 clubes (Séries A e B), cada um com estrutura de site e nome de categoria diferentes (não há padrão nacional, diferente da CBF que é uma fonte só para todos). Um "raspador genérico" não funciona; cada clube precisa de um mapeamento próprio (URL da categoria de notícia, como identificar "Boletim Médico"), crescendo aos poucos -- mesmo modelo do `data/apelidos-participantes.csv`, que também cresce um item de cada vez.
 
-**Proposta:** priorizar só os clubes de maior amostra na Loteca (os que mais aparecem na grade) e crescer a lista aos poucos, não tentar os 40 de uma vez. Cadastro num CSV novo (ex. `data/fontes-oficiais-por-clube.csv`: participante, domínio, padrão da categoria de notícia/boletim médico).
+**Decisão do usuário (29/09/2026):** não priorizar por amostra -- cobrir **todos os participantes envolvidos na Loteca**, clube ou seleção. Isso é maior escopo do que eu tinha proposto (mais de 40 sites, cada um com estrutura própria); vou tratar como uma lista viva que cresce item a item (mesmo modelo do `data/apelidos-participantes.csv`), começando a mapear pelo participante que aparecer no concurso mais próximo e seguindo até cobrir todos, em vez de tentar os 40+ de uma vez de forma manual. Cadastro num CSV novo (`data/fontes-oficiais-por-clube.csv`: participante, domínio, padrão da categoria de notícia/boletim médico).
 
 ### Canais e influencers (YouTube)
 
@@ -128,8 +129,8 @@ Antes de codificar: ler a página pública do BID com mais profundidade (que dad
 ### Fase Q2b -- canais do YouTube como mais um "veículo" de notícia
 Levantar `channel_id` dos canais que você já tinha indicado (CazéTV, TNT Sports Brasil, Desimpedidos, Canal GOAT), incluir como fonte na varredura com o MESMO filtro do C2 (nome + palavra-chave de fato, nunca palpite/opinião). Barato -- reaproveita tudo, só soma feeds.
 
-### Fase Q2c -- sites oficiais de clube, começando pelos de maior amostra
-Mapear, um clube de cada vez (começando pelos que mais aparecem na Loteca), o endereço da categoria de notícia/boletim médico. Prioriza qualidade da fonte (o próprio clube) sobre cobertura total dos 40+ clubes de uma vez.
+### Fase Q2c -- sites oficiais de clube, cobrindo todos os participantes da Loteca
+Mapear, um participante de cada vez, o endereço da categoria de notícia/boletim médico -- meta é cobrir **todos os envolvidos na Loteca** (decisão do usuário, 29/09/2026), não só os de maior amostra. Escopo grande (40+ sites, sem padrão entre eles); cresce por lista viva no CSV, começando pelos participantes do concurso mais próximo do prazo, para ter valor prático desde já enquanto a lista cresce.
 
 ### Fase Q2d -- elenco (idade, valor de mercado) via Transfermarkt (NOVO -- só com autorização explícita)
 Antes de qualquer coleta: ler os termos de uso completos do Transfermarkt (só conferi o `robots.txt` agora, que permite acesso geral mas não é o mesmo que os termos de uso) e trazer o achado. **Esta fase reabre a decisão de não coletar elenco, tomada no início do projeto** -- só avança com sua confirmação explícita e separada das demais (pergunta 2 abaixo), porque muda o princípio de minimização de dado que o projeto seguia até aqui.
@@ -140,8 +141,8 @@ Mesma disciplina: ler antes de propor. Ainda não confirmei se existe painel pú
 ### Fase Q4 -- ligar os novos fatores à análise de associação ("o que costuma vir junto")
 Só depois de Q0-Q3 trazerem dado, testar estatisticamente (mesmo método do backtest: comparação pareada, com significância, sem promessa causal) se cada fator novo está de fato associado a melhora ou piora no desempenho seguinte. Fator sem diferença perceptível é mostrado como tal, não escondido.
 
-### Fase Q5 -- dashboard comparando vários times/seleções (NOVO)
-Página nova (ex. "Painel geral"), com filtro por série/ano, mostrando vários participantes lado a lado: posição, pontos, V-E-D, saldo, aproveitamento -- reaproveitando `stats/competicao.py` e `stats/desempenho.py`, sem fonte nova. Complementa a Ficha do time (que é funda num time só) com uma visão comparativa.
+### Fase Q5 -- dashboard comparando vários times/seleções (NOVO) -- **priorizada para agora (decisão do usuário, 29/09/2026)**
+Página nova (ex. "Painel geral"), com filtro por série/ano, mostrando vários participantes lado a lado: posição, pontos, V-E-D, saldo, aproveitamento **e linhas de tendência** (pedido explícito do usuário) -- reaproveitando `stats/competicao.py` e `stats/desempenho.py`, sem fonte nova. Complementa a Ficha do time (que é funda num time só) com uma visão comparativa. Plano de implementação detalhado a apresentar antes de codificar (protocolo do projeto: plano → validação → código).
 
 ## Análise do texto "Game Data Science → risco em loteria" (mesmo dia, 4ª rodada)
 
@@ -209,17 +210,61 @@ Não vou importar essa planilha nem usar seus números de "garantia" no app. Se 
 - **Agente para rodar `atualizar_tudo.py` periodicamente**: já existe o script; a tarefa agendada continua sendo criada por você (não crio tarefa do sistema operacional).
 - **Não recomendo** um "agente autônomo" coletando rede social ou fazendo julgamento de "contratação bem feita" -- foge do princípio de não fabricar dado e de manter humano na decisão.
 
+## Respostas de validação do usuário (29/09/2026, rodada 7)
+
+| # | Pergunta | Resposta | Efeito no plano |
+|---|---|---|---|
+| 1 | Ordem das fases Q0→Q7 | Aprovada (implícita pela cascata de sim abaixo) | Sequência mantida |
+| 2 | Elenco via Transfermarkt (Q2d) | **SIM** | Autorizado reabrir a coleta de elenco/idade, condicionado à leitura dos termos de uso completos antes de codificar (já previsto) |
+| 3 | Pesquisa do BID (Q2) | **SIM** | Segue como primeiro passo de fonte nova |
+| 4 | Canais de YouTube (Q2b) | **Confirmado**: CazéTV, TNT Sports Brasil, Desimpedidos, Canal GOAT | Lista fechada |
+| 5 | Sites oficiais de clube (Q2c) | **Ajustado**: cobrir todos os participantes da Loteca, não só os de maior amostra | Seção Q2c reescrita acima -- escopo maior, lista viva |
+| 6 | Skill de pesquisa de fonte oficial | **SIM** | A criar em `~/.claude/skills/` |
+| 7 | Sentimento social e dado tático fino fora de escopo | Pediu explicação -- ver seção abaixo | Decisão em aberto até sua resposta |
+| 8 | Outros sites específicos | Nenhum agora; aceita sugestões | Sem mudança |
+| 9 | Dashboard multi-time (Q5) | **SIM, com linhas de tendência, priorizado para agora** | Vira a próxima entrega de código, com plano a apresentar |
+| 10 | Seguir só com o testado contra a base real (não os números do texto de Game Data Science) | Pediu explicação -- ver seção abaixo | Decisão em aberto até sua resposta |
+| 11 | Aviso de faixa por coluna (Q6), só informativo | **SIM** | Confirmado -- nunca bloqueia salvar o bilhete |
+| 12 | Fechamento reduzido com garantia (Q9), construir de verdade | Pediu explicação -- ver seção abaixo | Decisão em aberto até sua resposta |
+
+### Sobre a pergunta 7 -- por que sentimento de torcida (rede social) e dado tático fino ficam fora, hoje
+
+Não é uma regra definitiva -- é uma consequência de três problemas concretos, cada um resolúvel só com uma decisão sua (igual ao que já aconteceu com a CBF, cujos termos de uso vedam uso não autorizado e você decidiu assumir o risco de propósito):
+
+**Sentimento de torcida via rede social (X/Twitter, Instagram, Reddit, etc.):**
+- **Custo:** a API do X/Twitter hoje é paga (o nível gratuito não permite busca histórica útil); Instagram não tem API pública de sentimento sem aprovação de parceiro comercial da Meta. "Raspar" essas redes sem API viola os termos de uso delas -- diferente da CBF, que só restringe uso comercial e não bloqueia tecnicamente o acesso.
+- **Amostra não confiável:** quem posta sobre um time nas redes é uma fração pequena e não representativa da torcida -- torcedor engajado (positivo ou negativo demais), perfil automatizado, campanha coordenada (comum em rivalidade de clube brasileiro). Sem controle de qualidade, um "score de sentimento" location vira ruído travestido de dado, contrariando a regra permanente deste projeto de não fabricar indicador sem base real ([[feedback_proibido_fabricar_dado]] na sua memória).
+- **Camada de IA extra:** medir sentimento em texto exige um classificador (regra simples não dá conta de ironia, viés regional etc.) -- isso é uma peça de IA nova, que precisaria do mesmo teto e rastreabilidade que já aplicamos ao ajuste de notícia (C2), e ainda não tem literatura nem teste nosso mostrando que funciona para prever resultado de partida.
+- **Se você quiser seguir mesmo assim:** dá para tratar como o caso da CBF -- eu leio os termos de uso da rede escolhida, registro o risco explicitamente, e você decide se assume. Não é impossível, é uma decisão de risco que precisa ser seu, feita com os olhos abertos.
+
+**Dado tático fino (xG, rede de passes, distância percorrida, entrosamento medido):**
+- Esse nível de detalhe (por lance, por jogador, em tempo real) só existe hoje em provedores pagos (Driblab, Opta, StatsBomb) -- já estudado no projeto, não contratado, decisão sua confirmada anteriormente.
+- É diferente de artilharia, cartões, ou "giro de elenco" (contratação/saída via BID) -- esses são fatos discretos e públicos, gratuitos, e já estão nas fases Q0/Q2. O que fica de fora é especificamente o dado tático **granular e calculado** (xG por chute, mapa de passe), que exige captura de vídeo/GPS em campo -- não é algo que dê para "coletar de forma alternativa e gratuita", diferente de artilharia/cartões que você corretamente apontou na rodada anterior.
+
+### Sobre a pergunta 10 -- o que o texto de "Game Data Science" propôs, e como funciona
+
+O texto pedia para transpor 4 técnicas de análise de jogos digitais para a Loteca:
+1. **SVM e Random Forest** -- algoritmos de classificação que aprendem, a partir de exemplos passados, a separar categorias (aqui, seria classificar cada um dos 14 jogos como "risco baixo/médio/alto", em vez do limiar fixo 65%/45% que o app usa hoje).
+2. **"Fast and frugal trees"** (árvores podadas) -- versão simplificada de árvore de decisão, com poucas regras (3-4), mais fácil de auditar que um Random Forest completo.
+3. **Ajuste dinâmico de dificuldade** -- conceito de design de jogos (o jogo fica mais fácil/difícil para manter o jogador engajado); o texto usava isso como analogia solta, sem aplicação concreta definida para a Loteca.
+4. Números específicos de acurácia e uma "probabilidade conjunta de ~0,5%" para justificar tudo isso.
+
+**O que eu verifiquei, e por que os números não podem ser reaproveitados:** as citações são reais, mas resolvem problemas diferentes do nosso -- Rothmeier et al. mede se um JOGADOR vai parar de jogar um jogo de estratégia (97% de acerto, com sinal comportamental forte, ao vivo), não se um TIME vai vencer uma partida de futebol antes dela começar, só com histórico. Um Random Forest não herda a acurácia de outro problema só por ser citado no mesmo texto -- ele precisaria ser treinado e testado com o **nosso** histórico, do mesmo jeito rigoroso que já fazemos: o `B3` (backtest já feito) mostrou que o modelo atual, mais simples, **mal empata com a frequência histórica**. Adicionar um algoritmo mais complexo sem essa prova é um risco real de sobreajuste (a amostra por confronto específico é pequena, `JOGOS_MINIMOS_PARA_FORCA_PROPRIA=5`) -- pioraria a confiabilidade, não melhoraria.
+
+**O que "seguir só com o testado" significa na prática:** eu já rodei a parte que dá pra testar contra a nossa base real (1.261 concursos) -- a heurística de faixa por coluna (Q6, aprovada por você na pergunta 11) e o estudo anti-manada (Q7, correlação fraca, precisa de mais rigor). A ideia de "modelo mais sofisticado" (Q8: Random Forest/SVM de verdade) fica **registrada, não descartada** -- só entra depois que o B2 (modelo por competição) e um backtest walk-forward, igual ao B3, provarem que ela realmente bate a frequência simples. É a mesma disciplina que já rege todo o projeto, não uma rejeição da ideia.
+
+### Sobre a pergunta 12 -- fechamento reduzido com garantia: o que é, e por que seria interessante
+
+**O conceito (matemática de loteria real, não invenção):** quando você marca mais de um resultado em vários jogos (duplos/triplos), apostar em TODAS as combinações (fechamento cheio, o que `stats/fechamento.py` já calcula) garante o máximo de acerto possível, mas custa caro (2^duplos × 3^triplos linhas). Um "sistema reduzido com garantia" é um **subconjunto bem escolhido** dessas linhas, menor, tal que -- não importa qual combinação de resultado realmente aconteça -- pelo menos uma linha do seu subconjunto erra, no máximo, uma quantidade definida de jogos. Isso é chamado de "código de cobertura" (*covering code*) em matemática combinatória, e é a base de sistemas de fechamento reduzido vendidos para outras loterias (Lotofácil, Mega-Sena) há décadas -- não é algo que estou inventando, é uma área de matemática estabelecida.
+
+**Por que seria interessante para o app:** o valor central é dar ao apostador **a mesma garantia da matriz cheia, por uma fração do custo** -- no nosso caso concreto (5 duplos, 3 triplos), a matriz cheia custa R$ 1.728,00; o mínimo comprovado para uma garantia real de 13 pontos é 72 linhas, R$ 144,00 -- 12 vezes mais barato, mantendo a garantia matemática (não uma promessa vaga). Isso serve diretamente o objetivo do projeto ("reduzir risco e erro"): estruturar melhor uma aposta cara, com honestidade sobre o que de fato se garante (13 pontos **se os 6 secos acertarem** -- os secos nunca são garantidos, só o desdobramento dos duplos/triplos).
+
+**O que falta para isso ir ao app -- e por que ainda não fiz:** eu só provei o **piso teórico** (72 é o mínimo possível, por uma conta de cobertura). Eu **não construí** um conjunto de 72 (ou próximo) linhas que comprovadamente cubra as 864 combinações -- isso é um problema de desenho combinatório separado (existe uma área de pesquisa chamada "covering design" com repositórios que catalogam soluções conhecidas para vários parâmetros; não verifiquei se o nosso caso específico -- 5 posições de 2 opções + 3 posições de 3 opções, raio de erro 1 -- já tem solução catalogada, ou se eu precisaria construir e verificar computacionalmente). O trabalho, se você autorizar, seria: (1) pesquisar se existe solução conhecida para este formato exato; (2) se não houver, construir um conjunto candidato (por algoritmo guloso de cobertura de conjuntos ou busca) e **verificar exaustivamente**, por computador, que ele realmente cobre as 864 combinações -- as 864 são poucas, então a verificação em si é rápida e confiável; (3) só depois disso, integrar como uma opção nova em `stats/fechamento.py`, testada com o mesmo rigor que a matriz cheia já tem contra a tabela oficial da CAIXA, e rotulada na tela exatamente pelo que garante, nada além.
+
 ## Perguntas para sua validação
 
-1. Aprova a ordem Q0 → Q1 → Q2 → Q2b → Q2c → Q2d → Q3 → Q4 → Q5 → Q6 → Q7? (Q8 fica condicionado ao B2/B3; Q9 só depois de eu provar a garantia matematicamente)
-2. **Elenco (Q2d):** autoriza reabrir a decisão de não coletar elenco, para idade e valor de mercado via Transfermarkt, depois de eu ler os termos de uso completos? (pergunta separada de propósito, por mudar um princípio já registrado)
-3. Aprova a pesquisa do BID (Q2) como primeiro passo com fonte nova?
-4. Para os canais do YouTube (Q2b): confirma CazéTV, TNT Sports Brasil, Desimpedidos e Canal GOAT, ou tem outros/quer tirar algum?
-5. Para os sites oficiais de clube (Q2c): concorda em começar pelos clubes de maior amostra em vez de tentar os 40+ de uma vez? Tem algum específico que quer priorizar?
-6. Quer que eu crie a skill de pesquisa de fonte oficial no seu `~/.claude/skills/`?
-7. Confirma que sentimento de rede social e dado tático fino (passe, xG) ficam fora do escopo por ora?
-8. Tem sites específicos em mente para eu avaliar (além dos já estudados antes: Driblab, UFMG, ValorFinal)?
-9. **Dashboard (Q5):** confirma que é uma visão comparando VÁRIOS times/seleções ao mesmo tempo (diferente da Ficha do time, que é um time só)? Prefere que entre logo (não depende de nenhuma fonte nova) ou junto com as demais fases?
-10. **Sobre o texto de Game Data Science:** ciente de que os números específicos (acurácia, faixa de coluna, probabilidade conjunta) não se confirmaram na transposição literal -- concorda em seguir só com o que testei contra nossa base real (Q6-Q9), em vez dos números do texto original?
-11. **Q6 (aviso de faixa por coluna):** confirma que deve ser só um aviso informativo, nunca um bloqueio que impeça salvar o bilhete?
-12. **Sobre a simulação numérica (16 volantes/R$32):** ciente de que essa alegação específica está matematicamente refutada (não apenas "não comprovada") -- quer que eu estude, como item futuro separado, a construção de verdade de um fechamento reduzido com garantia (mínimo comprovado de 72 linhas / R$ 144, ainda a construir e testar), ou prefere deixar essa linha de trabalho fora do escopo por enquanto?
+**Status em 29/09/2026 (rodada 7):** as perguntas 1-6, 8, 9, 11 já foram respondidas (ver "Respostas de validação" acima) e viraram plano aprovado. Restam 3 em aberto, aguardando sua decisão após as explicações que dei:
+
+1. **Sentimento de rede social / dado tático fino (pergunta 7):** depois da explicação (custo de API, amostra não confiável nas redes, dado tático granular exige provedor pago) -- confirma que fica fora por ora, ou quer que eu trate como fiz com a CBF (leio os termos de uso de uma rede específica, registro o risco, você decide se assume)?
+2. **Modelo mais sofisticado / Game Data Science (pergunta 10):** depois da explicação -- confirma que sigo só com o que já testei contra nossa base real (heurística de coluna, anti-manada), deixando Random Forest/SVM registrado como ideia condicionada a um backtest futuro (igual ao B2/B3), em vez dos números do texto original?
+3. **Fechamento reduzido com garantia de verdade (pergunta 12):** depois da explicação (o que é, por que ajudaria, e o que falta) -- quer que eu pesquise/construa um conjunto de ≥72 linhas com garantia comprovada (item de trabalho novo, separado), ou prefere deixar isso fora de escopo por enquanto?
