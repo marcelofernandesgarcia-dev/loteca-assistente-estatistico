@@ -1,0 +1,6 @@
+# Fim de linha fixo em LF para dados versionados -- sem isso, o Git no Windows
+# pode gravar CRLF no checkout (core.autocrlf), mudando o hash do arquivo em
+# disco em relação ao hash do conteúdo versionado. Achado confirmado em
+# 29/09/2026 (ver docs/parecer-tecnico-28-09-2026.md): o SHA-256 documentado em
+# data/README.md era o da cópia CRLF local, não o do conteúdo no Git.
+*.csv text eol=lf
