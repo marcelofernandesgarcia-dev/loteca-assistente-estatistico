@@ -146,6 +146,19 @@ CREATE TABLE IF NOT EXISTS mapa_cbf_participante (
 
 -- Bootstrap: histórico agregado 1/X/2 do dataset aberto ValorFinal (sem nome de time).
 -- Serve só para a frequência global até o importador da CAIXA preencher `jogos`.
+-- Uma linha por execução de cada fonte de dado (etapa D1). Serve só para o
+-- painel "Status dos dados" saber a idade e o resultado da última coleta --
+-- não é log de auditoria de negócio (essas ficam em fatores_externos etc.).
+CREATE TABLE IF NOT EXISTS execucoes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fonte TEXT NOT NULL,
+    iniciado_em TEXT NOT NULL,
+    concluido_em TEXT,
+    sucesso INTEGER,
+    quantidade INTEGER,
+    erro TEXT
+);
+
 CREATE TABLE IF NOT EXISTS historico_valorfinal (
     concurso INTEGER NOT NULL,
     num_jogo INTEGER NOT NULL,
@@ -233,6 +246,27 @@ def sessao():
         conexao.commit()
     finally:
         conexao.close()
+
+
+def registrar_execucao(
+    conexao: sqlite3.Connection, fonte: str, sucesso: bool, quantidade: int | None = None, erro: str | None = None
+) -> None:
+    """Grava uma linha em `execucoes` para o painel 'Status dos dados' (etapa
+    D1) -- não substitui os logs de auditoria de negócio (ex.: fatores_externos)."""
+    agora = dt.datetime.now().isoformat(timespec="seconds")
+    conexao.execute(
+        "INSERT INTO execucoes (fonte, iniciado_em, concluido_em, sucesso, quantidade, erro) VALUES (?, ?, ?, ?, ?, ?)",
+        (fonte, agora, agora, 1 if sucesso else 0, quantidade, erro),
+    )
+
+
+def ultima_execucao_por_fonte(conexao: sqlite3.Connection) -> dict[str, dict]:
+    """Última linha de `execucoes` de cada fonte (a de maior id), para saber
+    quando e se a última coleta deu certo."""
+    linhas = conexao.execute(
+        "SELECT * FROM execucoes WHERE id IN (SELECT MAX(id) FROM execucoes GROUP BY fonte)"
+    ).fetchall()
+    return {linha["fonte"]: dict(linha) for linha in linhas}
 
 
 def obter_ou_criar_participante(conexao: sqlite3.Connection, nome: str, tipo: str, pais_ou_uf: str | None = None) -> int:

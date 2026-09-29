@@ -10,13 +10,26 @@ Projeto pessoal, sem vínculo institucional. Ver `CLAUDE.md`.
 
 ```bash
 python -m venv .venv
-.venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\pip install -r requirements.lock
 ```
 
-Rodar a interface (abre no navegador em `http://localhost:8501`):
+`requirements.txt` declara as dependências diretas (sem versão travada); `requirements.lock` (gerado com `pip freeze`) trava tudo, inclusive dependências transitivas, para uma reinstalação futura não vir com versão diferente sem querer. Ao adicionar uma dependência nova em `requirements.txt`, regenere o lock com `pip freeze > requirements.lock` e confira vulnerabilidade conhecida:
+
+```bash
+.venv\Scripts\pip install pip-audit
+.venv\Scripts\python -m pip_audit -r requirements.lock
+```
+
+Rodar a interface (abre no navegador em `http://localhost:8501`), ou dar duplo clique em `iniciar_loteca.bat`:
 
 ```bash
 .venv\Scripts\streamlit run app/main.py
+```
+
+Atualizar as três fontes de dado de uma vez (CAIXA, CBF, notícias), com o resultado de cada uma registrado em `execucoes` e visível no painel "Status dos dados" da página inicial:
+
+```bash
+.venv\Scripts\python scripts\atualizar_tudo.py
 ```
 
 Rodar os testes:
@@ -25,14 +38,10 @@ Rodar os testes:
 .venv\Scripts\pytest tests/
 ```
 
-Importar histórico (opcional — o app já bootstrapa com `data/loteca-historico-valorfinal.csv` na primeira execução; para dado por clube/placar completo, importar da API da CAIXA):
+Importar histórico completo (opcional — o app já bootstrapa com `data/loteca-historico-valorfinal.csv` na primeira execução; para dado por clube/placar completo, importa da API da CAIXA concurso a concurso, ~15-20 min; retomável, faz backup do banco antes e junta grafias/UF ausente do mesmo time ao final):
 
-```python
-import db
-from importer.caixa_client import importar_historico
-db.inicializar_schema()
-with db.sessao() as conexao:
-    importar_historico(conexao)  # concurso 1 até o vigente -- leva alguns minutos
+```bash
+.venv\Scripts\python scripts\importar_historico.py
 ```
 
 ## Estrutura
@@ -42,7 +51,9 @@ with db.sessao() as conexao:
 - `externo/` — varredura semanal de notícias (RSS público, sem chave de API; janela de 10 dias; veículos prioritários ge/Globo-SporTV e ESPN Brasil, ver `docs/fontes-de-noticias.md`) e cálculo do ajuste externo limitado. O percentual mostrado nos cards 2 e 3 é o final (`externo/percentual_final.py`): o efeito no jogo é o ajuste do mandante menos o do visitante, limitado a ±8 pontos, redistribuído entre os outros resultados na proporção deles e sempre somando 100%. A manchete, o veículo e o link que sustentam cada ajuste ficam em `fatores_externos.evidencias` e aparecem em "Por que os percentuais foram ajustados".
 - `importer/cbf_client.py`, `importer/cbf_mapeamento.py`, `stats/cbf.py`, `scripts/coleta_cbf.py` — leitura das páginas públicas da CBF, pareamento com os times da Loteca (UF + nome) e consultas.
 - `app/` — páginas Streamlit (Concurso atual com 3 cards, Por concurso, Ficha do time em abas (Visão geral, Evolução na competição, Jogo a jogo, Ataque/defesa/mando, Comparação com a liga, Próximo jogo e resultados possíveis, Na Loteca), com ficha reduzida para quem não tem dados da CBF, Fechamento de bolão, Confiabilidade do modelo), sem lógica de negócio própria. A página "Confiabilidade do modelo" não usa `pandas` de propósito (funciona mesmo se o `pandas` estiver bloqueado no Windows -- ver seção "Problema conhecido" abaixo).
-- `tests/` — pytest para `stats/`, `externo/` e um teste de integração leve contra a API real.
+- `tests/` — pytest para `stats/`, `externo/`, um teste de integração leve contra a API real e `AppTest` (Streamlit) de todas as páginas, sobre banco sintético -- nenhum toca o `loteca.db` real.
+- `scripts/atualizar_tudo.py` — roda as três fontes numa chamada só; cada uma isolada da outra (falha em uma não impede as demais); grava o resultado em `execucoes` (`db.registrar_execucao`/`db.ultima_execucao_por_fonte`), lido pelo painel "Status dos dados" da página inicial.
+- `iniciar_loteca.bat` — ativa o `.venv` e abre o Streamlit com duplo clique.
 - `scripts/varredura_semanal.py` — ponto de entrada para o Agendador de Tarefas do Windows.
 - `scripts/importar_historico.py` — importa o histórico completo de concursos da CAIXA (1 até o último apurado); retomável, faz backup do banco antes, e roda `unificar_participantes.unificar()` para juntar grafias normalizadas do mesmo time.
 - `config.py` — todos os parâmetros (rate-limit, pesos do ajuste externo, janela de forma, lista de seleções nacionais).
