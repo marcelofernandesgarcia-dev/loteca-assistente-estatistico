@@ -29,6 +29,7 @@
 | 17 | Decisão final sobre os 3 itens em aberto: redes sociais/dado tático (descartar), modelo sofisticado/Game Data Science (descartar de vez), fechamento reduzido com garantia real (manter -- pesquisar e construir) | Seção "Decisões finais (rodada 8)" | ✅ Decidido -- roteiro atualizado, nenhuma pergunta em aberto |
 | 18 | Painel comparativo (Q5): duas abas aprovadas; **projeção "se o desempenho persistir"** (pedido explícito, substitui minha proposta de não projetar); **todos os times do concurso analisados**, sem limite; mínimo de 10 jogos na Loteca, **podendo aumentar** se mais informação favorecer a análise | `docs/plano-dashboard-q5.md` (versão 2) | 🔲 Plano revisado, aguardando o "pode implementar" |
 | 19 | Card 3 (bilhete) está confuso: trocar por 3 quadrados (1, X, 2) por jogo, só para marcar o palpite | Protótipo clicável apresentado em 29/09/2026, com os 14 jogos reais do concurso 1272 | 🔲 Proposta aguardando validação |
+| 20 | Interações para pedir análise das próprias marcações (coerência, zebras, rendimento de duplos/triplos), registradas para aprendizado; descritivo de pontos positivos e negativos | `docs/estudo-analise-do-palpite.md` | 🔲 Estudo apresentado, aguardando validação |
 
 Este documento (`docs/estudo-fontes-qualitativas-29-09-2026.md`) passa a ser o **registro único** de solicitações de melhoria em aberto -- toda vez que eu propuser algo novo por minha conta ou você pedir algo novo, eu atualizo esta tabela, para nada se perder mesmo com o projeto crescendo aos poucos.
 
