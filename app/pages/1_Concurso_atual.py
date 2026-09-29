@@ -144,7 +144,9 @@ else:
                 }
             )
         st.markdown(
-            renderizar_cartao(f"1. Resultado do concurso {ultimo_encerrado['concurso_numero']} (encerrado)", linhas),
+            renderizar_cartao(
+                f"1. Resultado do concurso {ultimo_encerrado['concurso_numero']} (encerrado)", linhas, "resultado vencedor"
+            ),
             unsafe_allow_html=True,
         )
         st.caption("O que já aconteceu de fato -- o placar real, tal como saiu. Serve de referência para conferir contra os dois cards abaixo.")
@@ -202,7 +204,7 @@ else:
         )
 
     st.markdown(
-        renderizar_cartao(f"2. Percentual -- concurso {numero_vigente}", linhas_pct),
+        renderizar_cartao(f"2. Percentual -- concurso {numero_vigente}", linhas_pct, "maior percentual"),
         unsafe_allow_html=True,
     )
     if ajustes:

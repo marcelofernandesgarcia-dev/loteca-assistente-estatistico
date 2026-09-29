@@ -2,9 +2,14 @@
 (cabeçalho azul, destaque vermelho na coluna vencedora/sugerida) --
 referência visual trazida pelo usuário (print do portal oficial).
 Só HTML/CSS, sem lógica de negócio -- recebe os dados já calculados.
+
+Cores vêm de paleta.py (já conferidas quanto a contraste, ver test_paleta.py) --
+não duplica os hexadecimais aqui.
 """
-AZUL_CABECALHO = "#1a4fa0"
-VERMELHO_DESTAQUE = "#e30613"
+from paleta import AZUL, VERMELHO
+
+AZUL_CABECALHO = AZUL
+VERMELHO_DESTAQUE = VERMELHO
 CINZA_LINHA = "#eef3f8"
 
 _CSS = f"""
@@ -17,15 +22,20 @@ _CSS = f"""
 .loteca-card tr:nth-child(even) td {{ background: {CINZA_LINHA}; }}
 .loteca-badge {{ display: inline-block; min-width: 22px; text-align: center; padding: 2px 7px;
   border-radius: 4px; font-weight: bold; color: #333; }}
-.loteca-badge.destaque {{ background: {VERMELHO_DESTAQUE}; color: white; }}
+.loteca-badge.destaque {{ background: {VERMELHO_DESTAQUE}; color: white; border: 2px solid #7a0410;
+  text-decoration: underline; }}
 .loteca-titulo {{ font-weight: bold; padding: 8px 10px; background: #f5f7fa; border-bottom: 1px solid #d8dee8; }}
 </style>
 """
 
 
-def _badge(valor: str, destacado: bool) -> str:
+def _badge(valor: str, destacado: bool, titulo: str = "") -> str:
+    """`destacado` nunca é só cor: soma borda, sublinhado e um marcador de
+    texto (*) -- e-MAG exige que a informação não dependa só da cor."""
     classe = "loteca-badge destaque" if destacado else "loteca-badge"
-    return f'<span class="{classe}">{valor}</span>'
+    texto = f"* {valor}" if destacado else valor
+    atributo_titulo = f' title="{titulo}"' if titulo else ""
+    return f'<span class="{classe}"{atributo_titulo}>{texto}</span>'
 
 
 def renderizar_titulo_cartao(titulo: str) -> str:
@@ -35,19 +45,21 @@ def renderizar_titulo_cartao(titulo: str) -> str:
     return _CSS + '<div class="loteca-card"><div class="loteca-titulo">' + titulo + "</div></div>"
 
 
-def renderizar_cartao(titulo: str, linhas: list[dict]) -> str:
+def renderizar_cartao(titulo: str, linhas: list[dict], titulo_destaque: str = "destaque") -> str:
     """`linhas`: cada item precisa de num_jogo, casa, fora, data,
     valor_casa, valor_x, valor_fora (strings a exibir), e
     destaque_casa/destaque_x/destaque_fora (bool, se aquela célula deve
-    aparecer em vermelho)."""
+    aparecer marcada). `titulo_destaque`: o que a marca quer dizer nesta
+    tabela (ex.: 'resultado vencedor', 'maior percentual') -- vai no atributo
+    title de cada célula marcada, lido por leitor de tela."""
     corpo = []
     for linha in linhas:
         corpo.append(
             f"<tr>"
             f"<td>{linha['num_jogo']}</td>"
-            f"<td>{_badge(linha['valor_casa'], linha['destaque_casa'])} {linha['casa']}</td>"
-            f"<td>{_badge(linha['valor_x'], linha['destaque_x'])}</td>"
-            f"<td>{linha['fora']} {_badge(linha['valor_fora'], linha['destaque_fora'])}</td>"
+            f"<td>{_badge(linha['valor_casa'], linha['destaque_casa'], titulo_destaque)} {linha['casa']}</td>"
+            f"<td>{_badge(linha['valor_x'], linha['destaque_x'], titulo_destaque)}</td>"
+            f"<td>{linha['fora']} {_badge(linha['valor_fora'], linha['destaque_fora'], titulo_destaque)}</td>"
             f"<td>{linha['data']}</td>"
             f"</tr>"
         )
