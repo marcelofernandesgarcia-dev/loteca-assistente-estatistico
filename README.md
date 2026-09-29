@@ -37,13 +37,14 @@ with db.sessao() as conexao:
 
 ## Estrutura
 
-- `importer/` — cliente da API da CAIXA (rate-limited, incremental; `/loteca` para concursos apurados e `/loteca/programacao` para o concurso a jogar, com prazo exato de apostas) e bootstrap do dataset ValorFinal.
-- `stats/` — regra de negócio pura: cálculo de resultado, frequência, forma, percentual histórico (Poisson), sugestão seco/duplo/triplo, desempenho no ano, painel de desempenho por time (`desempenho.py`), fechamento de bolão, `bilhete.py` (sugestão de aposta simples: no máximo UM duplo ou UM triplo, regra do usuário), `prazo.py` e `concursos.py` (qual concurso está a jogar), `competicao.py` (tabela por rodada, ranking na série, força do calendário) e `modelo_temporada.py` (modelo EXPERIMENTAL de gols da temporada, ainda sem backtest).
+- `importer/` — cliente da API da CAIXA (rate-limited, incremental; `/loteca` para concursos apurados e `/loteca/programacao` para o concurso a jogar, com prazo exato de apostas), bootstrap do dataset ValorFinal e `unificar_participantes.py` (junta grafias diferentes do MESMO time; só por normalização automática ou por `data/apelidos-participantes.csv` curado à mão -- `candidatos_a_duplicidade` só lista pares parecidos para revisão humana, nunca une sozinho).
+- `stats/` — regra de negócio pura: cálculo de resultado, frequência, forma, percentual histórico (Poisson), sugestão seco/duplo/triplo, desempenho no ano, painel de desempenho por time (`desempenho.py`), fechamento de bolão, `bilhete.py` (sugestão de aposta simples: no máximo UM duplo ou UM triplo, regra do usuário), `prazo.py` e `concursos.py` (qual concurso está a jogar), `competicao.py` (tabela por rodada, ranking na série, força do calendário), `modelo_temporada.py` (modelo EXPERIMENTAL de gols da temporada) e `backtest.py` (mede o percentual atual contra a própria base, sem vazamento temporal -- ver página "Confiabilidade do modelo" e `docs/resposta-ao-parecer-29-09-2026.md`).
 - `externo/` — varredura semanal de notícias (RSS público, sem chave de API; janela de 10 dias; veículos prioritários ge/Globo-SporTV e ESPN Brasil, ver `docs/fontes-de-noticias.md`) e cálculo do ajuste externo limitado. O percentual mostrado nos cards 2 e 3 é o final (`externo/percentual_final.py`): o efeito no jogo é o ajuste do mandante menos o do visitante, limitado a ±8 pontos, redistribuído entre os outros resultados na proporção deles e sempre somando 100%. A manchete, o veículo e o link que sustentam cada ajuste ficam em `fatores_externos.evidencias` e aparecem em "Por que os percentuais foram ajustados".
 - `importer/cbf_client.py`, `importer/cbf_mapeamento.py`, `stats/cbf.py`, `scripts/coleta_cbf.py` — leitura das páginas públicas da CBF, pareamento com os times da Loteca (UF + nome) e consultas.
-- `app/` — páginas Streamlit (Concurso atual com 3 cards, Por concurso, Ficha do time em abas (Visão geral, Evolução na competição, Jogo a jogo, Ataque/defesa/mando, Comparação com a liga, Próximo jogo e resultados possíveis, Na Loteca), com ficha reduzida para quem não tem dados da CBF, Fechamento de bolão), sem lógica de negócio própria.
+- `app/` — páginas Streamlit (Concurso atual com 3 cards, Por concurso, Ficha do time em abas (Visão geral, Evolução na competição, Jogo a jogo, Ataque/defesa/mando, Comparação com a liga, Próximo jogo e resultados possíveis, Na Loteca), com ficha reduzida para quem não tem dados da CBF, Fechamento de bolão, Confiabilidade do modelo), sem lógica de negócio própria. A página "Confiabilidade do modelo" não usa `pandas` de propósito (funciona mesmo se o `pandas` estiver bloqueado no Windows -- ver seção "Problema conhecido" abaixo).
 - `tests/` — pytest para `stats/`, `externo/` e um teste de integração leve contra a API real.
 - `scripts/varredura_semanal.py` — ponto de entrada para o Agendador de Tarefas do Windows.
+- `scripts/importar_historico.py` — importa o histórico completo de concursos da CAIXA (1 até o último apurado); retomável, faz backup do banco antes, e roda `unificar_participantes.unificar()` para juntar grafias normalizadas do mesmo time.
 - `config.py` — todos os parâmetros (rate-limit, pesos do ajuste externo, janela de forma, lista de seleções nacionais).
 
 ## Dados oficiais da CBF (Séries A e B)
@@ -84,6 +85,10 @@ schtasks /Create /SC DAILY /ST 08:00 /TN "Loteca - Varredura Semanal" /TR "C:\Us
 App funcional (v1): importador, banco SQLite, motor estatístico (frequência, forma, percentual Poisson, fechamento de bolão), camada de ajuste externo por notícias e as 4 páginas Streamlit. Testado localmente com dado real (47 concursos importados, varredura semanal executada, 17 testes automatizados passando). Toda a pesquisa que fundamenta as regras de negócio está em `docs/` e no cofre Obsidian (`Loteca/`). Plano completo em `C:\Users\marce\.claude\plans\velvety-toasting-squid.md`.
 
 **Fora do escopo da v1 (decisão deliberada):** odds de mercado, suporte a Lotogol, enriquecimento com escalação oficial detalhada.
+
+## Problema conhecido: Smart App Control (Windows) pode bloquear o `pandas`
+
+Em 29/09/2026 o "Controle de Aplicativos Inteligente" do Windows 11 passou a bloquear a DLL nativa do `pandas` neste computador (Registro de Eventos, canal Code Integrity: "Smart App Control Block"). Isso derruba as páginas "Por concurso" e "Por time" (usam `pandas` para tabela); "Concurso atual", "Fechamento de bolão" e "Confiabilidade do modelo" não usam `pandas` e continuam funcionando. É uma política de segurança do Windows, não um defeito do código -- resolver em Configurações → Privacidade e segurança → Segurança do Windows → Controle de aplicativos e do navegador. Detalhes em `docs/resposta-ao-parecer-29-09-2026.md`, seção 4.
 
 ## Aviso importante
 
