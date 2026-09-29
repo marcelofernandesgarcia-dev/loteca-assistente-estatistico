@@ -12,6 +12,39 @@ import config
 PRECO_APOSTA = 2.0
 
 
+def validar_volante(marcacoes: list[list[str]]) -> dict:
+    """Confere o volante marcado pelo usuário, na ordem dos jogos. Jogo sem
+    marcação NÃO vira coluna nenhuma por conta própria: ele bloqueia o
+    salvamento e aparece em `jogos_sem_marcacao` (número do jogo, a partir de 1).
+    Regras oficiais: ao menos 1 duplo ou triplo (mínimo de R$ 4,00) e no
+    máximo `config.BILHETE_MAX_APOSTAS` apostas (Manual de Produtos v21, 6.3.3)."""
+    sem_marcacao = [i + 1 for i, m in enumerate(marcacoes) if not m]
+    duplos = sum(1 for m in marcacoes if len(m) == 2)
+    triplos = sum(1 for m in marcacoes if len(m) == 3)
+    apostas = (2**duplos) * (3**triplos)
+    problemas = []
+    if sem_marcacao:
+        lista = ", ".join(map(str, sem_marcacao))
+        problemas.append(f"Falta marcar o(s) jogo(s) {lista}.")
+    if duplos + triplos == 0:
+        problemas.append("O volante exige ao menos um duplo ou triplo (mínimo de R$ 4,00). Marque duas colunas em algum jogo.")
+    if apostas > config.BILHETE_MAX_APOSTAS:
+        problemas.append(
+            f"Passa do máximo oficial de {config.BILHETE_MAX_APOSTAS} apostas. Tire algum duplo ou triplo."
+        )
+    return {
+        "marcados": len(marcacoes) - len(sem_marcacao),
+        "total": len(marcacoes),
+        "jogos_sem_marcacao": sem_marcacao,
+        "duplos": duplos,
+        "triplos": triplos,
+        "apostas": apostas,
+        "custo": apostas * PRECO_APOSTA,
+        "problemas": problemas,
+        "pode_salvar": not problemas,
+    }
+
+
 def montar_bilhete(jogos: list[dict]) -> dict:
     """`jogos`: lista de {'1': %, 'X': %, '2': %}, na ordem dos jogos."""
     ordenados = [sorted(j, key=j.get, reverse=True) for j in jogos]

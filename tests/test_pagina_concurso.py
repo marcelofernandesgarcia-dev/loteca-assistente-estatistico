@@ -87,3 +87,47 @@ def test_sem_varredura_mostra_so_o_historico_e_sem_expansor(banco):
     assert "Sem varredura de notícias para este concurso" in " ".join(c.value for c in at.caption)
     assert not [e for e in at.expander if "Por que os percentuais" in e.label]
     assert "(-" not in _cartao_2(at) and "(+" not in _cartao_2(at)
+
+
+# --- Card 3: volante com 3 quadrados por jogo ---
+
+def _quadrados(at: AppTest) -> list:
+    return [c for c in at.checkbox if c.key and c.key.startswith("volante_9002_")]
+
+
+def test_volante_tem_3_quadrados_por_jogo_e_comeca_em_branco(banco):
+    at = _abrir()
+    quadrados = _quadrados(at)
+    assert len(quadrados) == 3  # 1 jogo x (1, X, 2)
+    assert [q.key.rsplit("_", 1)[1] for q in quadrados] == ["1", "X", "2"]
+    assert not any(q.value for q in quadrados)
+    assert any("0 de 1 jogos marcados" in i.value for i in at.info)
+
+
+def test_preencher_com_a_sugestao_marca_os_quadrados(banco):
+    at = _abrir()
+    next(b for b in at.button if b.label == "Preencher com a sugestão").click().run()
+    assert not at.exception
+    assert sum(1 for q in _quadrados(at) if q.value) >= 2  # o único jogo vira duplo ou triplo
+    next(b for b in at.button if b.label == "Limpar").click().run()
+    assert not any(q.value for q in _quadrados(at))
+
+
+def test_salvar_com_jogo_em_branco_e_bloqueado_e_nao_grava(banco):
+    at = _abrir()
+    next(b for b in at.button if b.label == "Salvar bilhete").click().run()
+    assert any("Falta marcar o(s) jogo(s) 1." in e.value for e in at.error)
+    with db.sessao() as c:
+        assert c.execute("SELECT COUNT(*) FROM bilhetes").fetchone()[0] == 0
+
+
+def test_salvar_com_duplo_marcado_grava_as_colunas_escolhidas(banco):
+    at = _abrir()
+    quadrados = {q.key.rsplit("_", 1)[1]: q for q in _quadrados(at)}
+    quadrados["1"].check()
+    quadrados["2"].check().run()
+    assert any("1 de 1 jogos marcados · 1 duplo(s)" in i.value for i in at.info)
+    next(b for b in at.button if b.label == "Salvar bilhete").click().run()
+    assert not at.exception and not at.error
+    with db.sessao() as c:
+        assert c.execute("SELECT marcacoes FROM bilhete_jogos").fetchone()[0] == "1,2"

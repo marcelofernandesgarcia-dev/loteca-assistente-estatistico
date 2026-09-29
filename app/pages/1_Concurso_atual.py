@@ -1,5 +1,6 @@
 import datetime as dt
 import email.utils
+import html
 import sys
 from pathlib import Path
 
@@ -15,11 +16,14 @@ from importer.caixa_client import ErroImportacaoLoteca, importar_concurso, impor
 from stats.cbf import classificacao_do_participante, resumo_curto_cbf
 from stats.contexto import selo_da_posicao
 from stats.concursos import concurso_a_jogar, ultimo_encerrado as buscar_ultimo_encerrado
-from stats.bilhete import montar_bilhete
+from stats.bilhete import montar_bilhete, validar_volante
 from stats.bilhetes_salvos import salvar_bilhete
-from stats.fechamento import calcular
 from stats.prazo import formatar_restante, situacao_do_prazo
 from stats.temporada import desempenho_no_ano, resumo_curto
+
+COLUNAS_VOLANTE = ("1", "X", "2")
+LARGURA_BLOCO_JOGO = 320  # px: cabe em celular de 375 px e forma 2-3 blocos por linha no computador
+LARGURA_QUADRADO = 80  # px: quadrado + percentual com "(maior)" sem cortar
 
 st.title("Concurso atual")
 mostrar_aviso_responsabilidade()
@@ -217,88 +221,108 @@ else:
         st.caption("Sem varredura de notícias para este concurso: os percentuais são só o histórico.")
     mostrar_motivos_do_ajuste(jogos_vigente, calculos)
 
-    # Card 3 -- bilhete interativo: o usuário marca, comparando com o
-    # percentual histórico e com o desempenho de cada time no ano em curso.
+    # Card 3 -- volante: 3 quadrados por jogo (1, X, 2), como o volante da
+    # CAIXA. Começa em branco (pedido do usuário, 29/09/2026); a sugestão do
+    # app só entra se ele clicar no botão. Jogo em branco bloqueia o salvamento.
     st.info(
-        "**3. Seu bilhete** -- marque abaixo como se fosse o volante de aposta de verdade (pode marcar "
-        "mais de uma coluna por jogo, igual a duplo/triplo). Ao lado de cada jogo está o percentual "
-        f"do card 2 e o desempenho de cada time só em {ano_atual} (o ano em curso), para você "
-        "confrontar sua marcação com o dado antes de decidir -- a marcação já vem preenchida com uma "
-        "sugestão de aposta simples (no máximo um duplo ou um triplo), mas você pode mudar "
-        "qualquer jogo."
+        "**3. Seu palpite** -- marque os quadrados como no volante: um quadrado é aposta simples, dois é "
+        "duplo, três é triplo. Embaixo de cada quadrado está o percentual do card 2 (em negrito, o maior do jogo). "
+        "O volante começa em branco; use **Preencher com a sugestão** se quiser partir da sugestão do app."
     )
-    st.markdown(renderizar_titulo_cartao(f"3. Seu bilhete -- concurso {numero_vigente}"), unsafe_allow_html=True)
+    st.markdown(renderizar_titulo_cartao(f"3. Seu palpite -- concurso {numero_vigente}"), unsafe_allow_html=True)
 
     proposta = montar_bilhete([dados_por_jogo[j["id"]]["pct"] for j in jogos_vigente])
-    marcacao_inicial = {j["id"]: proposta["marcacoes"][i] for i, j in enumerate(jogos_vigente)}
+
+    def _chave(jogo_id: int, coluna: str) -> str:
+        return f"volante_{numero_vigente}_{jogo_id}_{coluna}"
+
+    def _preencher_com_sugestao():
+        for i, jogo in enumerate(jogos_vigente):
+            for coluna in COLUNAS_VOLANTE:
+                st.session_state[_chave(jogo["id"], coluna)] = coluna in proposta["marcacoes"][i]
+
+    def _limpar_volante():
+        for jogo in jogos_vigente:
+            for coluna in COLUNAS_VOLANTE:
+                st.session_state[_chave(jogo["id"], coluna)] = False
+
+    with st.container(horizontal=True):
+        st.button("Preencher com a sugestão", on_click=_preencher_com_sugestao)
+        st.button("Limpar", on_click=_limpar_volante)
     jogo_multiplo = jogos_vigente[proposta["jogo_multiplo"]]
     tipo_multiplo = "triplo" if proposta["triplos"] else "duplo"
     st.caption(
-        f"Sugestão de partida: aposta simples em todos os jogos, com um único {tipo_multiplo} no jogo "
+        f"A sugestão do app é aposta simples em todos os jogos, com um único {tipo_multiplo} no jogo "
         f"{jogo_multiplo['num_jogo']} ({jogo_multiplo['casa']} x {jogo_multiplo['fora']}), o mais incerto pelo "
         f"histórico -- {proposta['apostas']} apostas, R$ {proposta['custo']:.2f}. É uma estimativa: não garante acerto."
     )
 
-    total_triplos = total_duplos = 0
-    marcacoes = {}
-    for j in jogos_vigente:
-        dado = dados_por_jogo[j["id"]]
-        pct, historico = dado["pct"], dado["historico"]
-        forma_casa = resumo_curto(desempenho_no_ano(conexao, j["casa_id"], ano_atual))
-        forma_fora = resumo_curto(desempenho_no_ano(conexao, j["fora_id"], ano_atual))
+    # Cada jogo é um bloco: times em cima, os 3 quadrados embaixo. Os blocos
+    # ficam lado a lado em tela larga e um embaixo do outro no celular (com
+    # st.columns, a linha inteira empilhava e os nomes ficavam espremidos).
+    # Quadrado com só a coluna no rótulo, para nunca ser cortado, e o
+    # percentual logo abaixo -- em negrito e com "(maior)" quando é o maior do
+    # jogo, para não depender só do negrito.
+    st.caption("1 = vitória do mandante · X = empate · 2 = vitória do visitante")
+    with st.container(horizontal=True, wrap=True, gap="small"):
+        for j in jogos_vigente:
+            pct = dados_por_jogo[j["id"]]["pct"]
+            maior = max(pct, key=pct.get)
+            with st.container(border=True, width=LARGURA_BLOCO_JOGO):
+                st.markdown(f"**{j['num_jogo']}.** {html.escape(j['casa'])} **x** {html.escape(j['fora'])}")
+                with st.container(horizontal=True, wrap=False, gap="small"):
+                    for coluna in COLUNAS_VOLANTE:
+                        with st.container(width=LARGURA_QUADRADO, gap=None):
+                            st.checkbox(coluna, key=_chave(j["id"], coluna))
+                            percentual = f"{pct[coluna]:.0f}%"
+                            st.caption(f"**{percentual}** (maior)" if coluna == maior else percentual)
 
-        cbf_casa = classificacao_do_participante(conexao, j["casa_id"])
-        cbf_fora = classificacao_do_participante(conexao, j["fora_id"])
-        selo_casa = selo_da_posicao(cbf_casa["serie"], cbf_casa["ano"], cbf_casa["posicao"]) if cbf_casa else None
-        selo_fora = selo_da_posicao(cbf_fora["serie"], cbf_fora["ano"], cbf_fora["posicao"]) if cbf_fora else None
-        extra_casa = f" · {resumo_curto_cbf(cbf_casa)}" if cbf_casa else ""
-        extra_fora = f" · {resumo_curto_cbf(cbf_fora)}" if cbf_fora else ""
-        extra_casa += f" · zona: {selo_casa}" if selo_casa else ""
-        extra_fora += f" · zona: {selo_fora}" if selo_fora else ""
+    marcacoes_lista = [
+        [coluna for coluna in COLUNAS_VOLANTE if st.session_state.get(_chave(j["id"], coluna))] for j in jogos_vigente
+    ]
+    volante = validar_volante(marcacoes_lista)
+    if volante["marcados"] == 0:
+        st.info(f"0 de {volante['total']} jogos marcados. Marque os quadrados ou use **Preencher com a sugestão**.")
+    else:
+        st.info(
+            f"{volante['marcados']} de {volante['total']} jogos marcados · {volante['duplos']} duplo(s) · "
+            f"{volante['triplos']} triplo(s) · **{volante['apostas']} aposta(s), R$ {volante['custo']:.2f}** "
+            "(ver página 'Fechamento de bolão' para organizar como Bolão CAIXA)."
+        )
+    if volante["apostas"] > config.BILHETE_MAX_APOSTAS:
+        st.warning(f"Passa do máximo oficial de {config.BILHETE_MAX_APOSTAS} apostas. Tire algum duplo ou triplo.")
 
-        col_info, col_marca = st.columns([3, 2])
-        with col_info:
+    with st.expander(f"Ver detalhes dos jogos (desempenho em {ano_atual}, classificação na CBF e zona)"):
+        for j in jogos_vigente:
+            dado = dados_por_jogo[j["id"]]
+            pct, historico = dado["pct"], dado["historico"]
+            forma_casa = resumo_curto(desempenho_no_ano(conexao, j["casa_id"], ano_atual))
+            forma_fora = resumo_curto(desempenho_no_ano(conexao, j["fora_id"], ano_atual))
+            cbf_casa = classificacao_do_participante(conexao, j["casa_id"])
+            cbf_fora = classificacao_do_participante(conexao, j["fora_id"])
+            selo_casa = selo_da_posicao(cbf_casa["serie"], cbf_casa["ano"], cbf_casa["posicao"]) if cbf_casa else None
+            selo_fora = selo_da_posicao(cbf_fora["serie"], cbf_fora["ano"], cbf_fora["posicao"]) if cbf_fora else None
+            extra_casa = (f" · {resumo_curto_cbf(cbf_casa)}" if cbf_casa else "") + (f" · zona: {selo_casa}" if selo_casa else "")
+            extra_fora = (f" · {resumo_curto_cbf(cbf_fora)}" if cbf_fora else "") + (f" · zona: {selo_fora}" if selo_fora else "")
             st.markdown(
                 f"**{j['num_jogo']}. {j['casa']}** ({_texto_percentual(pct['1'], historico['1'])} · {forma_casa}{extra_casa}) "
                 f"x **{j['fora']}** ({_texto_percentual(pct['2'], historico['2'])} · {forma_fora}{extra_fora}) — "
                 f"empate {_texto_percentual(pct['X'], historico['X'])}"
             )
-        with col_marca:
-            escolha = st.multiselect(
-                "Marcação",
-                options=["1", "X", "2"],
-                default=marcacao_inicial[j["id"]],
-                key=f"bilhete_{j['id']}",
-                label_visibility="collapsed",
-            )
-        marcacoes[j["id"]] = escolha or ["1"]
-        if len(escolha) == 2:
-            total_duplos += 1
-        elif len(escolha) == 3:
-            total_triplos += 1
-
-    custo = calcular(total_triplos, total_duplos)
-    st.success(
-        f"Seu bilhete: {total_duplos} duplo(s) e {total_triplos} triplo(s) -- "
-        f"{custo['apostas']} combinações, R$ {custo['valor_reais']:.2f} "
-        "(ver página 'Fechamento de bolão' para organizar como Bolão CAIXA)."
-    )
-    if custo["apostas"] > config.BILHETE_MAX_APOSTAS:
-        st.warning(
-            "Esse bilhete passa do máximo oficial da Loteca (864 apostas) -- não seria aceito num "
-            "volante de verdade. Remova algum duplo/triplo para caber no limite."
-        )
-    if total_duplos + total_triplos == 0:
-        st.warning("O volante da Loteca exige ao menos 1 duplo (mínimo de R$ 4,00). Marque duas colunas em algum jogo.")
 
     if st.button("Salvar bilhete"):
-        percentuais_por_jogo = {j["id"]: dados_por_jogo[j["id"]]["pct"] for j in jogos_vigente}
-        bilhete_id = salvar_bilhete(conexao, numero_vigente, marcacoes, percentuais_por_jogo)
-        conexao.commit()
-        st.success(
-            f"Bilhete salvo (nº {bilhete_id}) -- {custo['apostas']} apostas, R$ {custo['valor_reais']:.2f}. "
-            "Veja e confira depois em 'Meus bilhetes'. Fica só neste computador."
-        )
+        if not volante["pode_salvar"]:
+            for problema in volante["problemas"]:
+                st.error(problema)
+        else:
+            marcacoes = {j["id"]: m for j, m in zip(jogos_vigente, marcacoes_lista)}
+            percentuais_por_jogo = {j["id"]: dados_por_jogo[j["id"]]["pct"] for j in jogos_vigente}
+            bilhete_id = salvar_bilhete(conexao, numero_vigente, marcacoes, percentuais_por_jogo)
+            conexao.commit()
+            st.success(
+                f"Bilhete salvo (nº {bilhete_id}) -- {volante['apostas']} apostas, R$ {volante['custo']:.2f}. "
+                "Veja e confira depois em 'Meus bilhetes'. Fica só neste computador."
+            )
     st.caption(
         "Percentuais com o ajuste da última varredura de notícias (o valor entre parênteses mostra o efeito em pontos)."
         if ajustes
