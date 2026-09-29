@@ -24,6 +24,7 @@
 | 12 | Dashboard visual comparando vários times/seleções (classificação, V-E-D, métricas) | Novo item **Q5**, ver abaixo | 🔲 Novo, planejado agora |
 | 13 | Analisar e incorporar texto sobre "Game Data Science" transposto para risco em loteria (SVM, Random Forest, heurística de colunas, anti-manada, fechamento reduzido) | Nova seção abaixo -- itens **Q6-Q9** | 🔲 Analisado com verificação; plano em aberto |
 | 14 | Analisar e verificar a simulação prática do desdobramento reduzido com garantia (16 volantes, R$ 32, "garante" 13 pontos) | Seção "Simulação numérica do fechamento reduzido" (Q9) | ✅ Verificado -- **reivindicação central refutada por prova matemática** (16 linhas cobrem no máximo 22% do espaço; mínimo real comprovado é 72 linhas / R$ 144) |
+| 15 | Analisar descrição de planilha externa (`calculadora_desdobramento_loteca.xlsx`, "100% de garantia" com 16 volantes) | Seção "Complemento -- planilha externa" (Q9) | ✅ Verificado -- **repete a mesma alegação já refutada no item 14**; frequência de colunas da planilha bate com nossa base real, garantia de 100% não |
 
 Este documento (`docs/estudo-fontes-qualitativas-29-09-2026.md`) passa a ser o **registro único** de solicitações de melhoria em aberto -- toda vez que eu propuser algo novo por minha conta ou você pedir algo novo, eu atualizo esta tabela, para nada se perder mesmo com o projeto crescendo aos poucos.
 
@@ -192,6 +193,14 @@ Custo do mínimo real (72 linhas): R$ 144,00
 **Conclusão: é matematicamente impossível 16 linhas garantirem 13 pontos.** Não é "não comprovado" -- é **refutado por contagem**: 16 linhas cobrem no máximo 22% das combinações possíveis dos 8 jogos de risco; nos outros 78% dos casos, o bilhete de R$ 32,00 teria 12 pontos ou menos (2 ou mais erros), não os 13 garantidos. O número mínimo real para uma garantia de 13 pontos de verdade é **pelo menos 72 linhas (R$ 144,00)** -- ainda 12x mais barato que a matriz cheia, mas 4,5x mais caro que os R$ 32,00 afirmados, e **72 é só o piso teórico**: construir de fato um conjunto de 72 (ou perto disso) que cubra tudo é um problema de desenho combinatório real, que eu ainda não resolvi, não simplesmente "escolher 72 ao acaso".
 
 **O que fica de pé:** a ideia geral (reduzir uma matriz cheia mantendo alguma garantia é matematicamente possível e mais barato que apostar tudo) é válida e vale a pena perseguir -- só os números específicos dessa simulação (16 linhas, R$ 32, garantia de 13) não se sustentam. Isso não seria implementado no app enquanto não houver uma prova de cobertura de verdade, do mesmo jeito que `stats/fechamento.py` só foi ao app depois de bater com a tabela oficial linha a linha.
+
+### Complemento (mesmo dia, 6ª rodada): descrição de uma planilha externa que repete a mesma alegação
+
+O usuário colou a descrição de uma planilha (`calculadora_desdobramento_loteca.xlsx`), apresentada como já disponível num "painel do Studio" que não é uma ferramenta a que eu tenho acesso nesta sessão -- **não recebi o arquivo em si**, só o texto descrevendo suas abas. A aba `Matriz_16_Volantes` da descrição repete, com outras palavras, a mesma alegação já testada acima: "Garantia Matemática: Oferece **100% de garantia de 13 acertos** caso os 6 jogos secos da base se confirmem."
+
+Essa alegação **já está refutada pela prova de contagem acima**, e o fato de vir empacotada numa planilha com KPIs, cores e abas não muda a matemática: 16 linhas continuam cobrindo no máximo 192 das 864 combinações possíveis (22,2%), não 100%. A frequência de colunas citada na aba `Estatísticas_Históricas` (Coluna 1: 47,23%; Coluna X: 26,15%; Coluna 2: 26,62%) está **coerente com o que já medimos na nossa própria base real** (coluna 1 em torno de 47%, ver seção anterior) -- essa parte não é o problema. O problema é só a alegação de garantia de 100% com 16 linhas, que continua matematicamente impossível pelo mesmo motivo.
+
+Não vou importar essa planilha nem usar seus números de "garantia" no app. Se o usuário quiser, posso reavaliar a planilha de verdade (não só a descrição) caso ela seja enviada como arquivo nesta sessão -- mas o resultado da aba de garantia já é conhecido de antemão: não bate.
 
 ## Avaliação: skills e agentes
 
