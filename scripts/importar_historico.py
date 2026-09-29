@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import config
 import db
 from importer.caixa_client import importar_historico
+from importer.unificar_participantes import unificar, unificar_uf_ausente
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("importar_historico")
@@ -38,13 +39,17 @@ def main() -> int:
     conexao = db.conectar()
     try:
         resumo = importar_historico(conexao, args.inicio, args.fim, args.refazer)
+        unidos_normalizacao = unificar(conexao)
+        unidos_uf_ausente = unificar_uf_ausente(conexao)
         removidos = db.limpar_participantes_orfaos(conexao)
         conexao.commit()
     finally:
         conexao.close()
     logger.info(
-        "Concluído: %s importados, %s já existiam, %s falhas, %s participantes órfãos removidos.",
+        "Concluído: %s importados, %s já existiam, %s falhas, %s participantes órfãos removidos, "
+        "%s grupos unidos por normalização, %s grupos unidos por UF ausente.",
         resumo["importados"], resumo["ja_existiam"], len(resumo["falhas"]), removidos,
+        len(unidos_normalizacao), len(unidos_uf_ausente),
     )
     for numero, motivo in sorted(resumo["falhas"].items()):
         logger.warning("Falha no concurso %s: %s", numero, motivo)

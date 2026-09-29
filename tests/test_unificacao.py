@@ -95,3 +95,40 @@ def test_candidatos_listam_nomes_parecidos_da_mesma_uf_que_nunca_jogam_juntos(co
     pares = {(p["a"], p["b"]) for p in candidatos_a_duplicidade(conexao)}
     assert ("ATHLETICO", "ATLETICO") in pares
     assert ("PARANA", "PARANAENSE") not in pares
+
+
+from importer.unificar_participantes import unificar_uf_ausente  # noqa: E402
+
+
+def test_uf_ausente_e_unida_quando_so_ha_um_uf_de_verdade(conexao):
+    com_uf = db.obter_ou_criar_participante(conexao, "NAUTICO", "clube", "PE")
+    sem_uf = db.obter_ou_criar_participante(conexao, "NAUTICO", "clube", None)
+    outro = db.obter_ou_criar_participante(conexao, "SPORT", "clube", "PE")
+    _jogo(conexao, 1, 1, com_uf, outro)
+    _jogo(conexao, 2, 1, sem_uf, outro)
+
+    relatorio = unificar_uf_ausente(conexao)
+    assert relatorio == [{"nome": "NAUTICO", "uf": "PE", "linhas_sem_uf_unidas": 1, "jogos_afetados": 1}]
+    assert conexao.execute("SELECT COUNT(*) FROM participantes WHERE nome = 'NAUTICO'").fetchone()[0] == 1
+    assert conexao.execute("SELECT COUNT(*) FROM jogos WHERE casa_id = ? OR fora_id = ?", (com_uf, com_uf)).fetchone()[0] == 2
+
+
+def test_uf_ausente_nao_e_unida_quando_ha_mais_de_um_uf_real(conexao):
+    mg = db.obter_ou_criar_participante(conexao, "AMERICA", "clube", "MG")
+    rn = db.obter_ou_criar_participante(conexao, "AMERICA", "clube", "RN")
+    sem_uf = db.obter_ou_criar_participante(conexao, "AMERICA", "clube", None)
+    assert unificar_uf_ausente(conexao) == []
+    assert conexao.execute("SELECT COUNT(*) FROM participantes WHERE nome = 'AMERICA'").fetchone()[0] == 3
+    assert {mg, rn, sem_uf} == {r["id"] for r in conexao.execute("SELECT id FROM participantes WHERE nome = 'AMERICA'")}
+
+
+def test_uf_ausente_sem_nenhum_par_sem_uf_nao_gera_relatorio(conexao):
+    db.obter_ou_criar_participante(conexao, "GOIAS", "clube", "GO")
+    assert unificar_uf_ausente(conexao) == []
+
+
+def test_uf_ausente_e_idempotente(conexao):
+    db.obter_ou_criar_participante(conexao, "NAUTICO", "clube", "PE")
+    db.obter_ou_criar_participante(conexao, "NAUTICO", "clube", None)
+    unificar_uf_ausente(conexao)
+    assert unificar_uf_ausente(conexao) == []
