@@ -20,6 +20,7 @@ from stats.cbf import (
     nomes_dos_times,
     partidas_do_participante,
 )
+from stats.contexto import selo_da_posicao
 from stats.competicao import (
     aproveitamento_movel,
     carregar_partidas,
@@ -65,6 +66,12 @@ def renderizar_classificacao_oficial(conexao, participante_id, classif):
     else:
         serie = {"serie-a": "Série A", "serie-b": "Série B"}.get(classif["serie"], classif["serie"])
         est = estatisticas_do_participante(conexao, participante_id) or {}
+        selo = selo_da_posicao(classif["serie"], classif["ano"], classif["posicao"])
+        if selo:
+            st.info(
+                f"**Zona atual: {selo}.** Segundo o Regulamento Específico da Competição "
+                f"({serie} {classif['ano']}) -- ver docs/fontes-oficiais/. Reflete a posição na última coleta, não é previsão."
+            )
         c1, c2, c3, c4, c5, c6 = st.columns(6)
         c1.metric(f"Posição ({serie})", f"{classif['posicao']}º")
         c2.metric("Pontos", classif["pontos"])

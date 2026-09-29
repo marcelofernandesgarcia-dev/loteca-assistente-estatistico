@@ -120,6 +120,24 @@ COMPETICAO_JANELA_MOVEL = int(os.environ.get("LOTECA_JANELA_MOVEL", "5"))  # jog
 COMPETICAO_SEQUENCIA_MINIMA = 3  # a partir de quantos jogos uma sequência vira destaque
 COMPETICAO_DIFERENCA_RELEVANTE_PP = 10.0  # p.p. entre aproveitamento recente e da temporada
 
+# Zonas de classificação por (serie, ano), conforme o Regulamento Específico da
+# Competição (REC) de cada série -- lido em 29/09/2026, nunca por suposição (ver
+# stats/contexto.py e docs/fontes-oficiais/REC_Brasileiro_Serie_{A,B}_2026.pdf,
+# Capítulo 2). Série/ano sem entrada aqui não recebe selo de zona.
+ZONAS_CBF = {
+    ("serie-a", 2026): {
+        "libertadores_grupos": range(1, 5),      # 1º a 4º -- REC Série A, Art. 6, a-d
+        "libertadores_preliminar": range(5, 6),  # 5º -- Art. 6, e
+        "sul_americana": range(6, 12),            # 6º a 11º -- Art. 7
+        "rebaixamento": range(17, 21),            # 4 últimos -- Art. 8
+    },
+    ("serie-b", 2026): {
+        "acesso_direto": range(1, 3),      # 1º e 2º -- REC Série B, Art. 5
+        "playoff_acesso": range(3, 7),     # 3º a 6º disputam playoff de acesso -- Art. 5 e 13
+        "rebaixamento": range(17, 21),     # 4 últimos -- Art. 5
+    },
+}
+
 # Ficha do time: abaixo disso, a amostra é sinalizada como pequena (baixa confiança)
 FICHA_AMOSTRA_PEQUENA = 10
 

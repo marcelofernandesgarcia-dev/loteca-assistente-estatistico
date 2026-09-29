@@ -12,6 +12,7 @@ import config
 from externo.percentual_final import ajustes_do_concurso, percentuais_do_jogo
 from importer.caixa_client import ErroImportacaoLoteca, importar_concurso, importar_programacao
 from stats.cbf import classificacao_do_participante, resumo_curto_cbf
+from stats.contexto import selo_da_posicao
 from stats.concursos import concurso_a_jogar, ultimo_encerrado as buscar_ultimo_encerrado
 from stats.bilhete import montar_bilhete
 from stats.fechamento import calcular
@@ -229,8 +230,12 @@ else:
 
         cbf_casa = classificacao_do_participante(conexao, j["casa_id"])
         cbf_fora = classificacao_do_participante(conexao, j["fora_id"])
+        selo_casa = selo_da_posicao(cbf_casa["serie"], cbf_casa["ano"], cbf_casa["posicao"]) if cbf_casa else None
+        selo_fora = selo_da_posicao(cbf_fora["serie"], cbf_fora["ano"], cbf_fora["posicao"]) if cbf_fora else None
         extra_casa = f" · {resumo_curto_cbf(cbf_casa)}" if cbf_casa else ""
         extra_fora = f" · {resumo_curto_cbf(cbf_fora)}" if cbf_fora else ""
+        extra_casa += f" · zona: {selo_casa}" if selo_casa else ""
+        extra_fora += f" · zona: {selo_fora}" if selo_fora else ""
 
         col_info, col_marca = st.columns([3, 2])
         with col_info:
