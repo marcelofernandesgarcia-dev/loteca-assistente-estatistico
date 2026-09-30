@@ -54,6 +54,27 @@ def test_bilhete_apurado_pode_ser_conferido_e_mostra_acerto(conexao_pronta):
     assert any("1 de 1 acertos" in w.value for w in at.markdown)
 
 
+def test_sem_versoes_orienta_e_com_versoes_mostra_como_o_bilhete_foi_montado(conexao_pronta):
+    from stats.versoes_palpite import guardar_versao, ligar_ao_bilhete
+
+    at = AppTest.from_file(str(PAGINA), default_timeout=60).run()
+    assert any("Aparece quando um concurso tiver mais de uma versão" in i.value for i in at.info)
+    with db.sessao() as c:
+        jogo_id = c.execute("SELECT id FROM jogos").fetchone()["id"]
+        bilhete_id = c.execute("SELECT id FROM bilhetes").fetchone()["id"]
+        guardar_versao(c, 9001, {jogo_id: ["2"]}, {}, None)
+        final = guardar_versao(c, 9001, {jogo_id: ["1"]}, {}, None)
+        ligar_ao_bilhete(c, final["versao"]["id"], bilhete_id)
+    at = AppTest.from_file(str(PAGINA), default_timeout=60).run()
+    assert not at.exception, [e.value for e in at.exception]
+    legendas = " ".join(c.value for c in at.caption)
+    assert "Montado na versão 2 de 2" in legendas and "jogo 1: 2 (seco) virou 1 (seco)" in legendas
+    assert "a versão 1 teria feito 0 acerto(s) e esta fez 1" in legendas
+    textos = " ".join(m.value for m in at.markdown)
+    assert "**ajudaram em 1**" in textos and "saldo: +1 acerto(s)" in textos
+    assert "Ainda são poucos concursos" in legendas
+
+
 def test_historico_aparece_so_depois_de_conferir_e_bilhete_mostra_o_que_ensina(conexao_pronta):
     at = AppTest.from_file(str(PAGINA), default_timeout=60).run()
     assert any("Aparece depois do primeiro bilhete conferido" in i.value for i in at.info)

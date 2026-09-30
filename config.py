@@ -221,6 +221,8 @@ ANALISE_LIMIAR_EQUILIBRADO = SUGESTAO_LIMIAR_DUPLO  # favorito abaixo disso = jo
 ANALISE_QUANTOS_MELHORES_DUPLOS = 3  # quantos jogos mostrar em "onde um duplo rende mais"
 ANALISE_DIFERENCA_PARA_TROCA_PP = 10.0  # p.p. a mais de chance para sugerir mudar um duplo de jogo
 ANALISE_AMOSTRA_MINIMA = 30  # marcações conferidas antes de mostrar uma taxa de acerto no histórico
+VERSOES_MAX_POR_CONCURSO = 20  # versões do palpite guardadas por concurso (decisão do usuário: gravadas no banco)
+VERSOES_CONCURSOS_MINIMOS = 10  # concursos com mais de uma versão antes de tirar conclusão sobre as mudanças
 # Motivos opcionais da marcação: o que o usuário sabe e o app não coleta.
 ANALISE_MOTIVOS = (
     "Técnico novo",

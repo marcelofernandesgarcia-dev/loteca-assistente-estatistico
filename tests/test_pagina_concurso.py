@@ -189,6 +189,49 @@ def test_analisar_mostra_leitura_chance_e_duplo(banco):
     assert "Análise do seu palpite" not in " ".join(m.value for m in at.markdown)
 
 
+# --- Versões do palpite (30/09/2026) ---
+
+def _botao(at: AppTest, rotulo: str):
+    return next(b for b in at.button if b.label == rotulo)
+
+
+def test_guardar_versao_so_com_todos_os_jogos_marcados(banco):
+    at = _abrir()
+    assert _botao(at, "Guardar esta versão").disabled
+    assert any("Nenhuma versão guardada" in c.value for c in at.caption)
+
+
+def test_guardar_comparar_voltar_e_salvar_liga_a_versao(banco):
+    at = _marcar_duplo_1_2(_abrir())
+    _botao(at, "Guardar esta versão").click().run()
+    assert any("Versão 1 guardada." in s.value for s in at.success)
+    _botao(at, "Guardar esta versão").click().run()  # mesma marcação: não repete
+    assert any("já está guardada como versão 1" in i.value for i in at.info)
+
+    quadrados = {q.key.rsplit("_", 1)[1]: q for q in _quadrados(at)}
+    quadrados["2"].uncheck().run()  # vira seco no 1
+    assert any("difere da versão 1 em 1 jogo(s): jogo 1: 12 (duplo) virou 1 (seco)" in i.value for i in at.info)
+    _botao(at, "Guardar esta versão").click().run()
+    textos = " ".join(m.value for m in at.markdown)
+    assert "Comparação das versões" in textos and "Versão 2** em relação à 1: jogo 1: 12 (duplo) virou 1 (seco)" in textos
+
+    at.selectbox(key="versao_escolhida_9002").select(1).run()
+    _botao(at, "Voltar a esta versão").click().run()
+    assert {q.key.rsplit("_", 1)[1] for q in _quadrados(at) if q.value} == {"1", "2"}  # voltou ao duplo
+
+    _botao(at, "Salvar bilhete").click().run()
+    assert not at.exception and any("Ligado à versão 1." in s.value for s in at.success)
+    with db.sessao() as c:
+        ligadas = c.execute("SELECT numero_versao, bilhete_id FROM versoes_palpite ORDER BY numero_versao").fetchall()
+    assert [(v[0], v[1] is not None) for v in ligadas] == [(1, True), (2, False)]
+
+
+def test_salvar_sem_versao_guardada_cria_uma_e_liga(banco):
+    at = _marcar_duplo_1_2(_abrir())
+    _botao(at, "Salvar bilhete").click().run()
+    assert not at.exception and any("Ligado à versão 1." in s.value for s in at.success)
+
+
 def test_salvar_guarda_a_analise_e_o_motivo(banco):
     at = _marcar_duplo_1_2(_abrir())
     at.multiselect(key=next(k for k in (w.key for w in at.multiselect) if k.startswith("motivo_9002_"))).select("Intuição").run()

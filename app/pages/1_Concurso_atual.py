@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import streamlit as st
 from ano_em_curso_ui import mostrar_ano_em_curso
-from estilo_caixa import renderizar_cartao, renderizar_titulo_cartao
+from estilo_caixa import renderizar_cartao, renderizar_tabela, renderizar_titulo_cartao
 from util import formatar_data_br, mostrar_aviso_responsabilidade, obter_conexao
 
 import config
@@ -25,6 +25,14 @@ from stats.painel import participantes_do_concurso
 from stats.percentual import origem_do_percentual
 from stats.prazo import formatar_restante, situacao_do_prazo
 from stats.temporada import desempenho_no_ano, resumo_curto
+from stats.versoes_palpite import (
+    LimiteDeVersoes,
+    diferencas,
+    frase_da_mudanca,
+    guardar_versao,
+    ligar_ao_bilhete,
+    listar_versoes,
+)
 
 COLUNAS_VOLANTE = ("1", "X", "2")
 LARGURA_BLOCO_JOGO = 320  # px: cabe em celular de 375 px e forma 2-3 blocos por linha no computador
@@ -428,6 +436,89 @@ else:
             mostrar_analise(analise)
         st.button("Fechar análise", on_click=lambda: st.session_state.update({chave_analise: False}))
 
+    # Versões do palpite (pedido do usuário, 30/09/2026): guardar cada tentativa,
+    # reanalisar, comparar e voltar a uma versão antes de salvar. Gravadas no banco
+    # (decisão do usuário) para, depois do resultado, aprender se as mudanças ajudaram.
+    marcacoes_atuais = {j["id"]: m for j, m in zip(jogos_vigente, marcacoes_lista)}
+    percentuais_atuais = {j["id"]: dados_por_jogo[j["id"]]["pct"] for j in jogos_vigente}
+    num_jogo_por_id = {j["id"]: j["num_jogo"] for j in jogos_vigente}
+    with st.container(border=True):
+        st.markdown("#### Versões deste palpite")
+        st.caption(
+            "Guarde cada tentativa para comparar: mude os quadrados, guarde de novo e veja o que mudou na chance e "
+            "no custo. Dá para voltar a qualquer versão antes de salvar. Ficam gravadas só neste computador e, "
+            "depois do resultado, 'Meus bilhetes' mostra se as suas mudanças ajudaram."
+        )
+        if st.button("Guardar esta versão", disabled=analise is None,
+                     help=None if analise else "Marque todos os jogos para guardar uma versão."):
+            try:
+                guardada = guardar_versao(conexao, numero_vigente, marcacoes_atuais, percentuais_atuais, analise)
+                conexao.commit()
+                numero_da_versao = guardada["versao"]["numero_versao"]
+                if guardada["nova"]:
+                    st.success(f"Versão {numero_da_versao} guardada.")
+                else:
+                    st.info(f"Esta marcação já está guardada como versão {numero_da_versao}; nada foi repetido.")
+            except LimiteDeVersoes as erro:
+                st.warning(f"{erro} Salve um bilhete ou siga comparando as já guardadas.")
+
+        versoes = listar_versoes(conexao, numero_vigente)
+        if not versoes:
+            st.caption("Nenhuma versão guardada para este concurso ainda.")
+        else:
+            n_jogos = len(jogos_vigente)
+            linhas_versoes = []
+            for v in versoes:
+                chance_todos = formatar_uma_em(v["chance_todos"]) if v["chance_todos"] is not None else "-"
+                chance_quase = (formatar_uma_em(v["chance_todos_menos_um"])
+                                if v["chance_todos_menos_um"] is not None else "-")
+                esperados = f"{v['acertos_esperados']:.1f}".replace(".", ",") if v["acertos_esperados"] is not None else "-"
+                linhas_versoes.append([
+                    f"{v['numero_versao']}", v["criado_em"][11:16],
+                    f"{v['apostas']} (R$ {v['custo']:.2f})".replace(".", ","), chance_todos, chance_quase, esperados,
+                    f"{v['resumo'].get('duplos', 0)} / {v['resumo'].get('triplos', 0)}",
+                    str(v["resumo"].get("zebras", "-")),
+                    f"sim (nº {v['bilhete_id']})" if v["bilhete_id"] else "não",
+                ])
+            st.markdown(
+                renderizar_tabela(
+                    "Comparação das versões",
+                    ["Versão", "Hora", "Apostas (custo)", f"Chance de {n_jogos}", f"Chance de {n_jogos - 1} ou mais",
+                     "Acertos esperados", "Duplos / triplos", "Zebras", "Virou bilhete"],
+                    linhas_versoes,
+                ),
+                unsafe_allow_html=True,
+            )
+            for anterior, atual in zip(versoes, versoes[1:]):
+                mudancas = diferencas(anterior["marcacoes"], atual["marcacoes"], num_jogo_por_id)
+                st.markdown(
+                    f"- **Versão {atual['numero_versao']}** em relação à {anterior['numero_versao']}: "
+                    + ("; ".join(frase_da_mudanca(m) for m in mudancas) or "sem mudança")
+                )
+            ultima = versoes[-1]
+            if not volante["jogos_sem_marcacao"]:
+                agora = diferencas(ultima["marcacoes"], marcacoes_atuais, num_jogo_por_id)
+                if agora:
+                    st.info(
+                        f"O volante agora difere da versão {ultima['numero_versao']} em {len(agora)} jogo(s): "
+                        + "; ".join(frase_da_mudanca(m) for m in agora) + ". Guarde para comparar."
+                    )
+                else:
+                    st.caption(f"O volante está igual à versão {ultima['numero_versao']}.")
+
+            def _voltar_para_versao():
+                escolhida = next(v for v in versoes if v["numero_versao"] == st.session_state[f"versao_escolhida_{numero_vigente}"])
+                for jogo in jogos_vigente:
+                    colunas = escolhida["marcacoes"].get(jogo["id"], [])
+                    for coluna in COLUNAS_VOLANTE:
+                        st.session_state[_chave(jogo["id"], coluna)] = coluna in colunas
+
+            with st.container(horizontal=True, vertical_alignment="bottom"):
+                st.selectbox("Versão", [v["numero_versao"] for v in versoes], index=len(versoes) - 1,
+                             key=f"versao_escolhida_{numero_vigente}", width=140)
+                st.button("Voltar a esta versão", on_click=_voltar_para_versao,
+                          help="Recoloca as marcações da versão no volante; depois é só salvar ou continuar mudando.")
+
     with st.expander(f"Ver detalhes dos jogos (desempenho em {ano_atual}, classificação na CBF e zona)"):
         for j in jogos_vigente:
             dado = dados_por_jogo[j["id"]]
@@ -459,10 +550,19 @@ else:
             bilhete_id = salvar_bilhete(
                 conexao, numero_vigente, marcacoes, percentuais_por_jogo, analise=analise, motivos=motivos
             )
+            # Todo bilhete salvo fica ligado a uma versão (a igual já guardada, ou uma nova),
+            # para o aprendizado comparar a primeira tentativa com a que virou bilhete.
+            aviso_versao = ""
+            try:
+                guardada = guardar_versao(conexao, numero_vigente, marcacoes, percentuais_por_jogo, analise)
+                ligar_ao_bilhete(conexao, guardada["versao"]["id"], bilhete_id)
+                aviso_versao = f" Ligado à versão {guardada['versao']['numero_versao']}."
+            except LimiteDeVersoes:
+                aviso_versao = " (Limite de versões do concurso atingido: o bilhete foi salvo sem versão ligada.)"
             conexao.commit()
             st.success(
-                f"Bilhete salvo (nº {bilhete_id}) -- {volante['apostas']} apostas, R$ {volante['custo']:.2f}. "
-                "Veja e confira depois em 'Meus bilhetes'. Fica só neste computador."
+                f"Bilhete salvo (nº {bilhete_id}) -- {volante['apostas']} apostas, R$ {volante['custo']:.2f}."
+                f"{aviso_versao} Veja e confira depois em 'Meus bilhetes'. Fica só neste computador."
             )
     st.caption(
         "Percentuais com o ajuste da última varredura de notícias (o valor entre parênteses mostra o efeito em pontos)."

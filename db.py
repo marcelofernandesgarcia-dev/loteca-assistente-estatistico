@@ -193,6 +193,27 @@ CREATE TABLE IF NOT EXISTS bilhete_jogos (
     UNIQUE(bilhete_id, jogo_id)
 );
 
+-- Versões do palpite (pedido do usuário, 30/09/2026): cada marcação guardada
+-- para reanálise e comparação antes de salvar, e para aprender depois do
+-- resultado se as mudanças entre versões ajudaram. Sem dado pessoal: só a
+-- marcação, o percentual do momento e o resumo da análise.
+CREATE TABLE IF NOT EXISTS versoes_palpite (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    concurso_numero INTEGER NOT NULL REFERENCES concursos(numero),
+    numero_versao INTEGER NOT NULL,
+    criado_em TEXT NOT NULL,
+    marcacoes TEXT NOT NULL,
+    percentuais TEXT NOT NULL,
+    apostas INTEGER NOT NULL,
+    custo REAL NOT NULL,
+    chance_todos REAL,
+    chance_todos_menos_um REAL,
+    acertos_esperados REAL,
+    resumo TEXT,
+    bilhete_id INTEGER REFERENCES bilhetes(id),
+    UNIQUE(concurso_numero, numero_versao)
+);
+
 CREATE TABLE IF NOT EXISTS historico_valorfinal (
     concurso INTEGER NOT NULL,
     num_jogo INTEGER NOT NULL,

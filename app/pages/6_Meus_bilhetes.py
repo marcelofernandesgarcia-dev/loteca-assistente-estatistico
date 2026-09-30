@@ -10,6 +10,7 @@ import pandas as pd
 import streamlit as st
 from util import formatar_data_br, mostrar_aviso_responsabilidade, obter_conexao
 
+import config
 from stats.analise_palpite import (
     NAO_BASTOU,
     NAO_FEZ_DIFERENCA,
@@ -25,6 +26,14 @@ from stats.bilhetes_salvos import (
     pode_conferir,
     registrar_premio,
     resumo_financeiro,
+)
+from stats.versoes_palpite import (
+    agregar_aprendizado,
+    aprendizado_de_todos_os_concursos,
+    frase_da_mudanca,
+    historia_do_bilhete,
+    listar_versoes,
+    resultados_do_concurso,
 )
 
 NOME_RESULTADO = {"V": "Vitória", "E": "Empate", "D": "Derrota"}
@@ -108,6 +117,29 @@ def mostrar_aprendizado_do_bilhete(jogos: list[dict]) -> None:
         itens.append(f"Zebra no jogo {zebra['num_jogo']}: {'você marcou' if zebra['marcou'] else 'você não marcou'}.")
     st.markdown("\n".join(f"- {item}" for item in itens))
 
+def mostrar_aprendizado_das_versoes(leituras: list[dict]) -> None:
+    """Somatório de todos os concursos: as mudanças entre a primeira versão e a que
+    virou bilhete ajudaram ou atrapalharam? Só as contas; nada de conclusão cedo."""
+    st.subheader("Minhas versões: as mudanças ajudaram?")
+    if not leituras:
+        st.info(
+            "Aparece quando um concurso tiver mais de uma versão guardada e o resultado sair. Compara a sua "
+            "primeira versão com a que virou bilhete."
+        )
+        return
+    agregado = agregar_aprendizado(leituras)
+    st.markdown(
+        f"Em {agregado['concursos']} concurso(s), as mudanças da primeira versão para a que virou bilhete "
+        f"**ajudaram em {agregado['ajudaram']}**, **atrapalharam em {agregado['atrapalharam']}** e não mudaram o "
+        f"número de acertos em {agregado['iguais']} (saldo: {agregado['saldo_total']:+d} acerto(s))."
+    )
+    if not agregado["amostra_suficiente"]:
+        st.caption(
+            f"Ainda são poucos concursos (menos de {config.VERSOES_CONCURSOS_MINIMOS}): não dá para dizer se "
+            "mudar costuma ajudar. O número fica aqui para acompanhar."
+        )
+
+
 st.title("Meus bilhetes")
 mostrar_aviso_responsabilidade()
 st.caption(
@@ -136,6 +168,7 @@ st.caption(
 )
 
 mostrar_historico(agregar_historico(jogos_conferidos_para_historico(conexao)))
+mostrar_aprendizado_das_versoes(aprendizado_de_todos_os_concursos(conexao))
 st.subheader("Bilhetes")
 
 for bilhete in bilhetes:
@@ -149,6 +182,24 @@ for bilhete in bilhetes:
     if bilhete["conferido_em"] is not None:
         titulo += f" · {bilhete['acertos']}/{total_jogos_bilhete} acertos"
     with st.expander(titulo):
+        num_jogo = {
+            linha["id"]: linha["num_jogo"]
+            for linha in conexao.execute("SELECT id, num_jogo FROM jogos WHERE concurso_numero = ?", (bilhete["concurso_numero"],))
+        }
+        historia = historia_do_bilhete(
+            listar_versoes(conexao, bilhete["concurso_numero"]), bilhete["id"],
+            resultados_do_concurso(conexao, bilhete["concurso_numero"]), num_jogo,
+        )
+        if historia:
+            texto = f"Montado na versão {historia['numero']} de {historia['versoes']} guardada(s) para este concurso."
+            if historia["mudancas"]:
+                texto += " Da versão 1 para esta: " + "; ".join(frase_da_mudanca(m) for m in historia["mudancas"]) + "."
+            if historia["acertos_primeira"] is not None and historia["acertos_bilhete"] is not None:
+                texto += (
+                    f" Com o resultado, a versão 1 teria feito {historia['acertos_primeira']} acerto(s) e esta fez "
+                    f"{historia['acertos_bilhete']}."
+                )
+            st.caption(texto)
         if bilhete["conferido_em"] is None:
             if jogos_apurados_antes:
                 if st.button("Conferir", key=f"conferir_{bilhete['id']}"):
