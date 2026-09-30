@@ -32,6 +32,8 @@ CBF_TEMPORADAS_PASSADAS = [
     ("campeonato-brasileiro", serie, ano) for ano in range(2019, 2026) for serie in ("serie-a", "serie-b")
 ]
 CBF_JOGOS_TEMPORADA_COMPLETA = 380  # 20 times, turno e returno (REC 2026, art. 14 da Série A e art. 11 da Série B)
+# Clubes que trocaram de código na CBF (11, validados pelo usuário em 30/09/2026).
+CBF_CODIGOS_EQUIVALENTES_CSV = BASE_DIR / "data" / "cbf-codigos-equivalentes.csv"
 # Diferenças entre a soma dos jogos e a tabela da própria CBF, encontradas na coleta de 30/09/2026 e
 # entendidas. O roteiro de coleta as trata como conhecidas (não como falha). Nada foi inventado para
 # "consertá-las": o jogo que falta continua faltando.
@@ -271,6 +273,12 @@ PAINEL_MIN_JOGOS_ANO = 3  # ano com menos jogos que isso é sinal fraco na tend�
 PAINEL_LINHAS_SOBREPOSTAS_MAX = 8  # acima disso, mini-gráficos (um por time) em vez de linhas sobrepostas
 PAINEL_JANELA_RECENTE_LOTECA = 10  # jogos do "ritmo recente" no histórico da Loteca
 PAINEL_RODADA_TESTE_PROJECAO = 19  # rodada de onde se mede quanto a projeção por ritmo teria errado
+# Projeção cautelosa (decisão do usuário, 30/09/2026, depois de medir 13 temporadas completas das Séries A e B):
+# o ritmo do time é misturado com a média da liga. Peso do time = jogos / (jogos + k): quanto mais jogos
+# disputados, mais vale o ritmo do próprio time. k = 20 fica no meio da faixa 18 a 22 que a validação
+# (deixando uma temporada de fora por vez) escolheu em todas as 13 vezes. Erro fora da amostra faltando
+# 28, 19 e 10 jogos: 7,5, 5,4 e 3,7 pontos por time, contra 10,1, 5,8 e 3,8 só com o ritmo do time.
+PROJECAO_JOGOS_DE_MEDIA_DA_LIGA = 20
 PAINEL_ANOS_MINIMOS_RETA = 3  # anos com base mínima para desenhar a reta de tendência anual
 
 # Seleções (stats/selecoes.py; P1 da priorização estatística, 30/09/2026).

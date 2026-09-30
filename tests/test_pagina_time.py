@@ -117,10 +117,22 @@ def test_marca_de_saf_aparece_so_quando_o_nome_da_cbf_traz_saf(banco):
     with db.sessao() as c:
         c.execute("UPDATE cbf_times SET nome = 'Time Alfa SAF' WHERE cod_time = 1")
     com_saf = " ".join(i.value for i in _abrir("ALFA (clube)").info)
-    assert "Registrado como SAF na CBF" in com_saf and "Lei nº 14.193/2021" in com_saf
+    assert "Registrado como SAF na CBF desde 2026" in com_saf and "Lei nº 14.193/2021" in com_saf
     assert "não muda o percentual" in com_saf
     sem_saf = " ".join(i.value for i in _abrir("BETA (clube)").info)
     assert "SAF" not in sem_saf  # e nenhuma frase do tipo "não é SAF"
+
+
+def test_marca_de_saf_conta_o_nome_de_anos_anteriores_mesmo_quando_o_de_hoje_nao_traz(banco):
+    """Como o Cruzeiro: 'Saf' no nome da CBF em anos anteriores, mas o de hoje não traz."""
+    with db.sessao() as c:
+        c.execute("UPDATE cbf_classificacao SET nome_no_ano = 'Time Alfa Saf' WHERE cod_time = 1 AND rodada = 6")
+        c.execute("INSERT INTO cbf_classificacao (serie, ano, cod_time, rodada, coletado_em, nome_no_ano)"
+                  " VALUES ('serie-a', 2025, 1, 38, 'x', 'Time Alfa Saf')")
+        c.execute("UPDATE cbf_classificacao SET nome_no_ano = 'Time Alfa' WHERE cod_time = 1 AND ano = 2026")
+    info = " ".join(i.value for i in _abrir("ALFA (clube)").info)
+    assert "Consta como SAF no nome da CBF em 2025" in info and "o nome de hoje não traz" in info
+    assert "Registrado como SAF na CBF desde" not in info  # não afirma "desde": o de hoje não traz
 
 
 def test_titulos_seguem_a_hierarquia_da_pagina(banco):

@@ -103,6 +103,85 @@ def registrado_como_saf(nome_cbf: str | None) -> bool:
     return bool(nome_cbf and _SAF_NO_NOME.search(nome_cbf))
 
 
+def _faixas_de_anos(anos: list[int]) -> str:
+    """[2019, 2022, 2023, 2024] -> '2019 e 2022 a 2024'."""
+    faixas, inicio, anterior = [], None, None
+    for ano in sorted(set(anos)):
+        if inicio is None:
+            inicio = anterior = ano
+        elif ano == anterior + 1:
+            anterior = ano
+        else:
+            faixas.append((inicio, anterior))
+            inicio = anterior = ano
+    if inicio is not None:
+        faixas.append((inicio, anterior))
+    textos = [str(a) if a == b else f"{a} a {b}" for a, b in faixas]
+    return textos[0] if len(textos) == 1 else ", ".join(textos[:-1]) + " e " + textos[-1]
+
+
+def historico_saf_na_cbf(conexao, cod_time: int | None) -> dict | None:
+    """Em quais temporadas o nome do time na CBF traz "SAF", ou None se em nenhuma.
+
+    Usa o nome de cada ano (`cbf_classificacao.nome_no_ano`); na temporada mais recente,
+    onde o nome do ano ainda não foi guardado, vale o nome atual. Só afirma o que o nome
+    mostra: ausência do sufixo não prova que o clube não seja SAF (a CBF nem sempre
+    atualiza o nome, e Cuiabá, por exemplo, tem "Saf" em 2019 e depois some em 2020 e 2021).
+
+    Devolve {'anos': [...], 'texto_anos': '2022 a 2025', 'desde': 2022, 'hoje': bool,
+    'continuo_ate_hoje': bool, 'primeiro_ano_coletado': 2019}."""
+    if not cod_time:
+        return None
+    linhas = conexao.execute(
+        "SELECT DISTINCT ano, nome_no_ano FROM cbf_classificacao WHERE cod_time = ? ORDER BY ano", (cod_time,)
+    ).fetchall()
+    if not linhas:
+        return None
+    atual = conexao.execute("SELECT nome FROM cbf_times WHERE cod_time = ?", (cod_time,)).fetchone()
+    nome_atual = atual["nome"] if atual else None
+    ultimo_ano = max(linha["ano"] for linha in linhas)
+    anos_saf = []
+    for linha in linhas:
+        nome = linha["nome_no_ano"] or (nome_atual if linha["ano"] == ultimo_ano else None)
+        if registrado_como_saf(nome):
+            anos_saf.append(linha["ano"])
+    if not anos_saf:
+        return None
+    anos_do_time = [linha["ano"] for linha in linhas]
+    hoje = ultimo_ano in anos_saf
+    desde = min(anos_saf)
+    return {
+        "anos": sorted(set(anos_saf)),
+        "texto_anos": _faixas_de_anos(anos_saf),
+        "desde": desde,
+        "hoje": hoje,
+        # Contínuo até hoje: todos os anos coletados do time, de "desde" em diante, trazem SAF.
+        "continuo_ate_hoje": hoje and all(a in anos_saf for a in anos_do_time if a >= desde),
+        "primeiro_ano_coletado": min(anos_do_time),
+    }
+
+
+def codigos_equivalentes(caminho: str | None = None) -> dict[int, list[int]]:
+    """{código atual: [códigos anteriores]} dos clubes que trocaram de código na CBF, de
+    data/cbf-codigos-equivalentes.csv. Só linhas com status "validado" valem (a tabela foi
+    validada pelo usuário em 30/09/2026). Serve para juntar a história de um clube que
+    mudou de código. Arquivo ausente devolve vazio."""
+    import csv
+
+    import config
+
+    arquivo = caminho or str(config.CBF_CODIGOS_EQUIVALENTES_CSV)
+    equivalentes: dict[int, list[int]] = {}
+    try:
+        with open(arquivo, encoding="utf-8") as f:
+            for linha in csv.DictReader((l for l in f if not l.startswith("#")), delimiter=";"):
+                if linha["status"].strip() == "validado":
+                    equivalentes.setdefault(int(linha["cod_atual"]), []).append(int(linha["cod_anterior"]))
+    except FileNotFoundError:
+        return {}
+    return equivalentes
+
+
 def instrucao_consulta_bid(cod_time: int | None, uf: str | None) -> str | None:
     """Como achar o clube na consulta manual do BID. O código do time nas
     páginas da CBF é o mesmo da lista de clubes do BID (conferido em

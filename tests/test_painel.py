@@ -7,8 +7,11 @@ from stats.painel import (
     erro_da_projecao,
     frase_de_projecao,
     frases_da_loteca,
+    media_da_liga,
+    peso_do_time,
     pontos_por_jogo_recentes,
     projetar_temporada,
+    ritmo_cautelosa,
     resumo_loteca,
     reta_anual,
     reta_de_tendencia,
@@ -43,10 +46,14 @@ def temporada_curta(monkeypatch):
     monkeypatch.setattr(config, "COMPETICAO_JANELA_MOVEL", 3)
 
 
-def _projetar(partidas, serie="teste"):
-    tabelas = competicao.tabela_por_rodada(partidas)
-    jogos = {cod: competicao.jogos_do_time(partidas, cod) for cod in (1, 2)}
-    return projetar_temporada(tabelas[max(tabelas)], jogos, serie, 2026)
+def _linha(cod, jogos, pontos):
+    return {"cod_time": cod, "jogos": jogos, "pontos": pontos, "vitorias": pontos // 3, "saldo": 0, "gols_pro": 0}
+
+
+@pytest.fixture()
+def k_pequeno(monkeypatch):
+    """k = 6 jogos de média da liga: contas redondas nos exemplos abaixo."""
+    monkeypatch.setattr(config, "PROJECAO_JOGOS_DE_MEDIA_DA_LIGA", 6)
 
 
 def test_ritmo_recente_exige_janela_cheia(temporada_curta):
@@ -55,42 +62,77 @@ def test_ritmo_recente_exige_janela_cheia(temporada_curta):
     assert pontos_por_jogo_recentes(competicao.jogos_do_time(_liga(6), 1)) == 0.0  # perdeu os 3 últimos
 
 
-def test_projecao_nos_dois_ritmos(temporada_curta):
-    projecao = _projetar(_liga(6))
-    time1 = projecao[1]
-    # 9 pontos em 6 jogos, faltam 4: ritmo da temporada 1,5/jogo -> 15; ritmo recente 0/jogo -> 9.
-    assert (time1["pontos"], time1["restantes"]) == (9, 4)
-    assert time1["pontos_proj_temporada"] == pytest.approx(15.0)
-    assert time1["pontos_proj_recente"] == pytest.approx(9.0)
-    # O time 2 (9 pontos, ganhou os 3 últimos) passa à frente no ritmo recente: 9 + 4*3 = 21.
-    assert projecao[2]["pontos_proj_recente"] == pytest.approx(21.0)
-    assert (time1["posicao_proj_recente"], projecao[2]["posicao_proj_recente"]) == (2, 1)
-    assert time1["zona_proj_temporada"] is None  # série de teste sem zonas cadastradas
+def test_peso_do_time_cresce_com_os_jogos_disputados(k_pequeno):
+    assert peso_do_time(0) == 0.0
+    assert peso_do_time(6) == pytest.approx(0.5)  # jogos = k: metade time, metade liga
+    assert peso_do_time(2) < peso_do_time(6) < peso_do_time(38) < 1.0
 
 
-def test_sem_tamanho_de_temporada_cadastrado_nao_projeta(temporada_curta):
-    assert _projetar(_liga(6), serie="serie-inexistente") is None
+def test_ritmo_cautelosa_mistura_o_time_com_a_media_da_liga(k_pequeno):
+    # 30 pontos em 6 jogos (5 por jogo, exagero de amostra pequena), média da liga 1,5, peso 0,5 -> 3,25.
+    assert ritmo_cautelosa(30, 6, 1.5) == pytest.approx(0.5 * 5.0 + 0.5 * 1.5)
+    assert ritmo_cautelosa(0, 0, 1.5) == 1.5  # sem jogos, é a média da liga
+    assert ritmo_cautelosa(9, 6, 1.5) == pytest.approx(1.5)  # time igual à média: nada muda
 
 
-def test_time_que_ja_jogou_tudo_nao_tem_o_que_projetar(temporada_curta, monkeypatch):
+def test_media_da_liga_e_pontos_por_jogo_de_um_time_tipico():
+    assert media_da_liga([_linha(1, 6, 15), _linha(2, 6, 3)]) == pytest.approx(18 / 12)
+    assert media_da_liga([]) == 0.0
+
+
+def test_projecao_nos_dois_cenarios(monkeypatch, k_pequeno):
+    monkeypatch.setitem(config.TEMPORADA_JOGOS_POR_TIME, ("teste", 2026), 10)
+    tabela = [_linha(1, 6, 15), _linha(2, 6, 3)]  # média da liga 1,5; peso do time 0,5; faltam 4 jogos
+    projecao = projetar_temporada(tabela, "teste", 2026)
+    a, b = projecao[1], projecao[2]
+    assert (a["restantes"], a["peso_do_time"], a["media_da_liga"]) == (4, 0.5, pytest.approx(1.5))
+    assert a["pontos_proj_temporada"] == pytest.approx(15 + 4 * 2.5)  # 25: o ritmo do time se repete
+    assert a["pontos_proj_cautelosa"] == pytest.approx(15 + 4 * (0.5 * 2.5 + 0.5 * 1.5))  # 23: puxado para a média
+    assert b["pontos_proj_temporada"] == pytest.approx(3 + 4 * 0.5)
+    assert b["pontos_proj_cautelosa"] == pytest.approx(3 + 4 * (0.5 * 0.5 + 0.5 * 1.5))  # 7: sobe para a média
+    assert a["zona_proj_temporada"] is None  # série de teste sem zonas cadastradas
+
+
+def test_cautelosa_pode_inverter_a_ordem_quando_o_ritmo_vem_de_poucos_jogos(monkeypatch):
+    monkeypatch.setitem(config.TEMPORADA_JOGOS_POR_TIME, ("teste", 2026), 38)
+    monkeypatch.setattr(config, "PROJECAO_JOGOS_DE_MEDIA_DA_LIGA", 20)
+    # A: 6 pontos em 2 jogos (3,0/jogo, amostra minúscula). B: 26 em 12 (2,17/jogo). C: 10 em 10.
+    projecao = projetar_temporada([_linha(1, 2, 6), _linha(2, 12, 26), _linha(3, 10, 10)], "teste", 2026)
+    assert (projecao[1]["posicao_proj_temporada"], projecao[2]["posicao_proj_temporada"]) == (1, 2)  # só o ritmo: A na frente
+    assert (projecao[2]["posicao_proj_cautelosa"], projecao[1]["posicao_proj_cautelosa"]) == (1, 2)  # cautelosa: B passa
+    assert projecao[3]["posicao_proj_temporada"] == projecao[3]["posicao_proj_cautelosa"] == 3
+    assert projecao[1]["peso_do_time"] < projecao[2]["peso_do_time"]  # quem jogou menos vale menos
+
+
+def test_sem_tamanho_de_temporada_cadastrado_nao_projeta():
+    assert projetar_temporada([_linha(1, 6, 9)], "serie-inexistente", 2026) is None
+
+
+def test_time_que_ja_jogou_tudo_nao_tem_o_que_projetar(monkeypatch, k_pequeno):
     monkeypatch.setitem(config.TEMPORADA_JOGOS_POR_TIME, ("teste", 2026), 6)
-    projecao = _projetar(_liga(6))
-    assert projecao[1]["restantes"] == 0 and projecao[1]["pontos_proj_temporada"] == 9
+    projecao = projetar_temporada([_linha(1, 6, 9), _linha(2, 6, 9)], "teste", 2026)
+    assert projecao[1]["restantes"] == 0 and projecao[1]["pontos_proj_temporada"] == 9 == projecao[1]["pontos_proj_cautelosa"]
     assert frase_de_projecao("TIME 1", projecao[1], NOMES_ZONA) is None
 
 
-def test_frase_de_projecao_traz_os_dois_ritmos(temporada_curta):
-    frase = frase_de_projecao("TIME 1", _projetar(_liga(6))[1], NOMES_ZONA)
-    assert frase.startswith("TIME 1: no ritmo da temporada, terminaria com 15 pontos, em 1º")
-    assert "no ritmo dos últimos 3 jogos, 9 pontos, em 2º" in frase and frase.endswith("Faltam 4 jogos.")
+def test_frase_de_projecao_traz_os_dois_cenarios(monkeypatch, k_pequeno):
+    monkeypatch.setitem(config.TEMPORADA_JOGOS_POR_TIME, ("teste", 2026), 10)
+    projecao = projetar_temporada([_linha(1, 6, 15), _linha(2, 6, 3)], "teste", 2026)
+    frase = frase_de_projecao("TIME 1", projecao[1], NOMES_ZONA)
+    assert frase.startswith("TIME 1: no ritmo da temporada, terminaria com 25 pontos, em 1º")
+    assert "na projeção cautelosa (50% do ritmo do time e o resto pela média da liga), 23 pontos, em 1º" in frase
+    assert frase.endswith("Faltam 4 jogos.")
 
 
-def test_erro_da_projecao_mede_contra_o_que_aconteceu(temporada_curta):
+def test_erro_da_projecao_mede_contra_o_que_aconteceu(temporada_curta, monkeypatch):
+    monkeypatch.setattr(config, "PROJECAO_JOGOS_DE_MEDIA_DA_LIGA", 3)
     # Da rodada 3 até a 6: time 1 tinha 9 pts em 3 jogos (ritmo 3) -> projetaria 18, fez 9 (erro 9).
     # Time 2 tinha 0 -> projetaria 0, fez 9 (erro 9). Média 9 nos dois ritmos.
+    # Cautelosa (média da liga 1,5; peso 0,5): time 1 -> 9 + 3*2,25 = 15,75 (erro 6,75); time 2 -> 0 + 3*0,75 = 2,25 (erro 6,75).
     erro = erro_da_projecao(_liga(6), rodada_teste=3)
     assert erro["rodada_atual"] == 6 and erro["times"] == 2
     assert erro["erro_medio_temporada"] == pytest.approx(9.0) and erro["erro_medio_recente"] == pytest.approx(9.0)
+    assert erro["erro_medio_cautelosa"] == pytest.approx(6.75)
 
 
 def test_erro_da_projecao_sem_rodadas_depois_do_teste(temporada_curta):
@@ -180,8 +222,8 @@ def test_erro_entre_temporadas_mede_so_temporadas_completas(monkeypatch):
     assert set(resumo["por_rodada"]) == {2, 4}
     r2, r4 = resumo["por_rodada"][2], resumo["por_rodada"][4]
     assert (r2["temporadas"], r2["jogos_restantes"], r4["jogos_restantes"]) == (1, 4, 2)
-    assert r2["erro_temporada"] >= 0 and r2["erro_recente"] >= 0 and r2["com_recente"] == 1
-    assert 0 <= r2["recente_melhor_em"] <= 1
+    assert r2["erro_temporada"] >= 0 and r2["erro_cautelosa"] >= 0 and r2["erro_recente"] >= 0 and r2["com_recente"] == 1
+    assert 0 <= r2["cautelosa_melhor_em"] <= 1 and 0 <= r2["recente_melhor_em"] <= 1
 
 
 def test_erro_entre_temporadas_sem_temporada_completa_devolve_none():
@@ -196,26 +238,35 @@ def test_erro_entre_temporadas_calcula_a_media_das_temporadas(monkeypatch):
     from stats.painel import erro_da_projecao
     from stats import competicao
 
-    esperado = [
-        erro_da_projecao(competicao.carregar_partidas(conexao, "serie-a", ano), rodada_teste=3)["erro_medio_temporada"]
+    por_temporada = [
+        erro_da_projecao(competicao.carregar_partidas(conexao, "serie-a", ano), rodada_teste=3)
         for ano in (2023, 2024, 2025)
     ]
     assert resumo["por_rodada"][3]["temporadas"] == 3
-    assert resumo["por_rodada"][3]["erro_temporada"] == pytest.approx(sum(esperado) / 3)
+    assert resumo["por_rodada"][3]["erro_temporada"] == pytest.approx(sum(e["erro_medio_temporada"] for e in por_temporada) / 3)
+    assert resumo["por_rodada"][3]["erro_cautelosa"] == pytest.approx(sum(e["erro_medio_cautelosa"] for e in por_temporada) / 3)
+    melhores = sum(1 for e in por_temporada if e["erro_medio_cautelosa"] < e["erro_medio_temporada"])
+    assert resumo["por_rodada"][3]["cautelosa_melhor_em"] == melhores
 
 
 def test_frase_do_erro_entre_temporadas_traz_os_numeros_e_o_periodo():
     resumo = {
         "temporadas": [("serie-a", 2019), ("serie-b", 2025)],
         "por_rodada": {
-            28: {"temporadas": 2, "jogos_restantes": 10, "erro_temporada": 2.5, "erro_recente": 3.5, "recente_melhor_em": 0, "com_recente": 2},
-            19: {"temporadas": 2, "jogos_restantes": 19, "erro_temporada": 4.0, "erro_recente": None, "recente_melhor_em": 0, "com_recente": 0},
+            28: {"temporadas": 2, "jogos_restantes": 10, "erro_temporada": 2.5, "erro_cautelosa": 2.4, "cautelosa_melhor_em": 2,
+                 "erro_recente": 3.5, "recente_melhor_em": 0, "com_recente": 2},
+            19: {"temporadas": 2, "jogos_restantes": 19, "erro_temporada": 4.0, "erro_cautelosa": 3.1, "cautelosa_melhor_em": 1,
+                 "erro_recente": 5.0, "recente_melhor_em": 1, "com_recente": 2},
         },
     }
     frase = frase_erro_entre_temporadas(resumo)
     assert "2 temporadas completas (2019 a 2025, Séries A e B)" in frase
-    assert "faltando 10 jogos, o ritmo da temporada errou 2,5 pontos por time e o ritmo recente 3,5 (o recente foi melhor em 0 de 2 temporadas)" in frase
-    assert "faltando 19 jogos, o ritmo da temporada errou 4,0 pontos por time" in frase and "4,0 pontos por time e o ritmo" not in frase
+    assert ("faltando 10 jogos, o ritmo da temporada errou 2,5 pontos por time e a projeção cautelosa 2,4 "
+            "(a cautelosa foi melhor em 2 de 2 temporadas)") in frase
+    assert ("faltando 19 jogos, o ritmo da temporada errou 4,0 pontos por time e a projeção cautelosa 3,1 "
+            "(a cautelosa foi melhor em 1 de 2 temporadas)") in frase
+    # O ritmo recente saiu do painel, mas a frase conta por que: melhor em 1 de 4 medições.
+    assert "foi melhor que o da temporada em 1 de 4 medições e saiu do painel" in frase
     assert frase_erro_entre_temporadas(None) is None and frase_erro_entre_temporadas({"temporadas": [], "por_rodada": {}}) is None
 
 

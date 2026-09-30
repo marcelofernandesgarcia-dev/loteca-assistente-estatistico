@@ -1,0 +1,20 @@
+# VALIDADO pelo usuário em 30/09/2026 ("todas corretas"). Lido por stats/cbf.py (codigos_equivalentes).
+# Clubes que aparecem na CBF com dois códigos diferentes, em períodos que não se sobrepõem, com o mesmo nome (ou o mesmo nome
+# acrescido de "Saf") e a mesma UF. Achado na coleta das temporadas 2019 a 2025 (docs/p2-temporadas-cbf-30-09-2026.md).
+# Serve para juntar a história de um clube que trocou de código sem perder as temporadas anteriores.
+# O que os dados mostram: mesmo clube pelo nome e pela UF, um código termina e o outro começa no ano seguinte (Londrina volta em 2026,
+# depois de dois anos fora da Série B). O que NÃO foi verificado: a causa da troca. É compatível com a criação da SAF, mas nenhuma
+# fonte externa foi consultada para confirmar cada caso.
+# Para acrescentar um clube: uma linha com status "proposto"; só vale (e só é lida) depois que o usuário trocar para "validado".
+cod_atual;cod_anterior;clube;uf;anos_anterior;anos_atual;nome_anterior;nome_atual;status
+64052;57591;Amazonas;AM;2024;2025;Amazonas Fc;Amazonas Saf;validado
+59897;20047;América;MG;2019-2021;2022-2026;America;América / America Saf;validado
+62261;20093;Atlético Goianiense;GO;2019-2023;2024-2026;Atlético;Atlético Goianiense Saf;validado
+62194;20003;Atlético Mineiro;MG;2019-2022;2023-2026;Atlético / Atlético Mineiro;Atlético Mineiro / Atlético Mineiro Saf;validado
+61377;20006;Bahia;BA;2019-2022;2023-2026;Bahia;Bahia;validado
+60175;20004;Botafogo;RJ;2019-2021;2022-2026;Botafogo;Botafogo;validado
+61590;20025;Coritiba;PR;2019-2022;2023-2026;Coritiba;Coritiba S.a.f. / Coritiba SAF;validado
+59849;20021;Cruzeiro;MG;2019-2021;2022-2026;Cruzeiro;Cruzeiro / Cruzeiro Saf;validado
+63238;20048;Fortaleza;CE;2019-2024;2025-2026;Fortaleza;Fortaleza Ec Saf / Fortaleza SAF;validado
+62726;20069;Londrina;PR;2019-2023;2026;Londrina;Londrina SAF;validado
+60646;20012;Vasco da Gama;RJ;2019-2021;2022-2026;Vasco da Gama;Vasco da Gama S.a.f. / Vasco da Gama Saf;validado

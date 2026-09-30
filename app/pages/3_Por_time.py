@@ -17,10 +17,10 @@ from stats.cbf import (
     classificacao_do_participante,
     cod_time_do_participante,
     estatisticas_do_participante,
+    historico_saf_na_cbf,
     instrucao_consulta_bid,
     nomes_dos_times,
     partidas_do_participante,
-    registrado_como_saf,
 )
 from stats.contexto import selo_da_posicao
 from stats.links_externos import link_busca_transfermarkt
@@ -69,11 +69,21 @@ def renderizar_classificacao_oficial(conexao, participante_id, classif):
     else:
         serie = {"serie-a": "Série A", "serie-b": "Série B"}.get(classif["serie"], classif["serie"])
         est = estatisticas_do_participante(conexao, participante_id) or {}
-        if registrado_como_saf(classif.get("nome_cbf")):
+        saf = historico_saf_na_cbf(conexao, classif.get("cod_time"))
+        if saf:
+            if saf["continuo_ate_hoje"]:
+                titulo_saf = f"**Registrado como SAF na CBF desde {saf['desde']}**"
+                if saf["desde"] == saf["primeiro_ano_coletado"]:
+                    titulo_saf += " (o ano mais antigo coletado; pode ser anterior)"
+            else:
+                hoje_texto = "traz" if saf["hoje"] else "não traz"
+                titulo_saf = (
+                    f"**Consta como SAF no nome da CBF em {saf['texto_anos']}**; o nome de hoje {hoje_texto} \"SAF\""
+                )
             st.info(
-                "**Registrado como SAF na CBF** (Sociedade Anônima do Futebol, Lei nº 14.193/2021): o nome oficial do "
-                "time na CBF traz \"SAF\". É só uma informação, não muda o percentual. Ainda não foi medido se ser SAF "
-                "faz diferença no desempenho (isso é a Fase Q4)."
+                f"{titulo_saf} (Sociedade Anônima do Futebol, Lei nº 14.193/2021). Só o nome oficial na CBF mostra "
+                "isso: a CBF nem sempre atualiza o nome. É só uma informação, não muda o percentual. Ainda não foi "
+                "medido se ser SAF faz diferença no desempenho (isso é a Fase Q4)."
             )
         selo = selo_da_posicao(classif["serie"], classif["ano"], classif["posicao"])
         if selo:

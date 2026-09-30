@@ -138,9 +138,7 @@ def grafico_pontos(dados: dict, cods: list[int], nomes: dict[int, str], altura: 
         projecao = (dados["projecao"] or {}).get(cod)
         if projecao and projecao["restantes"] and evolucao:
             ultimo = evolucao[-1]
-            for chave, rotulo in (("pontos_proj_temporada", "ritmo da temporada"), ("pontos_proj_recente", "ritmo recente")):
-                if projecao[chave] is None:
-                    continue
+            for chave, rotulo in (("pontos_proj_temporada", "ritmo da temporada"), ("pontos_proj_cautelosa", "projeção cautelosa")):
                 figura.add_trace(
                     go.Scatter(
                         x=[ultimo["rodada"], dados["rodada_final"]], y=[ultimo["pontos"], projecao[chave]],
@@ -292,7 +290,10 @@ def mostrar_temporada(
             st.caption(
                 "É um cenário, não uma previsão: supõe que cada time mantém o ritmo e não considera os adversários "
                 "que faltam (o calendário futuro não é coletado), lesões, suspensões, troca de técnico ou outras "
-                "competições. Todos os times da série são projetados, cada um no seu ritmo, para calcular a posição."
+                "competições. Todos os times da série são projetados para calcular a posição. Dois cenários: o "
+                "**ritmo da temporada** (o que o time fez até aqui se repete) e a **projeção cautelosa**, que mistura "
+                "esse ritmo com a média da liga, mais quanto menos jogos o time já disputou. Em 13 temporadas "
+                "completas a cautelosa errou menos (números acima)."
             )
             for linha in linhas:
                 frase = frase_de_projecao(html.escape(nomes.get(linha["cod_time"], "")), linha["projecao"], NOMES_ZONA)
@@ -304,10 +305,8 @@ def mostrar_temporada(
         projecao = linha["projecao"]
         faixa = "-"
         if projecao and projecao["restantes"]:
-            valores = [projecao["pontos_proj_temporada"]] + (
-                [projecao["pontos_proj_recente"]] if projecao["pontos_proj_recente"] is not None else []
-            )
-            faixa = f"{min(valores):.0f} a {max(valores):.0f}" if len(valores) > 1 else f"{valores[0]:.0f}"
+            valores = [projecao["pontos_proj_temporada"], projecao["pontos_proj_cautelosa"]]
+            faixa = f"{min(valores):.0f} a {max(valores):.0f}"
         cartoes = linha["cartoes_por_jogo"]
         tabela.append(
             [
@@ -330,6 +329,11 @@ def mostrar_temporada(
         st.plotly_chart(grafico_posicao(dados, cods, nomes), width="stretch", key=f"{chave}_posicao")
         st.plotly_chart(grafico_pontos(dados, cods, nomes), width="stretch", key=f"{chave}_pontos")
         st.plotly_chart(grafico_aproveitamento(dados, cods, nomes), width="stretch", key=f"{chave}_aprov")
+        st.caption(
+            "A reta pontilhada só mostra a direção da média dos últimos jogos. Ela não foi medida como previsão: "
+            "essa média, em 13 temporadas, foi pior guia do que o ritmo da temporada inteira. A projeção que foi "
+            "medida é a de pontos, acima."
+        )
     else:
         st.caption(
             f"Com mais de {config.PAINEL_LINHAS_SOBREPOSTAS_MAX} times, cada um ganha o seu gráfico de pontos e projeção "
@@ -339,7 +343,7 @@ def mostrar_temporada(
         teto = max(
             [linha["pontos"] for linha in linhas]
             + [v for linha in linhas if linha["projecao"] for v in (linha["projecao"]["pontos_proj_temporada"],
-                                                                     linha["projecao"]["pontos_proj_recente"]) if v is not None]
+                                                                     linha["projecao"]["pontos_proj_cautelosa"])]
         )
         ultima_rodada = dados["rodada_final"] or max(dados["tabelas"])
         with st.container(horizontal=True, wrap=True, gap="small"):

@@ -10,11 +10,13 @@ da CBF -- diferente de `stats.desempenho.tendencia_por_ano`, que mede % de
 vitórias (a Ficha do time rotula isso corretamente).
 
 A projeção "se o desempenho persistir" (pedido do usuário) é um cenário, não
-previsão: supõe que o time mantém o ritmo (da temporada ou dos últimos jogos)
-e não considera os adversários que faltam (o calendário futuro não é
-coletado), lesões, suspensões, troca de técnico ou outras competições. O
-tamanho da temporada vem de `config.TEMPORADA_JOGOS_POR_TIME` (lido no
-regulamento); sem cadastro, não há projeção.
+previsão: supõe que o time mantém o ritmo -- o da temporada inteira, ou esse
+ritmo misturado com a média da liga (a "cautelosa", que errou menos em 13
+temporadas completas) -- e não considera os adversários que faltam (o
+calendário futuro não é coletado), lesões, suspensões, troca de técnico ou
+outras competições. O tamanho da temporada vem de
+`config.TEMPORADA_JOGOS_POR_TIME` (lido no regulamento); sem cadastro, não há
+projeção.
 """
 import config
 from stats import competicao
@@ -48,76 +50,97 @@ def _ordenar_projecao(linhas: list[dict], chave: str) -> dict[int, int]:
     return {linha["cod_time"]: posicao for posicao, linha in enumerate(ordem, start=1)}
 
 
-def projetar_temporada(tabela_atual: list[dict], jogos_por_time: dict[int, list[dict]], serie: str, ano: int) -> dict | None:
-    """Dois cenários por time até o fim da temporada: ritmo da temporada e
-    ritmo recente (últimos `COMPETICAO_JANELA_MOVEL` jogos). `tabela_atual`:
-    última tabela de `competicao.tabela_por_rodada`. None se a série/ano não
-    tem o número de jogos cadastrado -- o módulo nunca supõe o tamanho."""
+def media_da_liga(tabela: list[dict]) -> float:
+    """Pontos por jogo de um time típico da série até aqui (soma dos pontos / soma dos jogos)."""
+    jogos = sum(linha["jogos"] for linha in tabela)
+    return sum(linha["pontos"] for linha in tabela) / jogos if jogos else 0.0
+
+
+def peso_do_time(jogos: int) -> float:
+    """Quanto vale o ritmo do próprio time na projeção cautelosa: jogos / (jogos + k)."""
+    return jogos / (jogos + config.PROJECAO_JOGOS_DE_MEDIA_DA_LIGA) if jogos > 0 else 0.0
+
+
+def ritmo_cautelosa(pontos: int, jogos: int, media: float) -> float:
+    """Pontos por jogo projetados: mistura do ritmo do time com a média da liga. Com poucos
+    jogos disputados o ritmo do time é ruído e vale menos; com muitos, vale mais. Sem
+    jogos, é a própria média da liga."""
+    if jogos <= 0:
+        return media
+    peso = peso_do_time(jogos)
+    return peso * pontos / jogos + (1 - peso) * media
+
+
+def projetar_temporada(tabela_atual: list[dict], serie: str, ano: int) -> dict | None:
+    """Dois cenários por time até o fim da temporada: o ritmo da temporada (tudo o que o
+    time fez até aqui se repete) e o cautelosa (esse ritmo misturado com a média da liga,
+    ver `ritmo_cautelosa`). `tabela_atual`: última tabela de `competicao.tabela_por_rodada`.
+    None se a série/ano não tem o número de jogos cadastrado -- o módulo nunca supõe o
+    tamanho. O ritmo dos últimos 5 jogos, que o painel usava antes, saiu depois de errar
+    mais que o ritmo da temporada em 13 de 13 temporadas (docs/p2-temporadas-cbf-30-09-2026.md)."""
     total = config.TEMPORADA_JOGOS_POR_TIME.get((serie, ano))
     if not total:
         return None
+    media = media_da_liga(tabela_atual)
     linhas = []
     for linha in tabela_atual:
         jogos = linha["jogos"]
         restantes = max(total - jogos, 0)
         ritmo_temporada = linha["pontos"] / jogos if jogos else 0.0
-        ritmo_recente = pontos_por_jogo_recentes(jogos_por_time.get(linha["cod_time"], []))
-        pontos_temporada = linha["pontos"] + restantes * ritmo_temporada
-        pontos_recente = linha["pontos"] + restantes * ritmo_recente if ritmo_recente is not None else None
         linhas.append(
             {
                 **{k: linha[k] for k in ("cod_time", "pontos", "vitorias", "saldo", "gols_pro")},
                 "jogos": jogos,
                 "restantes": restantes,
-                "pontos_proj_temporada": pontos_temporada,
-                "pontos_proj_recente": pontos_recente,
-                # Para ordenar o cenário recente, quem ainda não tem 5 jogos entra pelo ritmo da temporada.
-                "_ordem_recente": pontos_recente if pontos_recente is not None else pontos_temporada,
+                "peso_do_time": peso_do_time(jogos),
+                "media_da_liga": media,
+                "pontos_proj_temporada": linha["pontos"] + restantes * ritmo_temporada,
+                "pontos_proj_cautelosa": linha["pontos"] + restantes * ritmo_cautelosa(linha["pontos"], jogos, media),
             }
         )
     pos_temporada = _ordenar_projecao(linhas, "pontos_proj_temporada")
-    pos_recente = _ordenar_projecao(linhas, "_ordem_recente")
+    pos_cautelosa = _ordenar_projecao(linhas, "pontos_proj_cautelosa")
     resultado = {}
     for linha in linhas:
         cod = linha["cod_time"]
-        linha.pop("_ordem_recente")
         resultado[cod] = {
             **linha,
             "total_jogos": total,
             "posicao_proj_temporada": pos_temporada[cod],
-            "posicao_proj_recente": pos_recente[cod] if linha["pontos_proj_recente"] is not None else None,
+            "posicao_proj_cautelosa": pos_cautelosa[cod],
             "zona_proj_temporada": zona_da_posicao(serie, ano, pos_temporada[cod]),
-            "zona_proj_recente": (
-                zona_da_posicao(serie, ano, pos_recente[cod]) if linha["pontos_proj_recente"] is not None else None
-            ),
+            "zona_proj_cautelosa": zona_da_posicao(serie, ano, pos_cautelosa[cod]),
         }
     return resultado
 
 
 def erro_da_projecao(partidas: list[dict], rodada_teste: int | None = None) -> dict | None:
-    """Quanto a projeção por ritmo teria errado nesta mesma temporada: projeta
-    da `rodada_teste` até a rodada mais recente e compara com os pontos reais
-    de agora. Erro médio absoluto, em pontos por time, nos dois cenários.
-    None se ainda não há rodadas depois da de teste."""
+    """Quanto a projeção teria errado nesta mesma temporada: projeta da `rodada_teste`
+    até a rodada mais recente e compara com os pontos reais de agora. Erro médio
+    absoluto, em pontos por time, no ritmo da temporada, na projeção cautelosa e (só
+    como referência, já fora do painel) no ritmo dos últimos jogos. None se ainda não há
+    rodadas depois da de teste."""
     rodada_teste = rodada_teste or config.PAINEL_RODADA_TESTE_PROJECAO
     tabelas = competicao.tabela_por_rodada(partidas)
     if not tabelas or rodada_teste not in tabelas or max(tabelas) <= rodada_teste:
         return None
     atual = max(tabelas)
+    media = media_da_liga(tabelas[rodada_teste])
     antes = {linha["cod_time"]: linha for linha in tabelas[rodada_teste]}
     agora = {linha["cod_time"]: linha for linha in tabelas[atual]}
     ate_teste = [p for p in partidas if p["rodada"] <= rodada_teste]
-    erros_temporada, erros_recente = [], []
+    erros_temporada, erros_cautelosa, erros_recente = [], [], []
     for cod, linha_antes in antes.items():
         if not linha_antes["jogos"] or cod not in agora:
             continue
         jogos_a_mais = agora[cod]["jogos"] - linha_antes["jogos"]
         real = agora[cod]["pontos"]
-        projetado = linha_antes["pontos"] + jogos_a_mais * linha_antes["pontos"] / linha_antes["jogos"]
-        erros_temporada.append(abs(projetado - real))
+        pontos, jogos = linha_antes["pontos"], linha_antes["jogos"]
+        erros_temporada.append(abs(pontos + jogos_a_mais * pontos / jogos - real))
+        erros_cautelosa.append(abs(pontos + jogos_a_mais * ritmo_cautelosa(pontos, jogos, media) - real))
         recente = pontos_por_jogo_recentes(competicao.jogos_do_time(ate_teste, cod))
         if recente is not None:
-            erros_recente.append(abs(linha_antes["pontos"] + jogos_a_mais * recente - real))
+            erros_recente.append(abs(pontos + jogos_a_mais * recente - real))
     if not erros_temporada:
         return None
     return {
@@ -125,6 +148,7 @@ def erro_da_projecao(partidas: list[dict], rodada_teste: int | None = None) -> d
         "rodada_atual": atual,
         "times": len(erros_temporada),
         "erro_medio_temporada": sum(erros_temporada) / len(erros_temporada),
+        "erro_medio_cautelosa": sum(erros_cautelosa) / len(erros_cautelosa),
         "erro_medio_recente": sum(erros_recente) / len(erros_recente) if erros_recente else None,
     }
 
@@ -242,6 +266,8 @@ def erro_da_projecao_entre_temporadas(conexao, rodadas_de_teste: tuple[int, ...]
             "temporadas": len(lista),
             "jogos_restantes": lista[0]["rodada_atual"] - rodada,
             "erro_temporada": sum(e["erro_medio_temporada"] for e in lista) / len(lista),
+            "erro_cautelosa": sum(e["erro_medio_cautelosa"] for e in lista) / len(lista),
+            "cautelosa_melhor_em": sum(1 for e in lista if e["erro_medio_cautelosa"] < e["erro_medio_temporada"]),
             "erro_recente": sum(e["erro_medio_recente"] for e in com_recente) / len(com_recente) if com_recente else None,
             "recente_melhor_em": sum(1 for e in com_recente if e["erro_medio_recente"] < e["erro_medio_temporada"]),
             "com_recente": len(com_recente),
@@ -250,24 +276,31 @@ def erro_da_projecao_entre_temporadas(conexao, rodadas_de_teste: tuple[int, ...]
 
 
 def frase_erro_entre_temporadas(resumo: dict | None) -> str | None:
-    """Uma frase para a tela, com os números medidos entre as temporadas completas."""
+    """Uma frase para a tela, com os números medidos entre as temporadas completas: o ritmo
+    da temporada contra a projeção cautelosa, e o que aconteceu com o ritmo recente."""
     if not resumo or not resumo["por_rodada"]:
         return None
     anos = [ano for _, ano in resumo["temporadas"]]
     partes = []
     for rodada in sorted(resumo["por_rodada"], reverse=True):
         r = resumo["por_rodada"][rodada]
-        texto = f"faltando {r['jogos_restantes']} jogos, o ritmo da temporada errou {_decimal(r['erro_temporada'])} pontos por time"
-        if r["erro_recente"] is not None:
-            texto += (
-                f" e o ritmo recente {_decimal(r['erro_recente'])} (o recente foi melhor em {r['recente_melhor_em']} de "
-                f"{r['com_recente']} temporadas)"
-            )
-        partes.append(texto)
-    return (
+        partes.append(
+            f"faltando {r['jogos_restantes']} jogos, o ritmo da temporada errou {_decimal(r['erro_temporada'])} pontos por time "
+            f"e a projeção cautelosa {_decimal(r['erro_cautelosa'])} (a cautelosa foi melhor em {r['cautelosa_melhor_em']} de "
+            f"{r['temporadas']} temporadas)"
+        )
+    texto = (
         f"Quanto a projeção costuma errar, medido em {len(resumo['temporadas'])} temporadas completas "
         f"({min(anos)} a {max(anos)}, Séries A e B): " + "; ".join(partes) + "."
     )
+    medicoes = sum(r["com_recente"] for r in resumo["por_rodada"].values())
+    if medicoes:
+        melhores = sum(r["recente_melhor_em"] for r in resumo["por_rodada"].values())
+        texto += (
+            f" O ritmo dos últimos {config.COMPETICAO_JANELA_MOVEL} jogos, que o painel usava antes, foi melhor que o da "
+            f"temporada em {melhores} de {medicoes} medições e saiu do painel."
+        )
+    return texto
 
 
 def classificacao_oficial(conexao, serie: str, ano: int) -> dict[int, dict]:
@@ -291,7 +324,7 @@ def dados_da_temporada(conexao, serie: str, ano: int) -> dict | None:
     tabelas = competicao.tabela_por_rodada(partidas)
     times = sorted({p["mandante_id"] for p in partidas} | {p["visitante_id"] for p in partidas})
     jogos_por_time = {cod: competicao.jogos_do_time(partidas, cod) for cod in times}
-    projecao = projetar_temporada(tabelas[max(tabelas)], jogos_por_time, serie, ano)
+    projecao = projetar_temporada(tabelas[max(tabelas)], serie, ano)
     total = config.TEMPORADA_JOGOS_POR_TIME.get((serie, ano))
     encerrada = len(partidas) >= config.CBF_JOGOS_TEMPORADA_COMPLETA
     return {
@@ -382,8 +415,7 @@ def frases_da_temporada(
             f"Teste da projeção nesta temporada: projetando da rodada {e['rodada_teste']} até a {e['rodada_atual']}, "
             f"o ritmo da temporada errou em média {_decimal(e['erro_medio_temporada'])} pontos por time"
         )
-        if e["erro_medio_recente"] is not None:
-            texto += f", e o ritmo recente, {_decimal(e['erro_medio_recente'])}"
+        texto += f", e a projeção cautelosa, {_decimal(e['erro_medio_cautelosa'])}"
         frases.append(texto + ".")
     return frases
 
@@ -401,16 +433,13 @@ def frase_de_projecao(nome: str, projecao: dict | None, nomes_zona: dict[str, st
     )
     if projecao["zona_proj_temporada"]:
         temporada += f" ({nomes_zona[projecao['zona_proj_temporada']]})"
-    texto = f"{nome}: {temporada}"
-    if projecao["pontos_proj_recente"] is not None:
-        recente = (
-            f"no ritmo dos últimos {config.COMPETICAO_JANELA_MOVEL} jogos, {projecao['pontos_proj_recente']:.0f} pontos, "
-            f"em {projecao['posicao_proj_recente']}º"
-        )
-        if projecao["zona_proj_recente"]:
-            recente += f" ({nomes_zona[projecao['zona_proj_recente']]})"
-        texto += f"; {recente}"
-    return texto + f". Faltam {projecao['restantes']} jogos."
+    cautelosa = (
+        f"na projeção cautelosa ({projecao['peso_do_time'] * 100:.0f}% do ritmo do time e o resto pela média da liga), "
+        f"{projecao['pontos_proj_cautelosa']:.0f} pontos, em {projecao['posicao_proj_cautelosa']}º"
+    )
+    if projecao["zona_proj_cautelosa"]:
+        cautelosa += f" ({nomes_zona[projecao['zona_proj_cautelosa']]})"
+    return f"{nome}: {temporada}; {cautelosa}. Faltam {projecao['restantes']} jogos."
 
 
 # ---------------------------------------------------------------------------

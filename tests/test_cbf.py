@@ -18,6 +18,8 @@ from importer.cbf_mapeamento import parear, tokens
 from stats.cbf import (
     classificacao_do_participante,
     instrucao_consulta_bid,
+    codigos_equivalentes,
+    historico_saf_na_cbf,
     partidas_do_participante,
     registrado_como_saf,
     resumo_curto_cbf,
@@ -135,6 +137,81 @@ def test_sem_saf_no_nome_nao_marca_e_nao_afirma_o_contrario(nome):
     Bahia são apontados como SAF em fontes externas): a função só devolve True
     quando o nome mostra, e a tela não escreve 'não é SAF' em lugar nenhum."""
     assert registrado_como_saf(nome) is False
+
+
+def _classificar(conexao, cod, nomes_por_ano):
+    """Grava uma linha de classificação por ano, com o nome que o time tinha naquele ano."""
+    conexao.execute("INSERT OR IGNORE INTO cbf_times (cod_time, nome, uf) VALUES (?, ?, 'SP')", (cod, nomes_por_ano[max(nomes_por_ano)] or "x"))
+    for ano, nome in nomes_por_ano.items():
+        conexao.execute(
+            "INSERT INTO cbf_classificacao (serie, ano, cod_time, rodada, coletado_em, nome_no_ano)"
+            " VALUES ('serie-a', ?, ?, 38, 'x', ?)", (ano, cod, nome),
+        )
+
+
+def test_historico_saf_continuo_ate_hoje(conexao):
+    _classificar(conexao, 1, {2019: "Time", 2022: "Time S.a.f.", 2023: "Time S.a.f.", 2024: "Time SAF"})
+    saf = historico_saf_na_cbf(conexao, 1)
+    assert (saf["desde"], saf["hoje"], saf["continuo_ate_hoje"]) == (2022, True, True)
+    assert saf["texto_anos"] == "2022 a 2024" and saf["primeiro_ano_coletado"] == 2019
+
+
+def test_historico_saf_que_some_do_nome_de_hoje_nao_e_continuo(conexao):
+    """Como o Cruzeiro: 'Saf' no nome de 2022 a 2025, mas o nome de 2026 não traz."""
+    _classificar(conexao, 2, {2021: "Time", 2022: "Time Saf", 2023: "Time Saf", 2025: "Time Saf", 2026: None})
+    conexao.execute("UPDATE cbf_times SET nome = 'Time' WHERE cod_time = 2")  # nome atual, sem SAF
+    saf = historico_saf_na_cbf(conexao, 2)
+    assert saf["anos"] == [2022, 2023, 2025] and saf["texto_anos"] == "2022 a 2023 e 2025"
+    assert saf["hoje"] is False and saf["continuo_ate_hoje"] is False
+
+
+def test_historico_saf_usa_o_nome_atual_na_temporada_mais_recente_sem_nome_guardado(conexao):
+    _classificar(conexao, 3, {2025: "Time", 2026: None})
+    conexao.execute("UPDATE cbf_times SET nome = 'Time SAF' WHERE cod_time = 3")
+    saf = historico_saf_na_cbf(conexao, 3)
+    assert saf["anos"] == [2026] and saf["hoje"] is True and saf["continuo_ate_hoje"] is True
+
+
+def test_historico_saf_com_lacuna_mostra_os_anos_e_nao_afirma_desde(conexao):
+    """Como o Cuiabá: 'Saf' em 2019, sem em 2020 e 2021, com de 2022 em diante."""
+    _classificar(conexao, 4, {2019: "T Saf", 2020: "T", 2021: "T", 2022: "T Saf", 2023: "T Saf"})
+    saf = historico_saf_na_cbf(conexao, 4)
+    assert saf["texto_anos"] == "2019 e 2022 a 2023" and saf["hoje"] is True
+    assert saf["continuo_ate_hoje"] is False  # tem ano sem SAF no meio: "desde 2019" seria falso
+
+
+def test_historico_saf_sem_saf_no_nome_ou_sem_dados_e_none(conexao):
+    _classificar(conexao, 5, {2025: "Time", 2026: "Time"})
+    assert historico_saf_na_cbf(conexao, 5) is None  # ausência não prova nada: não afirma
+    assert historico_saf_na_cbf(conexao, 999) is None and historico_saf_na_cbf(conexao, None) is None
+
+
+def test_faixas_de_anos():
+    from stats.cbf import _faixas_de_anos
+
+    assert _faixas_de_anos([2019, 2022, 2023, 2024]) == "2019 e 2022 a 2024"
+    assert _faixas_de_anos([2026]) == "2026" and _faixas_de_anos([2022, 2023]) == "2022 a 2023"
+
+
+def test_codigos_equivalentes_le_so_as_linhas_validadas(tmp_path):
+    arquivo = tmp_path / "eq.csv"
+    arquivo.write_text(
+        "# comentário\n"
+        "cod_atual;cod_anterior;clube;uf;anos_anterior;anos_atual;nome_anterior;nome_atual;status\n"
+        "60646;20012;Vasco;RJ;2019-2021;2022-2026;a;b;validado\n"
+        "61590;20025;Coritiba;PR;2019-2022;2023-2026;a;b;proposto\n"
+        "60646;99999;Vasco;RJ;2000;2001;a;b;validado\n",
+        encoding="utf-8",
+    )
+    assert codigos_equivalentes(str(arquivo)) == {60646: [20012, 99999]}  # a linha "proposto" fica de fora
+    assert codigos_equivalentes(str(tmp_path / "nao-existe.csv")) == {}
+
+
+def test_tabela_real_de_codigos_esta_validada_e_os_codigos_existem_no_banco_sintetico_de_nomes():
+    equivalentes = codigos_equivalentes()
+    assert len(equivalentes) == 11 and equivalentes[60646] == [20012] and equivalentes[62261] == [20093]
+    todos = {c for cods in equivalentes.values() for c in cods} | set(equivalentes)
+    assert len(todos) == 22  # 11 pares, nenhum código repetido
 
 
 def test_instrucao_do_bid_usa_o_codigo_da_cbf_e_a_uf():
