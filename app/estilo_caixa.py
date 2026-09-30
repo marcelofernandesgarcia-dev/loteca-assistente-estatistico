@@ -16,7 +16,9 @@ _CSS = f"""
 <style>
 .loteca-card {{ border: 1px solid #d8dee8; border-radius: 6px; overflow: hidden;
   font-family: sans-serif; margin-bottom: 1.5rem; }}
-.loteca-card table {{ width: 100%; border-collapse: collapse; font-size: 0.85rem; }}
+.loteca-rolagem {{ overflow-x: auto; -webkit-overflow-scrolling: touch; }}
+.loteca-card table {{ width: 100%; min-width: 460px; border-collapse: collapse; font-size: 0.85rem; }}
+.loteca-card td:last-child {{ white-space: nowrap; }}
 .loteca-card th {{ background: {AZUL_CABECALHO}; color: white; padding: 8px 10px; text-align: left; }}
 .loteca-card td {{ padding: 7px 10px; border-bottom: 1px solid #e2e6ee; }}
 .loteca-card tr:nth-child(even) td {{ background: {CINZA_LINHA}; }}
@@ -63,11 +65,15 @@ def renderizar_cartao(titulo: str, linhas: list[dict], titulo_destaque: str = "d
             f"<td>{linha['data']}</td>"
             f"</tr>"
         )
+    # O card tem overflow: hidden (cantos arredondados); sem o contêiner de
+    # rolagem, a tabela mais larga que a tela do celular era cortada.
     html = (
         _CSS
         + '<div class="loteca-card">'
         + f'<div class="loteca-titulo">{titulo}</div>'
-        + "<table><thead><tr><th>Jogo</th><th>Coluna 1</th><th>X</th><th>Coluna 2</th><th>Data</th></tr></thead>"
-        + f"<tbody>{''.join(corpo)}</tbody></table></div>"
+        + '<div class="loteca-rolagem"><table><thead><tr>'
+        + '<th scope="col">Jogo</th><th scope="col">Coluna 1</th><th scope="col">X</th>'
+        + '<th scope="col">Coluna 2</th><th scope="col">Data</th></tr></thead>'
+        + f"<tbody>{''.join(corpo)}</tbody></table></div></div>"
     )
     return html

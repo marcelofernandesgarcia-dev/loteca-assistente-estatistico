@@ -29,3 +29,12 @@ def test_celula_destacada_tem_marca_de_texto_alem_da_cor():
 def test_titulo_destaque_padrao_quando_nao_informado():
     html = renderizar_cartao("Título", [LINHA])
     assert 'title="destaque"' in html
+
+
+def test_tabela_rola_dentro_do_card_em_tela_estreita():
+    """O card corta o que sai dele (overflow: hidden, para os cantos); a
+    tabela precisa rolar dentro de um contêiner próprio no celular."""
+    html = renderizar_cartao("Título", [LINHA])
+    assert ".loteca-rolagem { overflow-x: auto;" in html
+    assert html.index('<div class="loteca-rolagem"><table>') < html.index("</table></div></div>")
+    assert html.count('<th scope="col">') == 5
