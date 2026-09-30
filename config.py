@@ -221,6 +221,11 @@ ANALISE_LIMIAR_EQUILIBRADO = SUGESTAO_LIMIAR_DUPLO  # favorito abaixo disso = jo
 ANALISE_QUANTOS_MELHORES_DUPLOS = 3  # quantos jogos mostrar em "onde um duplo rende mais"
 ANALISE_DIFERENCA_PARA_TROCA_PP = 10.0  # p.p. a mais de chance para sugerir mudar um duplo de jogo
 ANALISE_AMOSTRA_MINIMA = 30  # marcações conferidas antes de mostrar uma taxa de acerto no histórico
+# Estudo das sugestões para jogos complexos (E1 a E4, 30/09/2026). Só estudo: nada vai
+# para a tela antes de o usuário ver o resultado do teste com os concursos passados.
+OTIMIZACAO_MARGEM_APERTADA_PP = 10.0  # 1º e 2º resultado com diferença menor que isso = jogo apertado
+OTIMIZACAO_GANHO_MINIMO_RELATIVO = 0.10  # só sugere troca que aumente a chance de 14 em 10% ou mais
+OTIMIZACAO_ORCAMENTOS_TESTE = ((1, 0), (0, 1), (2, 0), (3, 0), (1, 1), (2, 1), (4, 1), (3, 2))  # (duplos, triplos)
 VERSOES_MAX_POR_CONCURSO = 20  # versões do palpite guardadas por concurso (decisão do usuário: gravadas no banco)
 VERSOES_CONCURSOS_MINIMOS = 10  # concursos com mais de uma versão antes de tirar conclusão sobre as mudanças
 # Motivos opcionais da marcação: o que o usuário sabe e o app não coleta.

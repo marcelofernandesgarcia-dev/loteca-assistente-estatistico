@@ -1,0 +1,339 @@
+{
+ "concursos": 1127,
+ "orcamentos": [
+  {
+   "duplos": 1,
+   "triplos": 0,
+   "apostas": 2,
+   "concursos": 1127,
+   "exato": {
+    "acertos_medios": 7.044365572315883,
+    "fez_14": 0,
+    "fez_13_ou_mais": 0,
+    "fez_12_ou_mais": 6
+   },
+   "regra": {
+    "acertos_medios": 7.055013309671695,
+    "fez_14": 0,
+    "fez_13_ou_mais": 0,
+    "fez_12_ou_mais": 6
+   },
+   "aleatorio": {
+    "acertos_medios": 7.010647737355812,
+    "fez_14": 0,
+    "fez_13_ou_mais": 0,
+    "fez_12_ou_mais": 8
+   },
+   "exato_menos_regra": {
+    "media": -0.01064773735581189,
+    "erro_padrao": 0.009133976107763129,
+    "veredito": "sem diferença perceptível"
+   },
+   "exato_menos_aleatorio": {
+    "media": 0.03371783496007098,
+    "erro_padrao": 0.01859353351145818,
+    "veredito": "sem diferença perceptível"
+   },
+   "exato_igual_a_regra": 892,
+   "previsto_14_soma": 1.0213445533578727,
+   "previsto_13_soma": 10.027834247635951
+  },
+  {
+   "duplos": 0,
+   "triplos": 1,
+   "apostas": 3,
+   "concursos": 1127,
+   "exato": {
+    "acertos_medios": 7.342502218278616,
+    "fez_14": 0,
+    "fez_13_ou_mais": 1,
+    "fez_12_ou_mais": 9
+   },
+   "regra": {
+    "acertos_medios": 7.345164152617569,
+    "fez_14": 0,
+    "fez_13_ou_mais": 1,
+    "fez_12_ou_mais": 10
+   },
+   "aleatorio": {
+    "acertos_medios": 7.245785270629991,
+    "fez_14": 0,
+    "fez_13_ou_mais": 1,
+    "fez_12_ou_mais": 10
+   },
+   "exato_menos_regra": {
+    "media": -0.0026619343389529724,
+    "erro_padrao": 0.007045496352185328,
+    "veredito": "sem diferença perceptível"
+   },
+   "exato_menos_aleatorio": {
+    "media": 0.09671694764862467,
+    "erro_padrao": 0.01973937901407773,
+    "veredito": "acerta mais"
+   },
+   "exato_igual_a_regra": 1021,
+   "previsto_14_soma": 1.3626374718263425,
+   "previsto_13_soma": 12.935802798302657
+  },
+  {
+   "duplos": 2,
+   "triplos": 0,
+   "apostas": 4,
+   "concursos": 1127,
+   "exato": {
+    "acertos_medios": 7.370008873114463,
+    "fez_14": 0,
+    "fez_13_ou_mais": 0,
+    "fez_12_ou_mais": 11
+   },
+   "regra": {
+    "acertos_medios": 7.370896184560781,
+    "fez_14": 0,
+    "fez_13_ou_mais": 0,
+    "fez_12_ou_mais": 12
+   },
+   "aleatorio": {
+    "acertos_medios": 7.3478260869565215,
+    "fez_14": 0,
+    "fez_13_ou_mais": 1,
+    "fez_12_ou_mais": 13
+   },
+   "exato_menos_regra": {
+    "media": -0.0008873114463176575,
+    "erro_padrao": 0.012522597353979146,
+    "veredito": "sem diferença perceptível"
+   },
+   "exato_menos_aleatorio": {
+    "media": 0.022182786157941437,
+    "erro_padrao": 0.025734966474118385,
+    "veredito": "sem diferença perceptível"
+   },
+   "exato_igual_a_regra": 742,
+   "previsto_14_soma": 1.619885771817043,
+   "previsto_13_soma": 14.71159782078145
+  },
+  {
+   "duplos": 3,
+   "triplos": 0,
+   "apostas": 8,
+   "concursos": 1127,
+   "exato": {
+    "acertos_medios": 7.665483584738243,
+    "fez_14": 0,
+    "fez_13_ou_mais": 1,
+    "fez_12_ou_mais": 19
+   },
+   "regra": {
+    "acertos_medios": 7.6770186335403725,
+    "fez_14": 0,
+    "fez_13_ou_mais": 1,
+    "fez_12_ou_mais": 17
+   },
+   "aleatorio": {
+    "acertos_medios": 7.550133096716948,
+    "fez_14": 0,
+    "fez_13_ou_mais": 2,
+    "fez_12_ou_mais": 11
+   },
+   "exato_menos_regra": {
+    "media": -0.011535048802129548,
+    "erro_padrao": 0.01519117944326988,
+    "veredito": "sem diferença perceptível"
+   },
+   "exato_menos_aleatorio": {
+    "media": 0.11535048802129548,
+    "erro_padrao": 0.028778696647302683,
+    "veredito": "acerta mais"
+   },
+   "exato_igual_a_regra": 621,
+   "previsto_14_soma": 2.4633765980405444,
+   "previsto_13_soma": 20.791316958103156
+  },
+  {
+   "duplos": 1,
+   "triplos": 1,
+   "apostas": 6,
+   "concursos": 1127,
+   "exato": {
+    "acertos_medios": 7.66282165039929,
+    "fez_14": 0,
+    "fez_13_ou_mais": 1,
+    "fez_12_ou_mais": 16
+   },
+   "regra": {
+    "acertos_medios": 7.661047027506655,
+    "fez_14": 0,
+    "fez_13_ou_mais": 1,
+    "fez_12_ou_mais": 18
+   },
+   "aleatorio": {
+    "acertos_medios": 7.597160603371783,
+    "fez_14": 0,
+    "fez_13_ou_mais": 2,
+    "fez_12_ou_mais": 18
+   },
+   "exato_menos_regra": {
+    "media": 0.001774622892635315,
+    "erro_padrao": 0.015730090318760187,
+    "veredito": "sem diferença perceptível"
+   },
+   "exato_menos_aleatorio": {
+    "media": 0.06566104702750665,
+    "erro_padrao": 0.027434851222593936,
+    "veredito": "acerta mais"
+   },
+   "exato_igual_a_regra": 543,
+   "previsto_14_soma": 2.1784580811666556,
+   "previsto_13_soma": 19.060548427317727
+  },
+  {
+   "duplos": 2,
+   "triplos": 1,
+   "apostas": 12,
+   "concursos": 1127,
+   "exato": {
+    "acertos_medios": 7.961845607808341,
+    "fez_14": 0,
+    "fez_13_ou_mais": 2,
+    "fez_12_ou_mais": 27
+   },
+   "regra": {
+    "acertos_medios": 7.967169476486247,
+    "fez_14": 0,
+    "fez_13_ou_mais": 2,
+    "fez_12_ou_mais": 26
+   },
+   "aleatorio": {
+    "acertos_medios": 7.794143744454304,
+    "fez_14": 0,
+    "fez_13_ou_mais": 2,
+    "fez_12_ou_mais": 14
+   },
+   "exato_menos_regra": {
+    "media": -0.005323868677905945,
+    "erro_padrao": 0.01861998899180996,
+    "veredito": "sem diferença perceptível"
+   },
+   "exato_menos_aleatorio": {
+    "media": 0.16770186335403728,
+    "erro_padrao": 0.030742101405016018,
+    "veredito": "acerta mais"
+   },
+   "exato_igual_a_regra": 399,
+   "previsto_14_soma": 3.3193832581377465,
+   "previsto_13_soma": 26.903823426951853
+  },
+  {
+   "duplos": 4,
+   "triplos": 1,
+   "apostas": 48,
+   "concursos": 1127,
+   "exato": {
+    "acertos_medios": 8.53061224489796,
+    "fez_14": 0,
+    "fez_13_ou_mais": 9,
+    "fez_12_ou_mais": 61
+   },
+   "regra": {
+    "acertos_medios": 8.54924578527063,
+    "fez_14": 0,
+    "fez_13_ou_mais": 11,
+    "fez_12_ou_mais": 53
+   },
+   "aleatorio": {
+    "acertos_medios": 8.345164152617569,
+    "fez_14": 0,
+    "fez_13_ou_mais": 6,
+    "fez_12_ou_mais": 40
+   },
+   "exato_menos_regra": {
+    "media": -0.018633540372670808,
+    "erro_padrao": 0.02124211795964248,
+    "veredito": "sem diferença perceptível"
+   },
+   "exato_menos_aleatorio": {
+    "media": 0.18544809228039041,
+    "erro_padrao": 0.03614870276767395,
+    "veredito": "acerta mais"
+   },
+   "exato_igual_a_regra": 357,
+   "previsto_14_soma": 7.117740851466507,
+   "previsto_13_soma": 49.74152943401881
+  },
+  {
+   "duplos": 3,
+   "triplos": 2,
+   "apostas": 72,
+   "concursos": 1127,
+   "exato": {
+    "acertos_medios": 8.821650399290151,
+    "fez_14": 0,
+    "fez_13_ou_mais": 15,
+    "fez_12_ou_mais": 71
+   },
+   "regra": {
+    "acertos_medios": 8.83673469387755,
+    "fez_14": 0,
+    "fez_13_ou_mais": 18,
+    "fez_12_ou_mais": 65
+   },
+   "aleatorio": {
+    "acertos_medios": 8.588287488908607,
+    "fez_14": 0,
+    "fez_13_ou_mais": 9,
+    "fez_12_ou_mais": 46
+   },
+   "exato_menos_regra": {
+    "media": -0.015084294587400177,
+    "erro_padrao": 0.022749233084637523,
+    "veredito": "sem diferença perceptível"
+   },
+   "exato_menos_aleatorio": {
+    "media": 0.23336291038154391,
+    "erro_padrao": 0.03792928883310557,
+    "veredito": "acerta mais"
+   },
+   "exato_igual_a_regra": 256,
+   "previsto_14_soma": 9.399575943862757,
+   "previsto_13_soma": 62.776283730403485
+  }
+ ],
+ "trocas": [
+  {
+   "duplos": 1,
+   "triplos": 0,
+   "concursos": 1127,
+   "com_sugestao": 1120,
+   "ganhou": 628,
+   "perdeu": 219,
+   "igual": 273,
+   "diferenca_media": 0.3580357142857143,
+   "erro_padrao": 0.0240918891554437,
+   "veredito": "acerta mais"
+  },
+  {
+   "duplos": 2,
+   "triplos": 1,
+   "concursos": 1127,
+   "com_sugestao": 1119,
+   "ganhou": 582,
+   "perdeu": 174,
+   "igual": 363,
+   "diferenca_media": 0.3529937444146559,
+   "erro_padrao": 0.02289142101451271,
+   "veredito": "acerta mais"
+  },
+  {
+   "duplos": 3,
+   "triplos": 2,
+   "concursos": 1127,
+   "com_sugestao": 1120,
+   "ganhou": 542,
+   "perdeu": 193,
+   "igual": 385,
+   "diferenca_media": 0.30089285714285713,
+   "erro_padrao": 0.0231144401180076,
+   "veredito": "acerta mais"
+  }
+ ]
+}
