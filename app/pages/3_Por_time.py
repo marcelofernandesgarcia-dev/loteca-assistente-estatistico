@@ -53,6 +53,7 @@ from stats.desempenho import (
 from stats.forma import forma_recente
 from stats.frequencia import frequencia_global, frequencia_participante
 from stats.modelo_temporada import analisar_confronto, forcas_da_serie
+from stats.participantes import rotulos_de_participantes
 from stats.percentual import origem_do_percentual, percentual_historico
 from stats.temporada import desempenho_no_ano
 
@@ -867,14 +868,14 @@ st.caption(
 )
 
 conexao = obter_conexao()
-participantes = conexao.execute("SELECT id, nome, tipo FROM participantes ORDER BY nome").fetchall()
+participantes = conexao.execute("SELECT id, nome, tipo, pais_ou_uf FROM participantes ORDER BY nome, pais_ou_uf, id").fetchall()
 
 if not participantes:
     st.info("Nenhum participante importado ainda -- veja a página 'Concurso atual'.")
     conexao.close()
     st.stop()
 
-opcoes = {f"{p['nome']} ({p['tipo']})": p["id"] for p in participantes}
+opcoes = rotulos_de_participantes(participantes)
 escolha = st.selectbox("Participante (clube ou seleção)", list(opcoes.keys()))
 participante_id = opcoes[escolha]
 

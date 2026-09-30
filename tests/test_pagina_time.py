@@ -135,6 +135,17 @@ def test_marca_de_saf_conta_o_nome_de_anos_anteriores_mesmo_quando_o_de_hoje_nao
     assert "Registrado como SAF na CBF desde" not in info  # não afirma "desde": o de hoje não traz
 
 
+def test_clube_homonimo_de_outra_uf_nao_esconde_o_clube_com_dados_da_cbf(banco):
+    """Como Cruzeiro-MG e Cruzeiro-RS: antes o rótulo repetido deixava só o último acessível."""
+    with db.sessao() as c:
+        db.obter_ou_criar_participante(c, "ALFA", "clube", "RS")
+    at = _abrir("ALFA/SP (clube)")
+    assert not at.exception, [e.value for e in at.exception]
+    assert any("Ficha completa" in s.value for s in at.success)  # o de SP é o que tem CBF
+    outro = _abrir("ALFA/RS (clube)")
+    assert "Ficha reduzida" in " ".join(i.value for i in outro.info)
+
+
 def test_titulos_seguem_a_hierarquia_da_pagina(banco):
     at = _abrir("ALFA (clube)")
     assert [t.value for t in at.title] == ["Ficha do time"]
