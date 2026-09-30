@@ -27,8 +27,8 @@ def banco(tmp_path, monkeypatch):
             sys.path.insert(0, pasta)
     db.inicializar_schema()
     with db.sessao() as c:
-        for cod, nome in ((1, "Time Alfa"), (2, "Time Beta"), (3, "Time Gama"), (4, "Time Delta")):
-            c.execute("INSERT INTO cbf_times (cod_time, nome) VALUES (?, ?)", (cod, nome))
+        for cod, nome, uf in ((1, "Time Alfa", "SP"), (2, "Time Beta", "RJ"), (3, "Time Gama", "MG"), (4, "Time Delta", "BA")):
+            c.execute("INSERT INTO cbf_times (cod_time, nome, uf) VALUES (?, ?, ?)", (cod, nome, uf))
         partidas = []
         for i, ((m, v), (gm, gv)) in enumerate(zip(itertools.permutations((1, 2, 3, 4), 2), PLACARES)):
             partidas.append({"rodada": i // 2 + 1, "mandante_id": m, "visitante_id": v, "gols_mandante": gm, "gols_visitante": gv})
@@ -93,6 +93,13 @@ def test_selecao_sem_cbf_abre_a_ficha_reduzida_com_dados_da_loteca(banco):
     assert "A evolução rodada a rodada só existe" in textos
     marcadores = " ".join(m.value for m in at.markdown)
     assert "Na grade da Loteca: 1 jogos" in marcadores
+
+
+def test_clube_da_cbf_tem_link_de_consulta_manual_ao_bid_e_selecao_nao(banco):
+    marcadores = " ".join(m.value for m in _abrir("ALFA (clube)").markdown)
+    assert "[consultar o BID da CBF](https://bid.cbf.com.br/home)" in marcadores
+    assert "a UF SP e o clube de código 1" in marcadores and "não coleta nem guarda nada do BID" in marcadores
+    assert "consultar o BID" not in " ".join(m.value for m in _abrir("ITALIA (selecao)").markdown)
 
 
 def test_titulos_seguem_a_hierarquia_da_pagina(banco):

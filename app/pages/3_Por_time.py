@@ -17,6 +17,7 @@ from stats.cbf import (
     classificacao_do_participante,
     cod_time_do_participante,
     estatisticas_do_participante,
+    instrucao_consulta_bid,
     nomes_dos_times,
     partidas_do_participante,
 )
@@ -89,6 +90,12 @@ def renderizar_classificacao_oficial(conexao, participante_id, classif):
             f"Fonte: páginas públicas da CBF ({serie} {classif['ano']}, após a rodada {classif['rodada']}); coletado em {coletado}. "
             "Dado guardado só neste computador."
         )
+        instrucao = instrucao_consulta_bid(classif["cod_time"], classif.get("uf_cbf"))
+        if instrucao:
+            st.markdown(
+                f"Contratações e saídas registradas: [consultar o BID da CBF]({config.BID_CONSULTA_URL}) "
+                f"(consulta manual, exige CAPTCHA). Lá, {instrucao}. O app não coleta nem guarda nada do BID."
+            )
         with st.expander("Calendário e resultados da temporada (CBF)"):
             partidas = partidas_do_participante(conexao, participante_id)
             st.dataframe(

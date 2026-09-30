@@ -28,6 +28,10 @@ CBF_COMPETICOES = [
 ]
 CBF_INTERVALO_SEGUNDOS = float(os.environ.get("LOTECA_CBF_INTERVALO_S", "2.0"))
 CBF_TIMEOUT_SEGUNDOS = 30
+# Consulta pública do BID (contratações). Só link para consulta manual: exige
+# CAPTCHA e traz dado pessoal de atleta, então o app não coleta nada dali
+# (docs/pesquisa-bid-cbf-30-09-2026.md).
+BID_CONSULTA_URL = "https://bid.cbf.com.br/home"
 CBF_VALIDADE_HORAS = int(os.environ.get("LOTECA_CBF_VALIDADE_H", "20"))
 CBF_USER_AGENT = "Mozilla/5.0 (compatible; LotecaAssistenteLocal/1.0; uso pessoal)"
 # Palavras que não ajudam a comparar nome de time da CBF com o da Loteca

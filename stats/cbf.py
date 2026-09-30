@@ -8,7 +8,7 @@ def classificacao_do_participante(conexao, participante_id: int) -> dict | None:
     participante da Loteca, ou None se não houver par ou coleta."""
     linha = conexao.execute(
         """
-        SELECT c.*, t.nome AS nome_cbf
+        SELECT c.*, t.nome AS nome_cbf, t.uf AS uf_cbf
         FROM mapa_cbf_participante m
         JOIN cbf_classificacao c ON c.cod_time = m.cod_time
         JOIN cbf_times t ON t.cod_time = c.cod_time
@@ -81,6 +81,20 @@ def resumo_curto_cbf(classificacao: dict | None) -> str:
     if ultimos:
         partes.append(ultimos)
     return " · ".join(partes)
+
+
+def instrucao_consulta_bid(cod_time: int | None, uf: str | None) -> str | None:
+    """Como achar o clube na consulta manual do BID. O código do time nas
+    páginas da CBF é o mesmo da lista de clubes do BID (conferido em
+    30/09/2026: Ceará 20031, Fortaleza SAF 63238). O BID exige CAPTCHA e uma
+    data por consulta, por isso o app só aponta o caminho e não coleta nada
+    (ver docs/pesquisa-bid-cbf-30-09-2026.md)."""
+    if not cod_time or not uf:
+        return None
+    return (
+        f"escolha uma data, a UF {uf} e o clube de código {cod_time} "
+        "(o código aparece entre parênteses no fim do nome do clube)"
+    )
 
 
 def idade_da_coleta_horas(classificacao: dict | None) -> float | None:

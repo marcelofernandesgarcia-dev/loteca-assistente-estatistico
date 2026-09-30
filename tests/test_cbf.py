@@ -15,7 +15,12 @@ from importer.cbf_client import (
     parse_pagina_time,
 )
 from importer.cbf_mapeamento import parear, tokens
-from stats.cbf import classificacao_do_participante, partidas_do_participante, resumo_curto_cbf
+from stats.cbf import (
+    classificacao_do_participante,
+    instrucao_consulta_bid,
+    partidas_do_participante,
+    resumo_curto_cbf,
+)
 
 
 def _html(texto_fluxo: str) -> str:
@@ -106,6 +111,15 @@ def test_gravar_e_consultar(conexao):
     futura, passada = partidas
     assert futura["realizada"] is False and futura["gols_feitos"] is None
     assert passada["mando"] == "casa" and (passada["gols_feitos"], passada["gols_sofridos"]) == (1, 0)
+
+
+def test_instrucao_do_bid_usa_o_codigo_da_cbf_e_a_uf():
+    # O código da CBF é o mesmo da lista do BID (Ceará: 20031, conferido em 30/09/2026).
+    assert instrucao_consulta_bid(20031, "CE") == (
+        "escolha uma data, a UF CE e o clube de código 20031 "
+        "(o código aparece entre parênteses no fim do nome do clube)"
+    )
+    assert instrucao_consulta_bid(20031, None) is None and instrucao_consulta_bid(None, "CE") is None
 
 
 def test_gravar_duas_vezes_nao_duplica(conexao):
