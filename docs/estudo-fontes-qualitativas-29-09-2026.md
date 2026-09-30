@@ -31,6 +31,7 @@
 | 19 | Card 3 (bilhete) está confuso: trocar por 3 quadrados (1, X, 2) por jogo, só para marcar o palpite | `app/pages/1_Concurso_atual.py`, `stats/bilhete.validar_volante` | ✅ Feito (29/09/2026): volante em branco, botão de sugestão, jogo em branco bloqueia o salvamento, conferido em tela larga e de celular |
 | 20 | Interações para pedir análise das próprias marcações (coerência, zebras, rendimento de duplos/triplos), registradas para aprendizado; descritivo de pontos positivos e negativos | `docs/estudo-analise-do-palpite.md`, `stats/analise_palpite.py` | ✅ Primeira entrega feita (29/09/2026): botão "Analisar meu palpite", motivos opcionais, análise guardada ao salvar, "O que este bilhete ensina" e "Meu histórico de palpites". Ficam para depois: distribuição por coluna, contexto (notícia/zona/forma) e diferença para a sugestão |
 | 21 | (achado ao verificar) As tabelas dos cards 1 e 2 da página "Concurso atual" ficam cortadas em tela de celular (tabela mais larga que a tela, sem rolagem) | `app/estilo_caixa.py` | ✅ Corrigido (30/09/2026): a tabela rola dentro do card no celular (o card usava `overflow: hidden`, que cortava a tabela); cabeçalhos com `scope="col"`; no computador, sem mudança |
+| 22 | Pesquisa do BID da CBF (Fase Q2) | `docs/pesquisa-bid-cbf-30-09-2026.md` | ✅ Pesquisado (30/09/2026): coleta automática **inviável** (CAPTCHA em toda consulta, uma data por consulta, dados pessoais de atletas na resposta). Alternativas propostas, aguardando decisão |
 
 Este documento (`docs/estudo-fontes-qualitativas-29-09-2026.md`) passa a ser o **registro único** de solicitações de melhoria em aberto -- toda vez que eu propuser algo novo por minha conta ou você pedir algo novo, eu atualizo esta tabela, para nada se perder mesmo com o projeto crescendo aos poucos.
 
@@ -129,6 +130,8 @@ Adicionar categorias de sinal em `config.VARREDURA_PALAVRAS_CHAVE_PARA_SINAL`: t
 
 ### Fase Q2 -- pesquisar e, se der, integrar o BID como fonte oficial de contratações
 Antes de codificar: ler a página pública do BID com mais profundidade (que dado exatamente aparece por consulta, formato, se dá para automatizar sem login), documentar em `docs/` como fiz com o REC, e **te trazer o achado antes de decidir coletar**. Se viável: uma tabela nova (`bid_movimentacoes` ou similar) e uma métrica de "giro de elenco" (contratações + saídas numa janela) por participante.
+
+**Resultado (30/09/2026): coleta automática inviável.** Toda consulta exige CAPTCHA e uma data exata, e a resposta traz dados pessoais dos atletas (nome, nascimento, foto, contrato). Detalhe em `docs/pesquisa-bid-cbf-30-09-2026.md`. O que fica: link de consulta manual; o sinal de giro de elenco segue por Q1 (notícias) e Q2d (Transfermarkt, após ler os termos).
 
 ### Fase Q2b -- canais do YouTube como mais um "veículo" de notícia
 Levantar `channel_id` dos canais que você já tinha indicado (CazéTV, TNT Sports Brasil, Desimpedidos, Canal GOAT), incluir como fonte na varredura com o MESMO filtro do C2 (nome + palavra-chave de fato, nunca palpite/opinião). Barato -- reaproveita tudo, só soma feeds.
