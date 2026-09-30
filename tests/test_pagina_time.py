@@ -113,6 +113,16 @@ def test_link_do_transfermarkt_aparece_para_clube_e_selecao_e_avisa_quando_o_ter
     assert "query=Italia" in " ".join(m.value for m in selecao.markdown)
 
 
+def test_marca_de_saf_aparece_so_quando_o_nome_da_cbf_traz_saf(banco):
+    with db.sessao() as c:
+        c.execute("UPDATE cbf_times SET nome = 'Time Alfa SAF' WHERE cod_time = 1")
+    com_saf = " ".join(i.value for i in _abrir("ALFA (clube)").info)
+    assert "Registrado como SAF na CBF" in com_saf and "Lei nº 14.193/2021" in com_saf
+    assert "não muda o percentual" in com_saf
+    sem_saf = " ".join(i.value for i in _abrir("BETA (clube)").info)
+    assert "SAF" not in sem_saf  # e nenhuma frase do tipo "não é SAF"
+
+
 def test_titulos_seguem_a_hierarquia_da_pagina(banco):
     at = _abrir("ALFA (clube)")
     assert [t.value for t in at.title] == ["Ficha do time"]

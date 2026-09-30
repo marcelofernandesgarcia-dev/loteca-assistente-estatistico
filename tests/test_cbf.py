@@ -19,6 +19,7 @@ from stats.cbf import (
     classificacao_do_participante,
     instrucao_consulta_bid,
     partidas_do_participante,
+    registrado_como_saf,
     resumo_curto_cbf,
 )
 
@@ -111,6 +112,29 @@ def test_gravar_e_consultar(conexao):
     futura, passada = partidas
     assert futura["realizada"] is False and futura["gols_feitos"] is None
     assert passada["mando"] == "casa" and (passada["gols_feitos"], passada["gols_sofridos"]) == (1, 0)
+
+
+@pytest.mark.parametrize(
+    "nome",
+    [
+        "Coritiba SAF", "Vasco da Gama Saf", "Athletic SAF", "Atlético Goianiense Saf", "Fortaleza SAF",
+        "Gremio Novorizontino - Saf", "Londrina SAF", "São Bernardo SAF",  # os 8 nomes reais da CBF em 30/09/2026
+        "Time X S.A.F.", "Time X S.A.F",
+    ],
+)
+def test_marca_saf_quando_o_nome_da_cbf_traz_saf(nome):
+    assert registrado_como_saf(nome) is True
+
+
+@pytest.mark.parametrize(
+    "nome",
+    ["Sport Recife", "Botafogo", "Cruzeiro", "Bahia", "Safira EC", "Casafe FC", "Ceará", "", None],
+)
+def test_sem_saf_no_nome_nao_marca_e_nao_afirma_o_contrario(nome):
+    """Ausência do sufixo não prova que o clube não seja SAF (Botafogo, Cruzeiro e
+    Bahia são apontados como SAF em fontes externas): a função só devolve True
+    quando o nome mostra, e a tela não escreve 'não é SAF' em lugar nenhum."""
+    assert registrado_como_saf(nome) is False
 
 
 def test_instrucao_do_bid_usa_o_codigo_da_cbf_e_a_uf():

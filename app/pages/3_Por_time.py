@@ -20,6 +20,7 @@ from stats.cbf import (
     instrucao_consulta_bid,
     nomes_dos_times,
     partidas_do_participante,
+    registrado_como_saf,
 )
 from stats.contexto import selo_da_posicao
 from stats.links_externos import link_busca_transfermarkt
@@ -68,6 +69,12 @@ def renderizar_classificacao_oficial(conexao, participante_id, classif):
     else:
         serie = {"serie-a": "Série A", "serie-b": "Série B"}.get(classif["serie"], classif["serie"])
         est = estatisticas_do_participante(conexao, participante_id) or {}
+        if registrado_como_saf(classif.get("nome_cbf")):
+            st.info(
+                "**Registrado como SAF na CBF** (Sociedade Anônima do Futebol, Lei nº 14.193/2021): o nome oficial do "
+                "time na CBF traz \"SAF\". É só uma informação, não muda o percentual. Ainda não foi medido se ser SAF "
+                "faz diferença no desempenho (isso é a Fase Q4)."
+            )
         selo = selo_da_posicao(classif["serie"], classif["ano"], classif["posicao"])
         if selo:
             st.info(

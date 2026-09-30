@@ -1,6 +1,7 @@
 """Consultas sobre os dados da CBF já coletados no banco local.
 Só leitura; a coleta está em importer/cbf_client.py."""
 import datetime as dt
+import re
 
 
 def classificacao_do_participante(conexao, participante_id: int) -> dict | None:
@@ -81,6 +82,19 @@ def resumo_curto_cbf(classificacao: dict | None) -> str:
     if ultimos:
         partes.append(ultimos)
     return " · ".join(partes)
+
+
+_SAF_NO_NOME = re.compile(r"\bS\.?A\.?F\.?\b", re.IGNORECASE)
+
+
+def registrado_como_saf(nome_cbf: str | None) -> bool:
+    """True quando o nome oficial do time na CBF traz "SAF" (Sociedade Anônima
+    do Futebol, Lei nº 14.193/2021). É uma marca confiável quando aparece; a
+    ausência NÃO prova que o clube não seja SAF, porque o nome na CBF pode não
+    ter sido atualizado (Botafogo, Cruzeiro e Bahia, por exemplo, são
+    apontados como SAF em fontes externas e não trazem o sufixo). Por isso a
+    tela só afirma o que o nome mostra, nunca o contrário."""
+    return bool(nome_cbf and _SAF_NO_NOME.search(nome_cbf))
 
 
 def instrucao_consulta_bid(cod_time: int | None, uf: str | None) -> str | None:
