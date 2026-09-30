@@ -33,7 +33,8 @@
 | 21 | (achado ao verificar) As tabelas dos cards 1 e 2 da página "Concurso atual" ficam cortadas em tela de celular (tabela mais larga que a tela, sem rolagem) | `app/estilo_caixa.py` | ✅ Corrigido (30/09/2026): a tabela rola dentro do card no celular (o card usava `overflow: hidden`, que cortava a tabela); cabeçalhos com `scope="col"`; no computador, sem mudança |
 | 22 | Pesquisa do BID da CBF (Fase Q2) | `docs/pesquisa-bid-cbf-30-09-2026.md` | ✅ Pesquisado (30/09/2026): coleta automática **inviável** (CAPTCHA em toda consulta, uma data por consulta, dados pessoais de atletas na resposta). Decisão do usuário (30/09/2026): **incluir o link de consulta manual** -- feito na Ficha do time, para os 40 clubes pareados com a CBF (UF e código do clube, que é o mesmo nas páginas da CBF e no BID). Pergunta respondida (30/09/2026): o usuário quer **os dois** caminhos para o sinal de contratações (Q1 e Q2d) |
 | 23 | Sinal de contratações, saídas, técnico e salários nas notícias (Q1) | `externo/analise.py`, `externo/ajuste.py`, `config.py`; página "Concurso atual" | ✅ Feito (30/09/2026): sinais **informativos** (sem peso no percentual até a Fase Q4 medir), com as barreiras do C2 mais três novas (outra equipe do clube, "ex-", adversário da frase), achadas na leitura de teste com 181 manchetes reais |
-| 24 | Termos de uso do Transfermarkt para elenco (Q2d) | `docs/pesquisa-transfermarkt-30-09-2026.md` | ✅ Lido (30/09/2026): **coleta automática não autorizada** (cláusula 11.1 reserva a extração de dados; 3.2 reserva a base de dados). Recomendação: não coletar, oferecer link de busca por clube. Aguardando decisão do usuário |
+| 24 | Termos de uso do Transfermarkt para elenco (Q2d) | `docs/pesquisa-transfermarkt-30-09-2026.md` | ✅ Lido (30/09/2026): **coleta automática não autorizada** (cláusula 11.1 reserva a extração de dados; 3.2 reserva a base de dados). Recomendação: não coletar, oferecer link de busca por clube. **Decisão do usuário (30/09/2026): só o link de busca** -- ✅ feito na Ficha do time (`stats/links_externos.py`, `data/busca-transfermarkt.csv`): 12 clubes do concurso 1272 com termo testado ao vivo; os demais usam o nome da CBF e a tela avisa que o termo não foi testado |
+| 25 | Texto colado sobre SAFs (Séries A, B e C, donos e percentuais), para análise e incorporação | Seção "Texto colado sobre SAF" | ✅ Verificado (30/09/2026): Lei nº 14.193/2021 **confere** (Planalto); lista de donos, percentuais e séries **sem fonte**, com 2 divergências contra a CBF (Coritiba e Chapecoense estão na Série A em 2026). Entra só o quadro legal e uma hipótese para a Q4; marca "SAF na CBF" proposta para os 8 clubes com SAF no nome |
 
 Este documento (`docs/estudo-fontes-qualitativas-29-09-2026.md`) passa a ser o **registro único** de solicitações de melhoria em aberto -- toda vez que eu propuser algo novo por minha conta ou você pedir algo novo, eu atualizo esta tabela, para nada se perder mesmo com o projeto crescendo aos poucos.
 
@@ -213,6 +214,28 @@ O usuário colou a descrição de uma planilha (`calculadora_desdobramento_lotec
 Essa alegação **já está refutada pela prova de contagem acima**, e o fato de vir empacotada numa planilha com KPIs, cores e abas não muda a matemática: 16 linhas continuam cobrindo no máximo 192 das 864 combinações possíveis (22,2%), não 100%. A frequência de colunas citada na aba `Estatísticas_Históricas` (Coluna 1: 47,23%; Coluna X: 26,15%; Coluna 2: 26,62%) está **coerente com o que já medimos na nossa própria base real** (coluna 1 em torno de 47%, ver seção anterior) -- essa parte não é o problema. O problema é só a alegação de garantia de 100% com 16 linhas, que continua matematicamente impossível pelo mesmo motivo.
 
 Não vou importar essa planilha nem usar seus números de "garantia" no app. Se o usuário quiser, posso reavaliar a planilha de verdade (não só a descrição) caso ela seja enviada como arquivo nesta sessão -- mas o resultado da aba de garantia já é conhecido de antemão: não bate.
+
+## Texto colado sobre SAF (Sociedade Anônima do Futebol), verificado em 30/09/2026
+
+O usuário colou um texto sobre SAFs nas Séries A, B e C, com donos e percentuais, para análise e incorporação ao conhecimento do projeto "se necessário". Mesmo processo de sempre: verificar antes de incorporar. O texto não cita fonte.
+
+**Confirmado na fonte oficial (Planalto, lido em 30/09/2026):**
+- **Lei nº 14.193, de 6 de agosto de 2021** institui a Sociedade Anônima do Futebol e trata de constituição, governança, controle, financiamento da atividade, tratamento dos passivos e regime tributário. O número e a data do texto colado estão corretos.
+- A lei prevê o **Regime Centralizado de Execuções** e cita a recuperação judicial e a extrajudicial, como o texto diz.
+- Nota: o art. 1º foi reescrito depois (a redação atual remete à Lei Geral do Esporte, Lei nº 14.597/2023). O conceito de SAF não mudou.
+
+**Não confirmado, e por isso não entra como dado no app:**
+- Quem controla cada clube e com quantos por cento (Eagle Football/Textor, Pedro Lourenço, City Football Group 90%, 777 Partners 70%, Treecorp, Dimache e outros). São afirmações sobre pessoas e empresas, sem fonte, que mudam com o tempo, e o texto fala de "disputas jurídicas" do Vasco sem indicar data. Colocar isso na tela seria afirmar fato não verificado.
+- Em que série cada clube joga. **Duas divergências com os dados da CBF que o app já tem (temporada 2026):** o texto põe **Coritiba** e **Chapecoense** na Série B, mas a CBF os lista na **Série A** de 2026. O texto está desatualizado ou impreciso.
+
+**O que os dados da CBF do próprio banco mostram (fato objetivo, sem depender do texto):** oito clubes aparecem com "SAF" no nome oficial da CBF: Coritiba, Vasco da Gama, Athletic (MG), Atlético Goianiense, Fortaleza, Grêmio Novorizontino, Londrina e São Bernardo. O texto **omite** cinco deles (Athletic, Fortaleza, Novorizontino, Londrina, São Bernardo). E clubes que o texto chama de SAF (Botafogo, Cruzeiro, Bahia) **não** têm "SAF" no nome da CBF; isso não prova nada, porque o nome pode não ter sido atualizado. Ou seja: "SAF" no nome é uma marca confiável quando aparece, mas a ausência não prova que o clube não seja SAF.
+
+**Como isso entra no projeto (sem inventar dado):**
+1. O quadro legal fica registrado aqui e no cofre como fonte verificada.
+2. Vira **hipótese da Fase Q4** (o pedido original do usuário incluía situação financeira e gestão dos clubes): clubes-empresa desempenham diferente de associações? Só se testa com um indicador confiável. O nome da CBF serve como indicador parcial, com a limitação acima, e são apenas 8 clubes nas Séries A e B, então qualquer resultado seria fraco.
+3. Para saber o dono de cada SAF com segurança, a fonte teria de ser oficial (o estatuto ou a ata publicados pelo clube, ou notícia de veículo identificado). Isso cabe no **Q2c (sites oficiais dos clubes)**, e não nesta colagem.
+
+**Proposta, aguardando o usuário:** mostrar na Ficha do time a marca "Registrado como SAF na CBF" para esses 8 clubes, como informação (sem efeito no percentual). Custo baixo, dado verificável.
 
 ## Avaliação: skills e agentes
 

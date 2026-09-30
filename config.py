@@ -32,6 +32,10 @@ CBF_TIMEOUT_SEGUNDOS = 30
 # CAPTCHA e traz dado pessoal de atleta, então o app não coleta nada dali
 # (docs/pesquisa-bid-cbf-30-09-2026.md).
 BID_CONSULTA_URL = "https://bid.cbf.com.br/home"
+# Busca por clube no Transfermarkt (elenco, idade, valor de mercado). Também só
+# link: os termos reservam a extração de dados (docs/pesquisa-transfermarkt-30-09-2026.md).
+TRANSFERMARKT_BUSCA_URL = "https://www.transfermarkt.com.br/schnellsuche/ergebnis/schnellsuche"
+TRANSFERMARKT_TERMOS_CSV = BASE_DIR / "data" / "busca-transfermarkt.csv"
 CBF_VALIDADE_HORAS = int(os.environ.get("LOTECA_CBF_VALIDADE_H", "20"))
 CBF_USER_AGENT = "Mozilla/5.0 (compatible; LotecaAssistenteLocal/1.0; uso pessoal)"
 # Palavras que não ajudam a comparar nome de time da CBF com o da Loteca

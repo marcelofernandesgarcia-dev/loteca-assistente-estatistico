@@ -102,6 +102,17 @@ def test_clube_da_cbf_tem_link_de_consulta_manual_ao_bid_e_selecao_nao(banco):
     assert "consultar o BID" not in " ".join(m.value for m in _abrir("ITALIA (selecao)").markdown)
 
 
+def test_link_do_transfermarkt_aparece_para_clube_e_selecao_e_avisa_quando_o_termo_nao_foi_testado(banco):
+    clube = _abrir("ALFA (clube)")
+    marcadores = " ".join(m.value for m in clube.markdown)
+    assert "[buscar no Transfermarkt](https://www.transfermarkt.com.br/schnellsuche/ergebnis/schnellsuche?query=Time+Alfa)" in marcadores
+    assert "O app não coleta nem guarda nada de lá" in marcadores
+    assert any("Este termo não foi testado" in c.value for c in clube.caption)  # Time Alfa não está na lista curada
+
+    selecao = _abrir("ITALIA (selecao)")
+    assert "query=Italia" in " ".join(m.value for m in selecao.markdown)
+
+
 def test_titulos_seguem_a_hierarquia_da_pagina(banco):
     at = _abrir("ALFA (clube)")
     assert [t.value for t in at.title] == ["Ficha do time"]

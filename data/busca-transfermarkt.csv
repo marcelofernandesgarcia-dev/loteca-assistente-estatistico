@@ -1,0 +1,18 @@
+# Termo de busca do Transfermarkt que abre o clube certo, por código de time da CBF. Cada termo foi testado ao vivo em 30/09/2026
+# (o primeiro resultado da busca era o clube). A busca só acerta quando o texto bate com o nome oficial do clube no Transfermarkt
+# ("Ceará SC" acha; "Ceará" não). Clube fora desta lista usa o nome da CBF e o app avisa que o termo não foi verificado.
+# Lista viva: acrescente uma linha por clube, testando a busca antes. O app só monta o link; nada do Transfermarkt é coletado
+# (termos de uso reservam a extração de dados -- ver docs/pesquisa-transfermarkt-30-09-2026.md).
+cod_time;termo;observacao
+20106;Operário Ferroviário;
+20031;Ceará SC;
+20023;Náutico;
+20010;Sport Recife;
+20028;Goiás EC;
+62261;Atlético Goianiense;
+20019;Criciúma EC;
+20058;Avaí FC;
+20032;Clube de Regatas Brasil;
+20800;Cuiabá EC;
+63238;Fortaleza Esporte Clube;
+59896;Athletic Club;O clube de Minas Gerais aparece abaixo do Athletic Bilbao (cerca do 5º resultado)

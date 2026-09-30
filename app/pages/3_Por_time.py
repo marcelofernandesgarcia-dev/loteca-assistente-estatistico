@@ -22,6 +22,7 @@ from stats.cbf import (
     partidas_do_participante,
 )
 from stats.contexto import selo_da_posicao
+from stats.links_externos import link_busca_transfermarkt
 from stats.competicao import (
     aproveitamento_movel,
     carregar_partidas,
@@ -116,6 +117,24 @@ def renderizar_classificacao_oficial(conexao, participante_id, classif):
                 width="stretch",
                 hide_index=True,
             )
+
+
+def mostrar_link_do_elenco(nome: str, cod_time: int | None, classif: dict | None):
+    """Idade e valor de mercado do elenco: só um link de busca no Transfermarkt.
+    Os termos de uso do site reservam a extração de dados, então o app não
+    coleta nada de lá (docs/pesquisa-transfermarkt-30-09-2026.md)."""
+    link = link_busca_transfermarkt(nome, cod_time, classif.get("nome_cbf") if classif else None)
+    st.markdown(
+        f"Elenco (idade e valor de mercado): [buscar no Transfermarkt]({link['url']}) "
+        f"(consulta manual; termo da busca: **{link['termo']}**). O app não coleta nem guarda nada de lá."
+    )
+    if link["observacao"]:
+        st.caption(link["observacao"])
+    if not link["verificado"]:
+        st.caption(
+            "Este termo não foi testado: a busca só acerta quando o texto bate com o nome oficial do clube no "
+            "Transfermarkt. Se não aparecer o clube certo, tente o nome completo (ex.: 'Ceará SC', não 'Ceará')."
+        )
 
 
 def renderizar_resumo_loteca(conexao, participante_id):
@@ -881,6 +900,7 @@ with aba_visao:
         for frase in frases_da_loteca(jogos_loteca, frequencia_participante(conexao, participante_id), frequencia_global(conexao)):
             st.write("- " + frase)
     renderizar_classificacao_oficial(conexao, participante_id, classif)
+    mostrar_link_do_elenco(nomes_participantes[participante_id], cod_time, classif)
 
 with aba_evolucao:
     st.header("Evolução na competição")
