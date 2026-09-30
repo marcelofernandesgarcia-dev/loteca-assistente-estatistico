@@ -281,6 +281,12 @@ PAINEL_RODADA_TESTE_PROJECAO = 19  # rodada de onde se mede quanto a projeção 
 PROJECAO_JOGOS_DE_MEDIA_DA_LIGA = 20
 PAINEL_ANOS_MINIMOS_RETA = 3  # anos com base mínima para desenhar a reta de tendência anual
 
+# Ano em curso (pedido do usuário, 30/09/2026: "sempre visível, como prioridade").
+# Fonte de cada participante, nesta ordem: temporada da CBF do ano, base aberta de
+# seleções (jogos do ano), jogos do ano na grade da Loteca.
+ANO_CURSO_AMOSTRA_PEQUENA = 5  # menos jogos que isso no ano: marcado como amostra pequena
+ANO_CURSO_ULTIMOS = 5  # quantos resultados recentes mostrar (V/E/D)
+
 # Seleções (stats/selecoes.py; P1 da priorização estatística, 30/09/2026).
 # Base aberta de resultados internacionais (licença CC0-1.0), baixada de
 # github.com/martj42/international_results, e a lista curada de nomes.
