@@ -20,7 +20,27 @@ python -m venv .venv
 .venv\Scripts\python -m pip_audit -r requirements.lock
 ```
 
-Rodar a interface (abre no navegador em `http://localhost:8501`), ou dar duplo clique em `iniciar_loteca.bat`:
+### Abrir o aplicativo (uso do dia a dia)
+
+Criar os atalhos uma vez (Área de Trabalho e Menu Iniciar, com ícone; não mexe no registro e não inicia com o Windows):
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts\criar_atalhos.ps1
+```
+
+Depois, é só abrir o atalho **Loteca - Assistente Estatistico**. O lançador (`iniciar.pyw`, regras em `lancador/regras.py`):
+
+1. se o app já está aberto, só abre outra janela dele;
+2. sobe o servidor em segundo plano, **só neste computador** (`127.0.0.1`, porta livre entre 8700 e 8799), sem janela preta;
+3. abre a janela do app (Edge em modo aplicativo, perfil próprio em `%LOCALAPPDATA%\LotecaAssistente`), com "Abrindo…" enquanto o servidor sobe;
+4. se a última tentativa de atualização tem mais de 12 horas, roda `scripts/atualizar_tudo.py` em segundo plano (o app abre na hora com os dados que já tem; sem internet, abre igual). Desligar: variável de ambiente `LOTECA_ATUALIZAR_AO_ABRIR=0`; mudar o intervalo: `LOTECA_HORAS_ENTRE_ATUALIZACOES`;
+5. fechar todas as janelas do app encerra o servidor. Uma atualização em andamento termina sozinha.
+
+Logs em `logs/` (fora do Git, sem dado pessoal): `lancador.log`, `servidor.log`, `atualizacao.log`. Sem o Edge, o app abre no navegador padrão e o servidor só para quando o Windows é encerrado. Para remover: apague os dois atalhos. O ícone é gerado por `scripts/gerar_icone.py`.
+
+`.streamlit/config.toml` fixa o endereço `127.0.0.1` e desliga as estatísticas de uso do Streamlit, para qualquer forma de abrir o app a partir desta pasta (sem ele, o servidor atendia pela rede e enviava estatística de uso -- conferido com `streamlit config show` em 30/09/2026).
+
+Modo de diagnóstico (com janela de console, mostra os erros): duplo clique em `iniciar_loteca.bat`, ou:
 
 ```bash
 .venv\Scripts\streamlit run app/main.py
@@ -62,7 +82,10 @@ Importar histórico completo (opcional — o app já bootstrapa com `data/loteca
 - `stats/analise_palpite.py` — análise do palpite por regra, sem IA: coerência com os dados, zebras (abaixo de `config.ANALISE_LIMIAR_ZEBRA`, 25%), rendimento de duplos e triplos e onde um duplo rende mais, chance do bilhete (Poisson-binomial), jogos sem base própria; depois do resultado, o que cada tipo de marcação acertou e o histórico acumulado em "Meus bilhetes" (taxas só com `config.ANALISE_AMOSTRA_MINIMA` marcações). Ver `docs/estudo-analise-do-palpite.md`.
 - `tests/` — pytest para `stats/`, `externo/`, um teste de integração leve contra a API real e `AppTest` (Streamlit) de todas as páginas, sobre banco sintético -- nenhum toca o `loteca.db` real.
 - `scripts/atualizar_tudo.py` — roda as três fontes numa chamada só; cada uma isolada da outra (falha em uma não impede as demais); grava o resultado em `execucoes` (`db.registrar_execucao`/`db.ultima_execucao_por_fonte`), lido pelo painel "Status dos dados" da página inicial.
-- `iniciar_loteca.bat` — ativa o `.venv` e abre o Streamlit com duplo clique.
+- `iniciar_loteca.bat` — modo de diagnóstico: ativa o `.venv` e abre o Streamlit com janela de console.
+- `iniciar.pyw`, `lancador/` e `scripts/criar_atalhos.ps1` — lançador do dia a dia (ver "Abrir o aplicativo").
+- `stats/ano_em_curso.py` + `app/ano_em_curso_ui.py` — o ano em curso sempre visível (página inicial, Concurso atual antes do volante; o Histórico na Loteca do painel e a Ficha do time abrem no ano em curso). Fonte de cada participante, da mais completa para a mais pobre: classificação da CBF do ano, jogos de seleções do ano na base aberta, jogos do ano na grade da Loteca. É o que aconteceu no ano, não previsão.
+- `stats/versoes_palpite.py` — versões do palpite gravadas no banco (tabela `versoes_palpite`): guardar cada tentativa, comparar (apostas, custo, chance, duplos/triplos, zebras), ver o que mudou, voltar a uma versão e salvar; todo bilhete salvo fica ligado a uma versão. Depois do resultado, "Meus bilhetes" mostra se as mudanças da primeira versão para a que virou bilhete ajudaram (conclusão só com `config.VERSOES_CONCURSOS_MINIMOS` concursos).
 - `scripts/varredura_semanal.py` — ponto de entrada para o Agendador de Tarefas do Windows.
 - `scripts/importar_historico.py` — importa o histórico completo de concursos da CAIXA (1 até o último apurado); retomável, faz backup do banco antes, e roda `unificar_participantes.unificar()` para juntar grafias normalizadas do mesmo time.
 - `config.py` — todos os parâmetros (rate-limit, pesos do ajuste externo, janela de forma, lista de seleções nacionais).

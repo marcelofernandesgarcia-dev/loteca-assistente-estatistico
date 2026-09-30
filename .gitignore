@@ -4,6 +4,7 @@ node_modules/
 dist/
 build/
 *.log
+logs/
 .DS_Store
 __pycache__/
 *.pyc

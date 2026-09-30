@@ -1,0 +1,9 @@
+# Vale para qualquer forma de abrir o app a partir desta pasta (atalho, iniciar_loteca.bat,
+# streamlit run). Conferido com `streamlit config show` em 30/09/2026: sem este arquivo, o
+# endereço fica em branco (o servidor atende pela rede) e as estatísticas de uso são enviadas.
+[server]
+address = "127.0.0.1"
+headless = true
+
+[browser]
+gatherUsageStats = false

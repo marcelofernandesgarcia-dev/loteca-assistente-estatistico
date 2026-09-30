@@ -289,6 +289,20 @@ PAINEL_ANOS_MINIMOS_RETA = 3  # anos com base mínima para desenhar a reta de te
 ANO_CURSO_AMOSTRA_PEQUENA = 5  # menos jogos que isso no ano: marcado como amostra pequena
 ANO_CURSO_ULTIMOS = 5  # quantos resultados recentes mostrar (V/E/D)
 
+# Lançador (iniciar.pyw; plano aprovado em 30/09/2026). As 5 decisões ficaram nas
+# opções recomendadas até o usuário dizer outra coisa: janela própria (Edge em modo
+# aplicativo, sem dependência nova), atualizar ao abrir, só neste computador, ícone
+# simples, não iniciar com o Windows.
+LANCADOR_ENDERECO = "127.0.0.1"  # só este computador: outro aparelho da rede não abre o app
+LANCADOR_PORTAS = (8700, 8799)  # faixa onde procurar porta livre (a 8600 fica para o desenvolvimento)
+LANCADOR_TEMPO_MAX_ESPERA_S = int(os.environ.get("LOTECA_LANCADOR_ESPERA_S", "90"))
+LANCADOR_ATUALIZAR_AO_ABRIR = os.environ.get("LOTECA_ATUALIZAR_AO_ABRIR", "1") == "1"
+LANCADOR_HORAS_ENTRE_ATUALIZACOES = float(os.environ.get("LOTECA_HORAS_ENTRE_ATUALIZACOES", "12"))
+LANCADOR_EDGE = (
+    r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+    r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+)
+
 # Seleções (stats/selecoes.py; P1 da priorização estatística, 30/09/2026).
 # Base aberta de resultados internacionais (licença CC0-1.0), baixada de
 # github.com/martj42/international_results, e a lista curada de nomes.

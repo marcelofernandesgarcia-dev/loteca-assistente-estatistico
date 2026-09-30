@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Abrindo… — Loteca</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+         font-family: "Segoe UI", sans-serif; background: #ffffff; color: #1b1f24; }
+  main { max-width: 32rem; padding: 1.5rem; text-align: center; }
+  h1 { font-size: 1.4rem; margin: 0 0 .75rem; }
+  p { line-height: 1.5; margin: .5rem 0; }
+  .barra { height: 6px; background: #e2e6ee; border-radius: 3px; overflow: hidden; margin: 1rem 0; }
+  .barra span { display: block; height: 100%; width: 30%; background: #1a4fa0; animation: vai 1.2s ease-in-out infinite; }
+  @keyframes vai { from { margin-left: -30%; } to { margin-left: 100%; } }
+  @media (prefers-reduced-motion: reduce) { .barra span { animation: none; width: 100%; } }
+  .erro { color: #b30010; font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Loteca — Assistente Estatístico</h1>
+  <div class="barra" aria-hidden="true"><span></span></div>
+  <p id="estado" role="status" aria-live="polite">Abrindo o aplicativo neste computador…</p>
+</main>
+<script>
+  // Endereço e tempo máximo preenchidos pelo iniciar.pyw.
+  const URL_APP = "__URL__";
+  const LIMITE_MS = __LIMITE_MS__;
+  const inicio = Date.now();
+  function tentar() {
+    // no-cors: basta o servidor responder para a promessa ser resolvida.
+    fetch(URL_APP + "/_stcore/health", { mode: "no-cors", cache: "no-store" })
+      .then(() => location.replace(URL_APP))
+      .catch(() => {
+        if (Date.now() - inicio > LIMITE_MS) {
+          const estado = document.getElementById("estado");
+          estado.className = "erro";
+          estado.textContent = "O aplicativo não respondeu a tempo. Feche esta janela e abra de novo pelo atalho. " +
+            "Se repetir, veja o arquivo logs/lancador.log na pasta do projeto.";
+        } else {
+          setTimeout(tentar, 500);
+        }
+      });
+  }
+  tentar();
+</script>
+</body>
+</html>
