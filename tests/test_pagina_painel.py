@@ -140,6 +140,15 @@ def test_temporadas_passadas_so_aparecem_no_modo_livre_com_o_nome_do_ano(banco):
     assert any("Temporada encerrada" in c.value for c in at.caption) or any("Sem projeção" in i.value for i in at.info)
 
 
+def test_historico_na_loteca_abre_no_ano_em_curso(banco):
+    import datetime as dt
+
+    at = _abrir()
+    ano_esperado = min(dt.date.today().year, 2026)  # 2026 é o último ano com jogo apurado no banco sintético
+    assert at.slider(key="periodo_loteca").value == (ano_esperado, ano_esperado)
+    assert any(f"Mostrando só {ano_esperado} (ano em curso)" in c.value for c in at.caption)
+
+
 def test_frase_de_amostra_pequena():
     assert frase_amostra_pequena([]) is None
     assert frase_amostra_pequena(["GAMA", "BETA"]).endswith("leitura fraca: GAMA, BETA.")

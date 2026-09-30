@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import streamlit as st
+from ano_em_curso_ui import mostrar_ano_em_curso
 from estilo_caixa import renderizar_cartao, renderizar_titulo_cartao
 from util import formatar_data_br, mostrar_aviso_responsabilidade, obter_conexao
 
@@ -20,6 +21,7 @@ from stats.concursos import concurso_a_jogar, ultimo_encerrado as buscar_ultimo_
 from stats.analise_palpite import NOME_CATEGORIA, ZEBRA, analisar_palpite, formatar_uma_em
 from stats.bilhete import montar_bilhete, validar_volante
 from stats.bilhetes_salvos import salvar_bilhete
+from stats.painel import participantes_do_concurso
 from stats.percentual import origem_do_percentual
 from stats.prazo import formatar_restante, situacao_do_prazo
 from stats.temporada import desempenho_no_ano, resumo_curto
@@ -310,6 +312,12 @@ else:
         st.caption("Sem varredura de notícias para este concurso: os percentuais são só o histórico.")
     mostrar_motivos_do_ajuste(jogos_vigente, calculos)
     mostrar_noticias_de_contexto(jogos_vigente, ajustes)
+
+    # Ano em curso sempre visível, logo antes do volante (pedido do usuário,
+    # 30/09/2026): quem marca vê primeiro como cada time está indo no ano.
+    st.markdown(renderizar_titulo_cartao(f"Ano em curso ({ano_atual}) -- concurso {numero_vigente}"), unsafe_allow_html=True)
+    mostrar_ano_em_curso(conexao, participantes_do_concurso(conexao, numero_vigente), ano_atual, "concurso",
+                         com_grafico=False)
 
     # Card 3 -- volante: 3 quadrados por jogo (1, X, 2), como o volante da
     # CAIXA. Começa em branco (pedido do usuário, 29/09/2026); a sugestão do

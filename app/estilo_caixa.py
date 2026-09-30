@@ -77,3 +77,18 @@ def renderizar_cartao(titulo: str, linhas: list[dict], titulo_destaque: str = "d
         + f"<tbody>{''.join(corpo)}</tbody></table></div></div>"
     )
     return html
+
+
+def renderizar_tabela(titulo: str, cabecalhos: list[str], linhas: list[list[str]]) -> str:
+    """Tabela genérica no mesmo card (cabeçalho com scope, rolagem própria no
+    celular). As células já chegam escapadas: quem chama é responsável por
+    `html.escape` em texto vindo de dado."""
+    cabeca = "".join(f'<th scope="col">{c}</th>' for c in cabecalhos)
+    corpo = "".join("<tr>" + "".join(f"<td>{celula}</td>" for celula in linha) + "</tr>" for linha in linhas)
+    return (
+        _CSS
+        + '<div class="loteca-card">'
+        + f'<div class="loteca-titulo">{titulo}</div>'
+        + f'<div class="loteca-rolagem"><table><thead><tr>{cabeca}</tr></thead>'
+        + f"<tbody>{corpo}</tbody></table></div></div>"
+    )

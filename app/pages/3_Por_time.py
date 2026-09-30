@@ -205,7 +205,12 @@ def renderizar_aba_loteca(conexao, participante_id):
     ]
 
     col_f1, col_f2, col_f3 = st.columns(3)
-    ano_escolhido = col_f1.selectbox("Ano", ["Todos"] + anos_disponiveis)
+    # Começa no ano em curso quando o time tem jogo nele (pedido do usuário, 30/09/2026).
+    opcoes_ano = ["Todos"] + anos_disponiveis
+    ano_corrente = str(dt.date.today().year)
+    ano_escolhido = col_f1.selectbox(
+        "Ano", opcoes_ano, index=opcoes_ano.index(ano_corrente) if ano_corrente in opcoes_ano else 0
+    )
     campeonato_escolhido = col_f2.selectbox("Campeonato", ["Todos"] + campeonatos_disponiveis)
     mando_escolhido = col_f3.selectbox("Mando", ["Ambos", "Só em casa", "Só fora"])
 

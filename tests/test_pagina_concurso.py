@@ -112,6 +112,17 @@ def _quadrados(at: AppTest) -> list:
     return [c for c in at.checkbox if c.key and c.key.startswith("volante_9002_")]
 
 
+def test_ano_em_curso_fica_visivel_antes_do_volante(banco):
+    import datetime as dt
+
+    at = _abrir()
+    textos = [m.value for m in at.markdown]
+    posicao_ano = next(i for i, t in enumerate(textos) if f"Ano em curso ({dt.date.today().year})" in t)
+    posicao_volante = next(i for i, t in enumerate(textos) if "3. Seu palpite -- concurso 9002" in t)
+    assert posicao_ano < posicao_volante
+    assert any(f"Jogo a jogo em {dt.date.today().year}" in t for t in textos)
+
+
 def test_volante_tem_3_quadrados_por_jogo_e_comeca_em_branco(banco):
     at = _abrir()
     quadrados = _quadrados(at)

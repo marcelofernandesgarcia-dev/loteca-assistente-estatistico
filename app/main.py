@@ -1,9 +1,15 @@
 import datetime as dt
 
 import streamlit as st
+from ano_em_curso_ui import mostrar_ano_em_curso, resumo_do_ano
 from util import mostrar_aviso_responsabilidade, obter_conexao
 
+import config
 import db
+from stats.ano_em_curso import cobertura
+from stats.concursos import concurso_a_jogar
+from stats.painel import participantes_do_concurso
+from stats.prazo import formatar_restante, situacao_do_prazo
 
 NOMES_FONTE = {"caixa": "CAIXA (concursos e programação)", "cbf": "CBF (classificação e jogos)", "noticias": "Notícias (ajuste externo)"}
 IDADE_ALERTA_HORAS = {"caixa": 24, "cbf": 7 * 24, "noticias": 8 * 24}
@@ -20,6 +26,31 @@ st.write(
 mostrar_aviso_responsabilidade()
 
 conexao = obter_conexao()
+
+# Ano em curso em primeiro lugar (pedido do usuário, 30/09/2026: "impacto visual importante").
+ano_atual = dt.date.today().year
+a_jogar = concurso_a_jogar(conexao)
+st.header(f"Ano em curso ({ano_atual})")
+if not a_jogar:
+    st.info("Nenhum concurso a jogar no banco. Use 'Atualizar dados da CAIXA' na página 'Concurso atual'.")
+else:
+    jogos_do_concurso = participantes_do_concurso(conexao, a_jogar["numero"])
+    resumo_ano = resumo_do_ano(conexao, jogos_do_concurso, ano_atual)
+    cob = cobertura(resumo_ano)
+    prazo = situacao_do_prazo(a_jogar["data_limite_aposta"], a_jogar["horario_fim_apostas"])
+    with st.container(horizontal=True, wrap=True):
+        st.metric("Concurso a jogar", a_jogar["numero"], border=True)
+        st.metric(
+            "Apostas", formatar_restante(prazo["restante"]) if prazo["limite"] else "prazo não informado",
+            help="Tempo até o fim das apostas." + ("" if prazo["exato"] else " Prazo aproximado: horário não informado."),
+            border=True,
+        )
+        st.metric(f"Participantes com dado de {ano_atual}", f"{cob['com_dado']} de {cob['total']}", border=True)
+        st.metric("Com amostra pequena no ano", cob["amostra_pequena"],
+                  help=f"Menos de {config.ANO_CURSO_AMOSTRA_PEQUENA} jogos no ano: leitura fraca.", border=True)
+    mostrar_ano_em_curso(conexao, jogos_do_concurso, ano_atual, "inicio", resumo=resumo_ano)
+
+st.subheader("Base de dados")
 total_concursos = conexao.execute("SELECT COUNT(*) AS n FROM concursos").fetchone()["n"]
 total_jogos = conexao.execute("SELECT COUNT(*) AS n FROM jogos").fetchone()["n"]
 total_valorfinal = conexao.execute("SELECT COUNT(*) AS n FROM historico_valorfinal").fetchone()["n"]

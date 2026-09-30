@@ -1,6 +1,7 @@
 """Painel comparativo de times e seleções (Fase Q5; plano v2 aprovado em
 29/09/2026 -- docs/plano-dashboard-q5.md). Só apresentação: as contas estão em
 stats/painel.py e stats/competicao.py."""
+import datetime as dt
 import html
 import sys
 from pathlib import Path
@@ -600,7 +601,16 @@ def aba_loteca(conexao, jogos_concurso: list[dict], numero_concurso: int | None)
         st.info("Ainda não há jogos apurados no banco.")
         return
     primeiro, ultimo = int(anos[0]), int(anos[1])
-    escolha = st.slider("Período", min_value=primeiro, max_value=ultimo, value=(primeiro, ultimo), key="periodo_loteca")
+    # Período padrão = ano em curso (decisão do usuário, 30/09/2026); o histórico inteiro
+    # continua a um arraste do controle. Sem jogo apurado no ano, cai no último ano com jogo.
+    ano_padrao = dt.date.today().year if primeiro <= dt.date.today().year <= ultimo else ultimo
+    escolha = st.slider("Período", min_value=primeiro, max_value=ultimo, value=(ano_padrao, ano_padrao),
+                        key="periodo_loteca")
+    if escolha == (ano_padrao, ano_padrao):
+        st.caption(
+            f"Mostrando só {ano_padrao} (ano em curso). Poucos jogos no ano caem na grade da Loteca: para comparar "
+            f"com o histórico, arraste o início do período até {primeiro}."
+        )
     periodo = (None, None) if escolha == (primeiro, ultimo) else escolha
     modo = st.radio(
         "Quem analisar", ["Todos os participantes do concurso a jogar", "Escolher livremente"], horizontal=True,
