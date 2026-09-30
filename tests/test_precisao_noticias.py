@@ -22,7 +22,31 @@ CASOS = [
     ("Zagueiro do Clube Alfa é liberado pelo departamento médico", False, "negação: liberado"),
     ("Atacante do Clube Beta está lesionado e desfalca o time", False, "outro participante, não o Clube Alfa"),
     ("Clube Alfa confirma treino aberto neste sábado", False, "sem palavra-chave"),
+    # Fase Q1 (30/09/2026): sinais informativos, mesmas barreiras.
+    ("Clube Alfa contrata meia para a sequência da Série B", True, "contratação"),
+    ("Clube Alfa demite técnico após derrota em casa", True, "troca de técnico"),
+    ("Jogadores do Clube Alfa cobram salários atrasados", True, "atraso de salário"),
+    ("Zagueiro rescinde com o Clube Alfa e deixa o clube", True, "saída de jogador"),
+    ("Clube Alfa desmente contratação de atacante", False, "negação: desmente"),
+    ("Clube Alfa mantém o técnico mesmo após a derrota", False, "negação: mantém o técnico"),
+    ("Clube Alfa quita salários atrasados do elenco", False, "negação: quita salários"),
+    ("Clube Beta contrata meia do futebol paulista", False, "contratação de outro participante"),
+    # Barreira 3 e "ex-", a partir da leitura de teste com notícia real (30/09/2026).
+    ("Jogadoras do Clube Alfa cobram salários atrasados", False, "futebol feminino, não o time da Loteca"),
+    ("Clube Alfa anuncia novo técnico do futebol feminino", False, "futebol feminino"),
+    ("Atacante do sub-20 do Clube Alfa está lesionado", False, "categoria de base: não mexe no percentual"),
+    ("Time Gama anuncia contratação de goleiro ex-Alfa", False, "ex-Alfa: jogador que já saiu do clube"),
+    ("Ex-técnico do Clube Beta é o novo técnico do Clube Alfa", True, "'ex-técnico' não apaga a menção ao Alfa"),
+    ("Clube Beta tem cinco desfalques diante do Clube Alfa", False, "Alfa é o adversário: desfalque é do Beta"),
+    ("Com reforço na zaga, Clube Beta embarca para enfrentar o Clube Alfa", False, "Alfa é o adversário"),
+    ("Clube Alfa tem desfalques contra o Clube Beta", True, "Alfa é o assunto; Beta, o adversário"),
 ]
+
+
+def test_desfalque_diante_do_adversario_fica_so_com_quem_tem_o_desfalque():
+    titulo = [{"titulo": "Escalação: Clube Beta tem cinco desfalques diante do Clube Alfa", "fonte": "X"}]
+    assert not extrair_sinais(titulo, participante_nome="CLUBE ALFA")
+    assert {s["sinal"] for s in extrair_sinais(titulo, participante_nome="CLUBE BETA")} == {"desfalque_multiplo"}
 
 
 @pytest.mark.parametrize("titulo,deve_gerar_sinal,motivo", CASOS)
@@ -34,8 +58,22 @@ def test_caso_rotulado(titulo, deve_gerar_sinal, motivo):
         assert not sinais, motivo
 
 
+@pytest.mark.parametrize(
+    "titulo,sinal",
+    [
+        ("Clube Alfa contrata meia para a sequência da Série B", "contratacao"),
+        ("Clube Alfa demite técnico após derrota em casa", "troca_de_tecnico"),
+        ("Jogadores do Clube Alfa cobram salários atrasados", "atraso_salarial"),
+        ("Zagueiro rescinde com o Clube Alfa e deixa o clube", "saida_de_jogador"),
+    ],
+)
+def test_sinais_informativos_recebem_o_tipo_certo(titulo, sinal):
+    sinais = extrair_sinais([{"titulo": titulo, "fonte": "Veículo de teste"}], participante_nome=PARTICIPANTE)
+    assert {s["sinal"] for s in sinais} == {sinal}
+
+
 def test_precisao_no_conjunto_rotulado_e_100_por_cento():
-    """Nenhum falso positivo nem falso negativo nos 8 casos acima -- conjunto
+    """Nenhum falso positivo nem falso negativo nos casos acima -- conjunto
     pequeno e desenhado para cobrir os riscos que motivaram o C2, não uma
     amostra representativa de notícia real."""
     acertos = 0

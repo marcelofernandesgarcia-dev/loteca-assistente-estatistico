@@ -8,13 +8,25 @@ ajuste nunca dominar o percentual histórico.
 import config
 
 
+def _parte_do_resumo(tipo: str) -> str:
+    if tipo in config.AJUSTE_EXTERNO_SINAIS_INFORMATIVOS:
+        return f"{tipo} (informativo)"
+    return f"{tipo} ({config.AJUSTE_EXTERNO_PESOS.get(tipo, 0.0):+.1f})"
+
+
 def calcular_ajuste(sinais: list[dict]) -> dict:
+    """Sinais informativos (config.AJUSTE_EXTERNO_SINAIS_INFORMATIVOS) entram no
+    resumo, mas nunca na soma: não têm peso até a Fase Q4 medir o efeito."""
     tipos_encontrados = {sinal["sinal"] for sinal in sinais}
-    soma = sum(config.AJUSTE_EXTERNO_PESOS.get(tipo, 0.0) for tipo in tipos_encontrados)
+    soma = sum(
+        config.AJUSTE_EXTERNO_PESOS.get(tipo, 0.0)
+        for tipo in tipos_encontrados
+        if tipo not in config.AJUSTE_EXTERNO_SINAIS_INFORMATIVOS
+    )
     teto = config.AJUSTE_EXTERNO_TETO_PONTOS
     ajuste_limitado = max(-teto, min(teto, soma))
 
-    resumo_partes = [f"{tipo} ({config.AJUSTE_EXTERNO_PESOS.get(tipo, 0.0):+.1f})" for tipo in sorted(tipos_encontrados)]
+    resumo_partes = [_parte_do_resumo(tipo) for tipo in sorted(tipos_encontrados)]
     return {
         "ajuste_aplicado": ajuste_limitado,
         "soma_antes_do_teto": soma,
@@ -39,6 +51,14 @@ def montar_evidencias(sinais: list[dict]) -> list[dict]:
             }
         )
     return saida
+
+
+def evidencias_informativas(evidencias: list[dict]) -> list[dict]:
+    """Só as manchetes de sinais informativos (contratação, saída, técnico,
+    salário), com o nome legível do sinal -- para a tela mostrar como
+    contexto, separado do que mexe no percentual."""
+    nomes = config.AJUSTE_EXTERNO_SINAIS_INFORMATIVOS
+    return [{**e, "nome_sinal": nomes[e["sinal"]]} for e in evidencias if e.get("sinal") in nomes]
 
 
 def aplicar_ajuste(historico: dict, ajuste_casa: float, ajuste_fora: float) -> dict:

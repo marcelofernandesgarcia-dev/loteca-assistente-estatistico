@@ -10,8 +10,18 @@ Duas barreiras contra falso positivo, adicionadas depois de revisão externa
 1. o nome do participante precisa aparecer no título -- corta notícia do
    adversário ou de outro assunto que só bateu na busca por coincidência;
 2. título com expressão de negação/recuperação (config.VARREDURA_PALAVRAS_DE_NEGACAO)
-   é descartado inteiro -- "sem lesão" não vira sinal de lesão.
+   é descartado inteiro -- "sem lesão" não vira sinal de lesão;
+3. título sobre outra equipe do clube (feminino, base, futsal --
+   config.VARREDURA_PALAVRAS_DE_OUTRA_EQUIPE) é descartado inteiro.
+
+Medido com notícia real em 30/09/2026: nome logo depois de "diante do",
+"contra o", "enfrentar o", "visita o", "recebe o" é tratado como adversário
+e não conta como menção. Limitações que continuam: adversário citado de
+outro jeito ("Atlético-GO x Goiás: ... salários atrasados do rival",
+"Craque do adversário do Clube Alfa é suspenso") e clube homônimo
+(Botafogo-RJ na busca pelo Botafogo-SP).
 """
+import re
 import unicodedata
 
 import config
@@ -28,11 +38,25 @@ def _normalizar(texto: str) -> str:
     return sem_acento.lower()
 
 
+_EX_CLUBE = re.compile(r"\bex[- ]\S+")
+# Nome logo depois destas expressões é o ADVERSÁRIO da frase, não o assunto:
+# "Ceará tem cinco desfalques diante do Operário-PR" é notícia do Ceará.
+# Achado com notícia real em 30/09/2026 (virava desfalque do Operário, com
+# peso). "para o" ficou de fora de propósito: "reforço para o X" é do X.
+_COMO_ADVERSARIO = re.compile(
+    r"\b(?:diante|contra|enfrentar|enfrenta|enfrentam|visita|visitar|recebe|receber)"
+    r"\s+(?:d?[oa]s?\s+)?\S+(?:\s+\S+)?"
+)
+
+
 def _menciona_participante(titulo_normalizado: str, participante_normalizado: str) -> bool:
     """Ao menos um token relevante do nome do participante precisa aparecer no
     título. Tokens curtos e conectivos são ignorados para não exigir demais de
     nomes compostos ('CLUBE DE REGATAS X') -- mas siglas curtas (ex. 'CRB')
-    usam o nome inteiro, já que não sobra token longo para checar."""
+    usam o nome inteiro, já que não sobra token longo para checar.
+    "ex-Botafogo" não conta como menção: fala de quem JÁ SAIU do clube
+    (achado com notícia real em 30/09/2026)."""
+    titulo_normalizado = _COMO_ADVERSARIO.sub(" ", _EX_CLUBE.sub(" ", titulo_normalizado))
     tokens = [t for t in participante_normalizado.split() if len(t) >= 4 and t not in _CONECTIVOS]
     if not tokens:
         return participante_normalizado in titulo_normalizado
@@ -48,6 +72,7 @@ def extrair_sinais(noticias: list[dict], participante_nome: str | None = None) -
     recomendado -- só fica opcional para não quebrar chamada antiga sem esse dado."""
     participante_normalizado = _normalizar(participante_nome) if participante_nome else None
     negacoes_normalizadas = [_normalizar(frase) for frase in config.VARREDURA_PALAVRAS_DE_NEGACAO]
+    outra_equipe_normalizadas = [_normalizar(frase) for frase in config.VARREDURA_PALAVRAS_DE_OUTRA_EQUIPE]
 
     sinais = []
     for noticia in noticias:
@@ -56,6 +81,8 @@ def extrair_sinais(noticias: list[dict], participante_nome: str | None = None) -
             continue
         if any(negacao in titulo_normalizado for negacao in negacoes_normalizadas):
             continue
+        if any(outra in titulo_normalizado for outra in outra_equipe_normalizadas):
+            continue  # feminino, base, futsal: não é o time da Loteca (barreira 3)
         for palavra, tipo_sinal in config.VARREDURA_PALAVRAS_CHAVE_PARA_SINAL.items():
             if _normalizar(palavra) in titulo_normalizado:
                 sinais.append(

@@ -11,6 +11,7 @@ from estilo_caixa import renderizar_cartao, renderizar_titulo_cartao
 from util import formatar_data_br, mostrar_aviso_responsabilidade, obter_conexao
 
 import config
+from externo.ajuste import evidencias_informativas
 from externo.percentual_final import ajustes_do_concurso, percentuais_do_jogo
 from importer.caixa_client import ErroImportacaoLoteca, importar_concurso, importar_programacao
 from stats.cbf import classificacao_do_participante, resumo_curto_cbf
@@ -92,6 +93,32 @@ def mostrar_motivos_do_ajuste(jogos, calculos):
                     linha += f" — publicada em {quando}" if quando else ""
                     linha += f" — [abrir]({link})" if link else ""
                     st.markdown(linha)
+
+def mostrar_noticias_de_contexto(jogos, ajustes):
+    """Contratação, saída, troca de técnico e atraso de salário: aparecem como
+    contexto, com manchete e link, mas não mexem no percentual (Fase Q1)."""
+    linhas = []
+    for j in jogos:
+        for participante_id, nome in ((j["casa_id"], j["casa"]), (j["fora_id"], j["fora"])):
+            registro = ajustes.get(participante_id)
+            for evidencia in evidencias_informativas(registro["evidencias"] if registro else []):
+                link = _link_seguro(evidencia.get("url", ""))
+                veiculo = _texto_seguro(evidencia.get("fonte", "")) or "veículo não informado"
+                quando = _data_publicacao_br(evidencia.get("publicado_em", ""))
+                linha = f"- **{nome}** · {evidencia['nome_sinal']}: «{_texto_seguro(evidencia.get('manchete', ''))}» — {veiculo}"
+                linha += f" — publicada em {quando}" if quando else ""
+                linha += f" — [abrir]({link})" if link else ""
+                linhas.append(linha)
+    if not linhas:
+        return
+    with st.expander(f"Notícias de contexto: contratações, saídas, técnico e salários ({len(linhas)})"):
+        st.caption(
+            "Estas notícias NÃO mexem no percentual: ainda não foi medido se esses fatos costumam melhorar ou piorar "
+            "o desempenho (isso é a Fase Q4). Servem para você considerar na sua marcação."
+        )
+        for linha in linhas:
+            st.markdown(linha)
+
 
 def _celula(texto: str) -> str:
     """Texto de fora (nome de time) seguro dentro da tabela HTML."""
@@ -282,6 +309,7 @@ else:
     else:
         st.caption("Sem varredura de notícias para este concurso: os percentuais são só o histórico.")
     mostrar_motivos_do_ajuste(jogos_vigente, calculos)
+    mostrar_noticias_de_contexto(jogos_vigente, ajustes)
 
     # Card 3 -- volante: 3 quadrados por jogo (1, X, 2), como o volante da
     # CAIXA. Começa em branco (pedido do usuário, 29/09/2026); a sugestão do

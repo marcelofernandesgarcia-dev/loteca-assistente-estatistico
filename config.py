@@ -109,6 +109,44 @@ VARREDURA_PALAVRAS_CHAVE_PARA_SINAL = {
     "sequência invicta": "sequencia_invicta_destacada",
     "sequência negativa": "sequencia_negativa_destacada",
     "sem vencer": "sequencia_negativa_destacada",
+    # Fase Q1 (30/09/2026): sinais INFORMATIVOS -- ver AJUSTE_EXTERNO_SINAIS_INFORMATIVOS.
+    "contrata": "contratacao",
+    "reforço": "contratacao",
+    "acerta com": "contratacao",
+    "anuncia a chegada": "contratacao",
+    "deixa o clube": "saida_de_jogador",
+    "rescinde": "saida_de_jogador",
+    "rescisão": "saida_de_jogador",
+    "é vendido": "saida_de_jogador",
+    "negociado com": "saida_de_jogador",  # "emprestado" ficou de fora: vale para chegada e para saída
+    "demite": "troca_de_tecnico",
+    "demitido": "troca_de_tecnico",
+    "novo técnico": "troca_de_tecnico",
+    "novo treinador": "troca_de_tecnico",
+    "técnico interino": "troca_de_tecnico",
+    "treinador interino": "troca_de_tecnico",
+    "deixa o comando": "troca_de_tecnico",
+    "salários atrasados": "atraso_salarial",
+    "salário atrasado": "atraso_salarial",
+    "salários em atraso": "atraso_salarial",
+    "atraso salarial": "atraso_salarial",
+    "atraso de salário": "atraso_salarial",
+    "atraso nos salários": "atraso_salarial",
+    "crise financeira": "atraso_salarial",
+    "transfer ban": "atraso_salarial",
+    "impedido de registrar": "atraso_salarial",
+}
+
+# Sinais que entram só como INFORMAÇÃO: aparecem na tela com manchete e link,
+# mas não mexem no percentual (peso zero). Ninguém mediu ainda para que lado
+# eles puxam o resultado (técnico novo às vezes melhora, às vezes piora); dar
+# um peso agora seria inventar número. A Fase Q4 mede a associação com o
+# desempenho seguinte antes de qualquer peso (decisão de 30/09/2026).
+AJUSTE_EXTERNO_SINAIS_INFORMATIVOS = {
+    "contratacao": "Contratação",
+    "saida_de_jogador": "Saída de jogador",
+    "troca_de_tecnico": "Troca de técnico",
+    "atraso_salarial": "Atraso de salário ou crise financeira",
 }
 
 # Se qualquer uma dessas expressões aparece no título, a notícia inteira é
@@ -123,6 +161,22 @@ VARREDURA_PALAVRAS_DE_NEGACAO = (
     "liberada", "reintegrado", "reintegrada", "treina normalmente",
     "treinou normalmente", "nao e duvida", "não é dúvida", "descarta lesao",
     "descarta lesão", "fora de duvida", "fora de dúvida",
+    # Fase Q1: negam ou desfazem contratação, saída, troca de técnico ou atraso.
+    # Só expressões longas: "nega" sozinho bateria em "negativa".
+    "desmente", "nega a contratação", "nega contratação", "descarta a contratação",
+    "descarta contratação", "nega interesse", "descarta saída", "nega saída",
+    "segue no clube", "permanece no clube", "fica no clube", "mantém o técnico",
+    "mantém técnico", "salários em dia", "quita salários", "quita os salários",
+    "paga os salários",
+)
+
+# Manchete sobre OUTRA equipe do mesmo clube é descartada inteira: a Loteca
+# usa o futebol profissional masculino. Achado na leitura de teste com
+# notícia real (30/09/2026): "jogadoras do Ceará paralisam treinos" e "novo
+# técnico do futebol feminino do Sport" viravam sinal do time da Loteca.
+VARREDURA_PALAVRAS_DE_OUTRA_EQUIPE = (
+    "feminino", "feminina", "jogadoras", "sub-20", "sub-17", "sub-23", "sub 20",
+    "sub 17", "categorias de base", "futsal", "futebol de areia", "e-sports", "esports",
 )
 
 # Sugestão de marcação (seco/duplo/triplo) -- ver stats/sugestao.py sobre

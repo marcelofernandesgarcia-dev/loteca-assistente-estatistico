@@ -22,6 +22,40 @@ def test_ajuste_e_zero_sem_sinais():
     assert "nenhum sinal" in resultado["resumo"]
 
 
+def test_sinal_informativo_aparece_no_resumo_mas_nao_mexe_no_ajuste():
+    sinais = [
+        {"sinal": "contratacao", "evidencia": "", "fonte": ""},
+        {"sinal": "troca_de_tecnico", "evidencia": "", "fonte": ""},
+        {"sinal": "lesao_titular", "evidencia": "", "fonte": ""},
+    ]
+    resultado = calcular_ajuste(sinais)
+    assert resultado["ajuste_aplicado"] == config.AJUSTE_EXTERNO_PESOS["lesao_titular"]  # só a lesão pesa
+    assert "contratacao (informativo)" in resultado["resumo"] and "troca_de_tecnico (informativo)" in resultado["resumo"]
+
+
+def test_so_sinal_informativo_da_ajuste_zero():
+    assert calcular_ajuste([{"sinal": "atraso_salarial", "evidencia": "", "fonte": ""}])["ajuste_aplicado"] == 0.0
+
+
+def test_evidencias_informativas_separa_contexto_do_que_pesa():
+    from externo.ajuste import evidencias_informativas
+
+    evidencias = [
+        {"sinal": "lesao_titular", "manchete": "A"},
+        {"sinal": "contratacao", "manchete": "B"},
+        {"sinal": "saida_de_jogador", "manchete": "C"},
+    ]
+    assert [(e["manchete"], e["nome_sinal"]) for e in evidencias_informativas(evidencias)] == [
+        ("B", "Contratação"), ("C", "Saída de jogador"),
+    ]
+
+
+def test_todo_sinal_das_palavras_chave_tem_peso_ou_e_informativo():
+    """Nenhuma palavra-chave pode apontar para um sinal sem destino definido."""
+    for sinal in set(config.VARREDURA_PALAVRAS_CHAVE_PARA_SINAL.values()):
+        assert (sinal in config.AJUSTE_EXTERNO_PESOS) != (sinal in config.AJUSTE_EXTERNO_SINAIS_INFORMATIVOS), sinal
+
+
 def test_ajuste_respeita_o_teto():
     sinais = [
         {"sinal": "lesao_titular", "evidencia": "", "fonte": ""},

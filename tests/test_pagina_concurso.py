@@ -89,6 +89,23 @@ def test_sem_varredura_mostra_so_o_historico_e_sem_expansor(banco):
     assert "(-" not in _cartao_2(at) and "(+" not in _cartao_2(at)
 
 
+def test_noticias_de_contexto_aparecem_separadas_e_nao_mexem_no_percentual(banco):
+    with db.sessao() as c:
+        beta = c.execute("SELECT id FROM participantes WHERE nome = 'BETA'").fetchone()[0]
+        evidencia = [{"sinal": "contratacao", "manchete": "Beta contrata meia", "fonte": "Veículo Teste",
+                      "url": "https://exemplo.test/contratacao"}]
+        c.execute(
+            "INSERT INTO fatores_externos (participante_id, concurso_numero, coletado_em, resumo, ajuste_aplicado, evidencias)"
+            " VALUES (?, 9002, '2026-09-24T10:00:00', 'contratacao (informativo)', 0.0, ?)",
+            (beta, json.dumps(evidencia, ensure_ascii=False)),
+        )
+    at = _abrir()
+    expansor = next(e for e in at.expander if e.label.startswith("Notícias de contexto"))
+    texto = " ".join(m.value for m in expansor.markdown)
+    assert "BETA** · Contratação: «Beta contrata meia»" in texto and "[abrir](https://exemplo.test/contratacao)" in texto
+    assert "NÃO mexem no percentual" in " ".join(c.value for c in expansor.caption)
+
+
 # --- Card 3: volante com 3 quadrados por jogo ---
 
 def _quadrados(at: AppTest) -> list:
