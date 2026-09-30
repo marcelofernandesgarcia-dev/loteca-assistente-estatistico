@@ -2,7 +2,7 @@
 
 **Pedido do usuário:** "Estude a possibilidade de sugerir melhorias de sugestões de alterações em jogos mais complexos." **Decisão do usuário:** estudar e testar antes de mostrar qualquer sugestão na tela.
 
-**Situação:** estudo concluído. **Nada foi para a tela.** As recomendações do fim dependem da sua decisão.
+**Situação:** estudo concluído em 30/09/2026. **As 5 recomendações do fim foram aprovadas pelo usuário na mesma data e implementadas** (ver "Implementação" no fim). O lançador também foi confirmado nas opções recomendadas.
 
 Código: `stats/otimizacao_bilhete.py` (E1 a E3), `stats/estudo_sugestoes.py` e `scripts/estudo_sugestoes.py` (E4). Números brutos: `docs/estudo-sugestoes-resultado.json`. Para reproduzir: `.venv\Scripts\python scripts\estudo_sugestoes.py` (só leitura do banco, cerca de 4 segundos).
 
@@ -99,3 +99,13 @@ Não houve teste próprio: é o mesmo raciocínio do E2 no sentido contrário. T
 3. **Corrigir a "chance de acertar" mostrada hoje (achado 4).** Ao lado do "1 em X", mostrar o que aconteceu de fato com bilhetes do mesmo custo nos concursos testados. Exemplo: "com R$ 24, 13 ou mais em 2 de 1.127 concursos; 14 em nenhum". Ou trocar o número pela frequência observada. É uma correção de algo que já está na tela, por isso precisa da sua decisão.
 4. **Economia (E3)** entra junto com a recomendação 2, como leitura: "se quiser gastar menos, o duplo que menos rende é o do jogo X".
 5. **Medir o seu comportamento real** assim que houver bilhetes e versões salvas. Este teste usou um bilhete simulado; as versões gravadas no banco vão permitir medir as suas mudanças de verdade (etapa 2).
+
+## Implementação (30/09/2026, depois da aprovação)
+
+1. **Complexidade de cada jogo:** coluna "Complexidade do jogo" (nível e motivos) no quadro do ano em curso da página "Concurso atual" e na tabela da "Análise do seu palpite". O sinal "vai pior no ano em curso" só entra quando as duas partes têm dado da mesma fonte e sem amostra pequena (`stats/sugestoes_bilhete.melhor_no_ano`). Uma legenda traz o que o teste mediu (cerca de 50%, 44% e 37% de acerto do favorito).
+2. **Sugestões de alteração pelo mesmo custo** (`stats/sugestoes_bilhete.py`): até 3 trocas de um passo, cada uma só com o mesmo número de apostas e a mesma quantidade de duplos e triplos (conferido no código; uma sugestão que mude o custo é descartada). Mais uma linha quando há jogo marcado contra o favorito dos dados. O efeito medido aparece ao lado, e só quando há alteração sugerida.
+3. **Chance mostrada corrigida** (`stats/calibracao_bilhete.py`): os rótulos viraram "(pelos percentuais)" e, ao lado, vem o que aconteceu de fato com bilhetes do mesmo custo nos concursos passados, calculado a partir do banco e atualizado quando entra concurso novo. Com menos de `config.CALIBRACAO_MIN_CONCURSOS` (200) concursos, a tela diz que não há base suficiente. A tabela de versões ganhou uma legenda no mesmo sentido.
+4. **Economia:** até 2 leituras "se quiser gastar menos", ordenadas pela menor perda de chance por real.
+5. **Comportamento real:** as versões gravadas no banco alimentam "Minhas versões: as mudanças ajudaram?" em "Meus bilhetes", que só tira conclusão com `config.VERSOES_CONCURSOS_MINIMOS` (10) concursos.
+
+Limitações mantidas: o teste usa o modelo histórico dos clubes (sem o Elo das seleções nem as notícias), e a sugestão do próprio app continua em no máximo um duplo ou um triplo. "Onde um duplo rende mais" continua existindo e agora avisa que aumenta o custo.

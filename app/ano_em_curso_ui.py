@@ -69,14 +69,19 @@ def _celula_diferenca(jogo: dict) -> str:
     return texto + (f"<br><small>{', '.join(avisos)}: comparação frágil</small>" if avisos else "")
 
 
-def tabela_jogo_a_jogo(resumo: list[dict], ano: int) -> str:
+def tabela_jogo_a_jogo(resumo: list[dict], ano: int, complexidade: dict[int, str] | None = None) -> str:
+    """`complexidade`: {num_jogo: HTML seguro da célula} (app/sugestoes_ui.texto_da_complexidade);
+    sem ele a coluna não aparece."""
+    cabecalhos = ["Jogo", "Mandante no ano", "Visitante no ano", "Quem vai melhor no ano"]
     linhas = [
         [str(j["num_jogo"]), _celula_lado(j["casa"]), _celula_lado(j["fora"]), _celula_diferenca(j)]
         for j in resumo
     ]
-    return renderizar_tabela(
-        f"Jogo a jogo em {ano}", ["Jogo", "Mandante no ano", "Visitante no ano", "Quem vai melhor no ano"], linhas
-    )
+    if complexidade:
+        cabecalhos.append("Complexidade do jogo")
+        for linha, j in zip(linhas, resumo):
+            linha.append(complexidade.get(j["num_jogo"], "-"))
+    return renderizar_tabela(f"Jogo a jogo em {ano}", cabecalhos, linhas)
 
 
 def grafico_aproveitamento(resumo: list[dict], ano: int) -> go.Figure | None:
@@ -105,7 +110,7 @@ def grafico_aproveitamento(resumo: list[dict], ano: int) -> go.Figure | None:
 
 
 def mostrar_ano_em_curso(conexao, jogos: list[dict], ano: int, chave: str, com_grafico: bool = True,
-                         resumo: list[dict] | None = None) -> list[dict]:
+                         resumo: list[dict] | None = None, complexidade: dict[int, str] | None = None) -> list[dict]:
     """Bloco completo: números de cobertura, gráfico e jogo a jogo. Devolve o resumo
     (passe `resumo` se ele já foi calculado, para não repetir a conta)."""
     resumo = resumo if resumo is not None else resumo_do_ano(conexao, jogos, ano)
@@ -119,5 +124,5 @@ def mostrar_ano_em_curso(conexao, jogos: list[dict], ano: int, chave: str, com_g
         figura = grafico_aproveitamento(resumo, ano)
         if figura:
             st.plotly_chart(figura, width="stretch", key=f"grafico_ano_{chave}")
-    st.markdown(tabela_jogo_a_jogo(resumo, ano), unsafe_allow_html=True)
+    st.markdown(tabela_jogo_a_jogo(resumo, ano, complexidade), unsafe_allow_html=True)
     return resumo

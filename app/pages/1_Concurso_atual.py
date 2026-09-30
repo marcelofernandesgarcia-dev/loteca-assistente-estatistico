@@ -7,8 +7,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import streamlit as st
-from ano_em_curso_ui import mostrar_ano_em_curso
+from ano_em_curso_ui import mostrar_ano_em_curso, resumo_do_ano
 from estilo_caixa import renderizar_cartao, renderizar_tabela, renderizar_titulo_cartao
+from sugestoes_ui import (
+    complexidade_da_tela,
+    mostrar_sugestoes,
+    texto_da_calibracao,
+    texto_da_complexidade,
+)
 from util import formatar_data_br, mostrar_aviso_responsabilidade, obter_conexao
 
 import config
@@ -135,8 +141,10 @@ def _celula(texto: str) -> str:
     return html.escape(str(texto))
 
 
-def mostrar_analise(analise: dict) -> None:
-    """Só apresentação: as regras estão em stats/analise_palpite.py."""
+def mostrar_analise(analise: dict, conexao=None, duplos: int = 0, triplos: int = 0,
+                    complexidade: dict[int, dict] | None = None) -> None:
+    """Só apresentação: as regras estão em stats/analise_palpite.py, stats/sugestoes_bilhete.py
+    e stats/calibracao_bilhete.py. `complexidade`: {num_jogo: complexidade do jogo}."""
     with st.container(border=True):
         st.markdown("#### Análise do seu palpite")
         st.caption(
@@ -145,9 +153,12 @@ def mostrar_analise(analise: dict) -> None:
         )
         chance, n = analise["chance"], analise["chance"]["jogos"]
         c1, c2, c3 = st.columns(3)
-        c1.metric(f"Chance de {n} acertos", formatar_uma_em(chance["chance_todos"]))
-        c2.metric(f"Chance de {n - 1} ou mais", formatar_uma_em(chance["chance_todos_menos_um_ou_mais"]))
+        c1.metric(f"Chance de {n} acertos (pelos percentuais)", formatar_uma_em(chance["chance_todos"]))
+        c2.metric(f"Chance de {n - 1} ou mais (pelos percentuais)", formatar_uma_em(chance["chance_todos_menos_um_ou_mais"]))
         c3.metric("Acertos esperados", f"{chance['acertos_esperados']:.1f}".replace(".", ","))
+        # Estudo E1-E4 (aprovado em 30/09/2026): a chance acima é otimista; ao lado dela, o que aconteceu de fato.
+        if conexao is not None:
+            st.info(texto_da_calibracao(conexao, duplos, triplos))
         for frase in analise["frases"]:
             st.markdown(f"- {frase}")
 
@@ -160,16 +171,22 @@ def mostrar_analise(analise: dict) -> None:
                 leitura += f" · inclui zebra ({', '.join(j['zebras'])})"
             if j["sem_base_propria"]:
                 leitura += " · sem base própria"
+            celula_complexidade = (
+                f"<td>{texto_da_complexidade(complexidade[j['num_jogo']])}</td>"
+                if complexidade and j["num_jogo"] in complexidade else ""
+            )
             linhas.append(
                 f"<tr><td>{j['num_jogo']}. {_celula(j['casa'])} x {_celula(j['fora'])}</td>"
                 f"<td>{', '.join(j['marcacoes'])}</td><td>{min(j['chance_coberta'], 100):.0f}%</td>"
-                f"<td>{j['favorito']} ({j['pct_favorito']:.0f}%)</td><td>{html.escape(leitura)}</td></tr>"
+                f"<td>{j['favorito']} ({j['pct_favorito']:.0f}%)</td><td>{html.escape(leitura)}</td>"
+                f"{celula_complexidade}</tr>"
             )
+        cabecalho_complexidade = "<th scope='col'>Complexidade do jogo</th>" if complexidade else ""
         st.markdown(
             "<div style='overflow-x:auto'><table style='min-width:560px'>"
             "<caption style='text-align:left;font-weight:600'>Jogo a jogo</caption>"
             "<thead><tr><th scope='col'>Jogo</th><th scope='col'>Você marcou</th><th scope='col'>Chance coberta</th>"
-            "<th scope='col'>Favorito dos dados</th><th scope='col'>Leitura</th></tr></thead>"
+            f"<th scope='col'>Favorito dos dados</th><th scope='col'>Leitura</th>{cabecalho_complexidade}</tr></thead>"
             f"<tbody>{''.join(linhas)}</tbody></table></div>",
             unsafe_allow_html=True,
         )
@@ -187,7 +204,10 @@ def mostrar_analise(analise: dict) -> None:
             for d in analise["melhores_duplos"]:
                 st.markdown(
                     f"- Jogo {d['num_jogo']}: acrescentar a coluna {d['coluna_extra']} soma {d['ganho']:.0f} pontos de chance."
+                    " (Isso aumenta o custo do bilhete.)"
                 )
+        if conexao is not None:
+            mostrar_sugestoes(conexao, analise, duplos, triplos)
 
 
 conexao = obter_conexao()
@@ -324,8 +344,28 @@ else:
     # Ano em curso sempre visível, logo antes do volante (pedido do usuário,
     # 30/09/2026): quem marca vê primeiro como cada time está indo no ano.
     st.markdown(renderizar_titulo_cartao(f"Ano em curso ({ano_atual}) -- concurso {numero_vigente}"), unsafe_allow_html=True)
-    mostrar_ano_em_curso(conexao, participantes_do_concurso(conexao, numero_vigente), ano_atual, "concurso",
-                         com_grafico=False)
+    jogos_do_concurso_ano = participantes_do_concurso(conexao, numero_vigente)
+    resumo_ano_concurso = resumo_do_ano(conexao, jogos_do_concurso_ano, ano_atual)
+    # Complexidade de cada jogo (estudo E1-E4, aprovado em 30/09/2026): no teste com 16.973 jogos o favorito
+    # acertou 49,7% nos de complexidade baixa, 44,0% nos de média e 37,2% nos de alta.
+    sem_base_por_jogo = {
+        j["id"]: origem_do_percentual(conexao, j["casa_id"], j["fora_id"])["metodo"] == "frequencia_global"
+        for j in jogos_vigente
+    }
+    complexidade_por_jogo = complexidade_da_tela(
+        [{"num_jogo": j["num_jogo"], "pct": dados_por_jogo[j["id"]]["pct"], "sem_base_propria": sem_base_por_jogo[j["id"]]}
+         for j in jogos_vigente],
+        resumo_ano_concurso,
+    )
+    mostrar_ano_em_curso(
+        conexao, jogos_do_concurso_ano, ano_atual, "concurso", com_grafico=False, resumo=resumo_ano_concurso,
+        complexidade={n: texto_da_complexidade(c) for n, c in complexidade_por_jogo.items()},
+    )
+    st.caption(
+        "Complexidade do jogo: quão difícil ele é de marcar, pelos percentuais e pelo ano em curso. Nos concursos "
+        "passados, o favorito dos dados acertou cerca de 50% nos jogos de complexidade baixa, 44% nos de média e 37% "
+        "nos de alta. É uma leitura, não uma previsão."
+    )
 
     # Card 3 -- volante: 3 quadrados por jogo (1, X, 2), como o volante da
     # CAIXA. Começa em branco (pedido do usuário, 29/09/2026); a sugestão do
@@ -419,7 +459,7 @@ else:
                 {
                     "jogo_id": j["id"], "num_jogo": j["num_jogo"], "casa": j["casa"], "fora": j["fora"],
                     "pct": dados_por_jogo[j["id"]]["pct"], "marcacoes": marcadas,
-                    "sem_base_propria": origem_do_percentual(conexao, j["casa_id"], j["fora_id"])["metodo"] == "frequencia_global",
+                    "sem_base_propria": sem_base_por_jogo[j["id"]],
                 }
                 for j, marcadas in zip(jogos_vigente, marcacoes_lista)
             ]
@@ -433,7 +473,7 @@ else:
             faltam = ", ".join(map(str, volante["jogos_sem_marcacao"]))
             st.info(f"Para analisar, marque todos os jogos. Falta(m): {faltam}.")
         else:
-            mostrar_analise(analise)
+            mostrar_analise(analise, conexao, volante["duplos"], volante["triplos"], complexidade_por_jogo)
         st.button("Fechar análise", on_click=lambda: st.session_state.update({chave_analise: False}))
 
     # Versões do palpite (pedido do usuário, 30/09/2026): guardar cada tentativa,
@@ -483,11 +523,17 @@ else:
             st.markdown(
                 renderizar_tabela(
                     "Comparação das versões",
-                    ["Versão", "Hora", "Apostas (custo)", f"Chance de {n_jogos}", f"Chance de {n_jogos - 1} ou mais",
+                    ["Versão", "Hora", "Apostas (custo)", f"Chance de {n_jogos} (pelos percentuais)",
+                     f"Chance de {n_jogos - 1} ou mais (pelos percentuais)",
                      "Acertos esperados", "Duplos / triplos", "Zebras", "Virou bilhete"],
                     linhas_versoes,
                 ),
                 unsafe_allow_html=True,
+            )
+            st.caption(
+                "As chances da tabela são as calculadas pelos percentuais do app e costumam ser otimistas: nos concursos "
+                "passados, bilhetes de mesmo custo fizeram 13 ou mais bem menos vezes do que elas previam. Use a tabela "
+                "para comparar versões entre si, não como expectativa. O número concreto aparece na 'Análise do seu palpite'."
             )
             for anterior, atual in zip(versoes, versoes[1:]):
                 mudancas = diferencas(anterior["marcacoes"], atual["marcacoes"], num_jogo_por_id)

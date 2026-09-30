@@ -184,7 +184,10 @@ def test_analisar_mostra_leitura_chance_e_duplo(banco):
     assert "Análise do seu palpite" in textos
     assert "Jogo 1 (duplo): a chance do jogo vai de" in textos
     assert "sem base própria" in textos  # ALFA x BETA tem só 3 jogos na base sintética
-    assert any(m.label == "Chance de 1 acertos" for m in at.metric)
+    assert any(m.label == "Chance de 1 acertos (pelos percentuais)" for m in at.metric)
+    # Recomendações do estudo E1-E4: o que aconteceu de fato ao lado da chance, e a complexidade do jogo.
+    assert any("Ainda não há concursos passados suficientes" in i.value for i in at.info)
+    assert "Complexidade do jogo" in textos and "pouco histórico dos dois times" in textos
     next(b for b in at.button if b.label == "Fechar análise").click().run()
     assert "Análise do seu palpite" not in " ".join(m.value for m in at.markdown)
 
@@ -230,6 +233,32 @@ def test_salvar_sem_versao_guardada_cria_uma_e_liga(banco):
     at = _marcar_duplo_1_2(_abrir())
     _botao(at, "Salvar bilhete").click().run()
     assert not at.exception and any("Ligado à versão 1." in s.value for s in at.success)
+
+
+def test_analise_com_dois_jogos_traz_sugestao_contra_o_favorito_e_economia(banco):
+    """Recomendações do estudo E1-E4 (aprovadas em 30/09/2026) na tela, sem aumentar o custo."""
+    with db.sessao() as c:
+        alfa = c.execute("SELECT id FROM participantes WHERE nome = 'ALFA'").fetchone()[0]
+        beta = c.execute("SELECT id FROM participantes WHERE nome = 'BETA'").fetchone()[0]
+        c.execute("INSERT INTO jogos (concurso_numero, num_jogo, casa_id, fora_id, data_jogo) VALUES (9002, 2, ?, ?, '2099-01-02')",
+                  (beta, alfa))
+    at = _abrir()
+    colunas = {q.key.split("_", 2)[2]: q for q in _quadrados(at)}  # "<jogo_id>_<coluna>"
+    ids = sorted({chave.rsplit("_", 1)[0] for chave in colunas}, key=int)
+    for coluna in ("1", "X", "2"):
+        colunas[f"{ids[0]}_{coluna}"].check()  # jogo 1: triplo
+    colunas[f"{ids[1]}_2"].check().run()  # jogo 2: só o visitante, contra o favorito dos dados
+    next(b for b in at.button if b.label == "Analisar meu palpite").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    textos = " ".join(m.value for m in at.markdown)
+    assert "Sugestões de alteração, pelo mesmo custo" in textos
+    assert "Levar o triplo do jogo 1 para o jogo 2" in textos and "pelo mesmo custo" in textos
+    # O jogo 2 é equilibrado (favorito com 37%): a linha "contra o favorito" não se aplica aqui (teste unitário cobre).
+    assert "Você marcou contra o favorito dos dados" not in textos
+    assert "Se quiser gastar menos" in textos and "Jogo 1: tirar a coluna" in textos
+    assert not any("rendeu" in c.value for c in at.caption)  # banco sintético: sem concursos para medir o efeito
+    coluna_complexidade = [m.value for m in at.markdown if "Complexidade do jogo" in m.value]
+    assert len(coluna_complexidade) >= 2  # quadro do ano em curso e tabela da análise
 
 
 def test_salvar_guarda_a_analise_e_o_motivo(banco):
