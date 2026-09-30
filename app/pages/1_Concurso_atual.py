@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 import streamlit as st
 from ano_em_curso_ui import mostrar_ano_em_curso, resumo_do_ano
 from estilo_caixa import renderizar_cartao, renderizar_tabela, renderizar_titulo_cartao
+from premiacao_ui import mostrar_premiacao
 from sugestoes_ui import (
     complexidade_da_tela,
     mostrar_sugestoes,
@@ -274,6 +275,9 @@ else:
             unsafe_allow_html=True,
         )
         st.caption("O que já aconteceu de fato -- o placar real, tal como saiu. Serve de referência para conferir contra os dois cards abaixo.")
+        # Valores do concurso apurado (pedido do usuário, 30/09/2026): arrecadação, ganhadores, prêmio e acumulados.
+        with st.expander(f"Valores do concurso {ultimo_encerrado['concurso_numero']}: arrecadação, ganhadores e prêmios", expanded=True):
+            mostrar_premiacao(conexao, ultimo_encerrado["concurso_numero"], rotulo="Premiação do último concurso apurado")
 
     # Card 2 -- percentual histórico do concurso vigente
     numero_vigente = concurso_vigente["numero"]

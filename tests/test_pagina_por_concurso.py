@@ -54,3 +54,6 @@ def test_pagina_mostra_prazo_exato_jogos_e_premiacao(banco):
     assert "Prazo de aposta: 01/03/2026 às 15h" in legenda
     assert "Acumulou: sim" in legenda
     assert [h.value for h in at.subheader] == ["Premiação"]
+    textos = " ".join(m.value for m in at.markdown)
+    assert "1ª faixa (14 acertos)" in textos and "R$ 50.000,00" in textos and "R$ 150.000,00" in textos  # 3 x 50.000
+    assert any(m.label == "Arrecadação total" and m.value == "sem dado" for m in at.metric)  # o banco sintético não tem

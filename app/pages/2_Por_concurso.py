@@ -5,6 +5,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import pandas as pd
 import streamlit as st
+from premiacao_ui import mostrar_premiacao
 from util import formatar_data_br, mostrar_aviso_responsabilidade, obter_conexao
 
 st.title("Por concurso")
@@ -56,21 +57,11 @@ else:
     ]
     st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
 
-    premiacoes = conexao.execute(
-        "SELECT faixa, pontos, ganhadores, valor_premio FROM premiacoes WHERE concurso_numero = ? ORDER BY faixa",
-        (numero,),
-    ).fetchall()
-    if premiacoes:
+    tem_premiacao = conexao.execute(
+        "SELECT 1 FROM premiacoes WHERE concurso_numero = ? LIMIT 1", (numero,)
+    ).fetchone()
+    if tem_premiacao:
         st.subheader("Premiação")
-        st.dataframe(
-            pd.DataFrame(
-                [
-                    {"Faixa": p["faixa"], "Pontos": p["pontos"], "Ganhadores": p["ganhadores"], "Prêmio (R$)": p["valor_premio"]}
-                    for p in premiacoes
-                ]
-            ),
-            width="stretch",
-            hide_index=True,
-        )
+        mostrar_premiacao(conexao, numero, com_titulo=False)
 
 conexao.close()

@@ -15,7 +15,12 @@ CREATE TABLE IF NOT EXISTS concursos (
     data_proximo TEXT,
     tipo TEXT NOT NULL DEFAULT 'regular',
     acumulado INTEGER,
-    valor_estimado_proximo REAL
+    valor_estimado_proximo REAL,
+    valor_arrecadado REAL,
+    valor_acumulado_final_0_5 REAL,
+    valor_acumulado_especial REAL,
+    valor_acumulado_proximo REAL,
+    valores_consultados_em TEXT
 );
 
 CREATE TABLE IF NOT EXISTS participantes (
@@ -249,7 +254,15 @@ def _migrar_participantes(conexao: sqlite3.Connection) -> None:
 def _garantir_colunas(conexao: sqlite3.Connection) -> None:
     """Bancos criados antes de uma coluna existir ganham a coluna sem perder dado."""
     novas = {
-        "concursos": [("horario_fim_apostas", "INTEGER")],
+        # Valores do concurso (pedido do usuário, 30/09/2026). Campos da API da CAIXA e o que são, conforme o
+        # Manual de Produtos v21 (itens 18.1.3.12 e 6.3.4): valorArrecadado = arrecadação total;
+        # valorAcumuladoConcurso_0_5 = acumulado para o próximo concurso de final zero ou cinco (3ª faixa);
+        # valorAcumuladoConcursoEspecial = acumulado para a Loteca Especial (4ª faixa);
+        # valorAcumuladoProximoConcurso = acumulado na 1ª faixa do concurso seguinte (sem ganhador de 14).
+        "concursos": [
+            ("horario_fim_apostas", "INTEGER"), ("valor_arrecadado", "REAL"), ("valor_acumulado_final_0_5", "REAL"),
+            ("valor_acumulado_especial", "REAL"), ("valor_acumulado_proximo", "REAL"), ("valores_consultados_em", "TEXT"),
+        ],
         # nome_no_ano: nome do time NAQUELA temporada (ex.: "Coritiba" em 2019, "Coritiba SAF" em 2026).
         "cbf_classificacao": [("proximo_adversario_id", "INTEGER"), ("nome_no_ano", "TEXT")],
         "fatores_externos": [("evidencias", "TEXT")],

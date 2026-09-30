@@ -112,6 +112,24 @@ def _gravar_jogos(conexao, numero: int, jogos: list[dict], preservar_placar: boo
         )
 
 
+def valores_do_concurso(corpo: dict) -> tuple[float | None, float | None, float | None, float | None]:
+    """(arrecadado, acumulado final 0/5, acumulado especial, acumulado na 1ª faixa do próximo).
+    Campo ausente ou nulo vira None (concursos antigos podem não trazer); nunca vira 0 por
+    suposição. O significado de cada campo está em db._garantir_colunas (Manual de Produtos v21)."""
+    def numero(chave):
+        valor = corpo.get(chave)
+        return float(valor) if isinstance(valor, (int, float)) and not isinstance(valor, bool) else None
+
+    # Achado em 30/09/2026 (concursos antigos): a API devolve valorArrecadado = 0,0 quando não informa. Uma
+    # arrecadação de zero é impossível num concurso com apostas, então vale como "sem dado". Os acumulados
+    # podem ser zero de verdade (nada acumulado) e ficam como vieram.
+    arrecadado = numero("valorArrecadado")
+    return (
+        arrecadado if arrecadado and arrecadado > 0 else None, numero("valorAcumuladoConcurso_0_5"),
+        numero("valorAcumuladoConcursoEspecial"), numero("valorAcumuladoProximoConcurso"),
+    )
+
+
 def importar_concurso(numero: int | None, conexao) -> int:
     """Importa um concurso já apurado (ou o último apurado, se `numero` for
     None). Idempotente: pode rodar de novo sem duplicar.
@@ -123,13 +141,20 @@ def importar_concurso(numero: int | None, conexao) -> int:
 
     conexao.execute(
         """
-        INSERT INTO concursos (numero, data_apuracao, data_proximo, tipo, acumulado, valor_estimado_proximo)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO concursos (numero, data_apuracao, data_proximo, tipo, acumulado, valor_estimado_proximo,
+                               valor_arrecadado, valor_acumulado_final_0_5, valor_acumulado_especial, valor_acumulado_proximo,
+                               valores_consultados_em)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(numero) DO UPDATE SET
             data_apuracao=excluded.data_apuracao,
             data_proximo=excluded.data_proximo,
             acumulado=excluded.acumulado,
-            valor_estimado_proximo=excluded.valor_estimado_proximo
+            valor_estimado_proximo=excluded.valor_estimado_proximo,
+            valor_arrecadado=excluded.valor_arrecadado,
+            valor_acumulado_final_0_5=excluded.valor_acumulado_final_0_5,
+            valor_acumulado_especial=excluded.valor_acumulado_especial,
+            valor_acumulado_proximo=excluded.valor_acumulado_proximo,
+            valores_consultados_em=excluded.valores_consultados_em
         """,
         (
             numero_real,
@@ -138,6 +163,8 @@ def importar_concurso(numero: int | None, conexao) -> int:
             "regular",
             1 if corpo.get("acumulado") else 0,
             corpo.get("valorEstimadoProximoConcurso"),
+            *valores_do_concurso(corpo),
+            datetime.now().isoformat(timespec="seconds"),
         ),
     )
 
@@ -208,6 +235,78 @@ def importar_programacao(conexao) -> list[int]:
         _gravar_jogos(conexao, numero, concurso.get("listaJogos", []), preservar_placar=True)
         numeros.append(numero)
     return numeros
+
+
+def _gravar_premiacoes(conexao, numero: int, corpo: dict) -> None:
+    for faixa in corpo.get("listaRateioPremio", []):
+        conexao.execute(
+            """
+            INSERT INTO premiacoes (concurso_numero, faixa, pontos, ganhadores, valor_premio)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(concurso_numero, faixa) DO UPDATE SET
+                ganhadores=excluded.ganhadores, valor_premio=excluded.valor_premio
+            """,
+            (numero, faixa.get("faixa"), 14 if faixa.get("faixa") == 1 else 13,
+             faixa.get("numeroDeGanhadores"), faixa.get("valorPremio")),
+        )
+
+
+def normalizar_valores_ja_gravados(conexao) -> dict:
+    """Conserta o que a primeira versão do preenchimento gravou (30/09/2026), antes de a arrecadação 0,0 da API
+    passar a valer como "sem dado": marca como consultado todo concurso que já recebeu valores e troca a
+    arrecadação gravada como zero por ausente. Idempotente (rodar de novo não muda nada)."""
+    marcados = conexao.execute(
+        "UPDATE concursos SET valores_consultados_em = ? WHERE valores_consultados_em IS NULL AND valor_arrecadado IS NOT NULL",
+        (datetime.now().isoformat(timespec="seconds"),),
+    ).rowcount
+    zerados = conexao.execute("UPDATE concursos SET valor_arrecadado = NULL WHERE valor_arrecadado <= 0").rowcount
+    conexao.commit()
+    return {"marcados_como_consultados": marcados, "arrecadacao_zero_virou_ausente": zerados}
+
+
+def completar_valores_do_historico(conexao, inicio: int | None = None, fim: int | None = None) -> dict:
+    """Preenche SÓ os valores do concurso (arrecadação, acumulados) e a premiação dos concursos
+    já importados, sem mexer em jogos nem em participantes. Retomável: pula o concurso que já
+    tem arrecadação gravada. Grava a cada concurso; tenta duas vezes antes de registrar falha.
+    Retorna {'atualizados': n, 'ja_tinham': n, 'sem_valor_na_api': [numeros], 'falhas': {numero: motivo}}."""
+    inicio = inicio or config.PRIMEIRO_CONCURSO
+    if fim is None:
+        fim = conexao.execute("SELECT MAX(numero) FROM concursos c WHERE EXISTS "
+                              "(SELECT 1 FROM jogos j WHERE j.concurso_numero = c.numero AND j.resultado IS NOT NULL)").fetchone()[0]
+    resumo = {"atualizados": 0, "ja_tinham": 0, "sem_valor_na_api": [], "falhas": {}}
+    for numero in range(inicio, (fim or 0) + 1):
+        linha = conexao.execute("SELECT valores_consultados_em FROM concursos WHERE numero = ?", (numero,)).fetchone()
+        if linha is None:
+            continue  # concurso que nunca foi importado: fora do escopo deste preenchimento
+        if linha["valores_consultados_em"] is not None:
+            resumo["ja_tinham"] += 1  # já consultado (mesmo que a API não tenha informado a arrecadação)
+            continue
+        for tentativa in (1, 2):
+            try:
+                corpo = _buscar_json(f"/{numero}")
+                valores = valores_do_concurso(corpo)
+                conexao.execute(
+                    "UPDATE concursos SET valor_arrecadado = ?, valor_acumulado_final_0_5 = ?,"
+                    " valor_acumulado_especial = ?, valor_acumulado_proximo = ?, valores_consultados_em = ? WHERE numero = ?",
+                    (*valores, datetime.now().isoformat(timespec="seconds"), numero),
+                )
+                _gravar_premiacoes(conexao, numero, corpo)
+                conexao.commit()
+                resumo["atualizados"] += 1
+                if valores[0] is None:
+                    resumo["sem_valor_na_api"].append(numero)
+                break
+            except (ErroImportacaoLoteca, KeyError, TypeError) as erro:
+                conexao.rollback()
+                if tentativa == 2:
+                    logger.warning("Valores do concurso %s não obtidos: %s", numero, erro)
+                    resumo["falhas"][numero] = str(erro)
+                else:
+                    time.sleep(config.CAIXA_REQUEST_INTERVAL_SEGUNDOS * 3)
+        if numero % 100 == 0:
+            logger.info("Valores até o concurso %s (%s atualizados, %s falhas)", numero, resumo["atualizados"], len(resumo["falhas"]))
+        time.sleep(config.CAIXA_REQUEST_INTERVAL_SEGUNDOS)
+    return resumo
 
 
 def importar_historico(conexao, inicio: int | None = None, fim: int | None = None, refazer: bool = False) -> dict:
