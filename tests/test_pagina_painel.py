@@ -114,6 +114,32 @@ def test_modo_livre_na_temporada_e_na_loteca(banco):
     assert "Desempenho nos jogos que caíram na Loteca" in _textos(at)
 
 
+def test_temporadas_passadas_so_aparecem_no_modo_livre_com_o_nome_do_ano(banco):
+    with db.sessao() as c:
+        confrontos = [(1, 2), (2, 3), (3, 1), (2, 1), (3, 2), (1, 3)]
+        for i, (casa, fora) in enumerate(confrontos, start=1):
+            c.execute(
+                "INSERT INTO cbf_partidas (id_jogo, serie, ano, rodada, data_jogo, mandante_id, visitante_id,"
+                " gols_mandante, gols_visitante, coletado_em) VALUES (?, 'serie-a', 2025, ?, ?, ?, ?, 1, 0, 'x')",
+                (100 + i, i, f"2025-05-{i:02d}", casa, fora),
+            )
+        c.execute(
+            "INSERT INTO cbf_classificacao (serie, ano, cod_time, rodada, coletado_em, nome_no_ano)"
+            " VALUES ('serie-a', 2025, 1, 6, 'x', 'Alfa Antigo')"
+        )
+    at = _abrir()
+    # Modo concurso: só a temporada de agora.
+    assert [s.value for s in at.subheader if s.value.startswith("Série")] == ["Série A 2026"]
+    at.radio(key="modo_temporada").set_value("Escolher livremente").run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert at.selectbox(key="serie_livre").options == ["Série A 2026", "Série A 2025"]
+    at.selectbox(key="serie_livre").select_index(1).run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert any("Temporada passada (Série A 2025)" in c.value for c in at.caption)
+    assert "Alfa Antigo" in at.multiselect(key="times_livre_serie-a_2025").options  # nome que o time tinha em 2025
+    assert any("Temporada encerrada" in c.value for c in at.caption) or any("Sem projeção" in i.value for i in at.info)
+
+
 def test_frase_de_amostra_pequena():
     assert frase_amostra_pequena([]) is None
     assert frase_amostra_pequena(["GAMA", "BETA"]).endswith("leitura fraca: GAMA, BETA.")

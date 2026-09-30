@@ -181,12 +181,93 @@ def participantes_do_concurso(conexao, numero: int) -> list[dict]:
 
 
 def temporadas_disponiveis(conexao) -> list[tuple[str, int]]:
+    """Todas as temporadas com jogos coletados, da mais recente para a mais antiga."""
     return [
         (linha["serie"], linha["ano"])
         for linha in conexao.execute(
             "SELECT DISTINCT serie, ano FROM cbf_partidas WHERE gols_mandante IS NOT NULL ORDER BY ano DESC, serie"
         )
     ]
+
+
+def temporadas_atuais(temporadas: list[tuple[str, int]]) -> list[tuple[str, int]]:
+    """As séries da temporada mais recente. Só elas valem para "os times do concurso
+    de agora": as passadas (coleta histórica) servem para comparar e para medir."""
+    if not temporadas:
+        return []
+    ano = max(ano for _, ano in temporadas)
+    return [t for t in temporadas if t[1] == ano]
+
+
+def nomes_da_temporada(conexao, serie: str, ano: int) -> dict[int, str]:
+    """Nome de cada time NAQUELA temporada (ex.: "Coritiba" em 2019, "Coritiba SAF" em
+    2026); cai no nome atual quando a temporada foi coletada sem o nome do ano."""
+    nomes = {
+        linha["cod_time"]: linha["nome"]
+        for linha in conexao.execute("SELECT cod_time, nome FROM cbf_times")
+    }
+    for linha in conexao.execute(
+        "SELECT DISTINCT cod_time, nome_no_ano FROM cbf_classificacao WHERE serie = ? AND ano = ? AND nome_no_ano IS NOT NULL",
+        (serie, ano),
+    ):
+        nomes[linha["cod_time"]] = linha["nome_no_ano"]
+    return nomes
+
+
+def erro_da_projecao_entre_temporadas(conexao, rodadas_de_teste: tuple[int, ...] = (10, 19, 28)) -> dict | None:
+    """Quanto a projeção por ritmo costuma errar, medido em TODAS as temporadas completas
+    coletadas (e não numa só). Para cada rodada de teste (que equivale a "faltam N
+    jogos"), projeta o fim da temporada só com o que havia até ali e compara com os
+    pontos finais reais; erro médio absoluto em pontos por time, nos dois ritmos, e em
+    quantas temporadas o ritmo recente foi melhor. None sem nenhuma temporada completa."""
+    por_rodada: dict[int, list[dict]] = {r: [] for r in rodadas_de_teste}
+    temporadas = []
+    for serie, ano in temporadas_disponiveis(conexao):
+        partidas = competicao.carregar_partidas(conexao, serie, ano)
+        if len(partidas) < config.CBF_JOGOS_TEMPORADA_COMPLETA:
+            continue  # temporada em andamento ou incompleta: não tem "fim" para conferir
+        temporadas.append((serie, ano))
+        for rodada in rodadas_de_teste:
+            erro = erro_da_projecao(partidas, rodada_teste=rodada)
+            if erro:
+                por_rodada[rodada].append(erro)
+    if not temporadas:
+        return None
+    resumo = {}
+    for rodada, lista in por_rodada.items():
+        if not lista:
+            continue
+        com_recente = [e for e in lista if e["erro_medio_recente"] is not None]
+        resumo[rodada] = {
+            "temporadas": len(lista),
+            "jogos_restantes": lista[0]["rodada_atual"] - rodada,
+            "erro_temporada": sum(e["erro_medio_temporada"] for e in lista) / len(lista),
+            "erro_recente": sum(e["erro_medio_recente"] for e in com_recente) / len(com_recente) if com_recente else None,
+            "recente_melhor_em": sum(1 for e in com_recente if e["erro_medio_recente"] < e["erro_medio_temporada"]),
+            "com_recente": len(com_recente),
+        }
+    return {"temporadas": temporadas, "por_rodada": resumo}
+
+
+def frase_erro_entre_temporadas(resumo: dict | None) -> str | None:
+    """Uma frase para a tela, com os números medidos entre as temporadas completas."""
+    if not resumo or not resumo["por_rodada"]:
+        return None
+    anos = [ano for _, ano in resumo["temporadas"]]
+    partes = []
+    for rodada in sorted(resumo["por_rodada"], reverse=True):
+        r = resumo["por_rodada"][rodada]
+        texto = f"faltando {r['jogos_restantes']} jogos, o ritmo da temporada errou {_decimal(r['erro_temporada'])} pontos por time"
+        if r["erro_recente"] is not None:
+            texto += (
+                f" e o ritmo recente {_decimal(r['erro_recente'])} (o recente foi melhor em {r['recente_melhor_em']} de "
+                f"{r['com_recente']} temporadas)"
+            )
+        partes.append(texto)
+    return (
+        f"Quanto a projeção costuma errar, medido em {len(resumo['temporadas'])} temporadas completas "
+        f"({min(anos)} a {max(anos)}, Séries A e B): " + "; ".join(partes) + "."
+    )
 
 
 def classificacao_oficial(conexao, serie: str, ano: int) -> dict[int, dict]:
@@ -212,7 +293,9 @@ def dados_da_temporada(conexao, serie: str, ano: int) -> dict | None:
     jogos_por_time = {cod: competicao.jogos_do_time(partidas, cod) for cod in times}
     projecao = projetar_temporada(tabelas[max(tabelas)], jogos_por_time, serie, ano)
     total = config.TEMPORADA_JOGOS_POR_TIME.get((serie, ano))
+    encerrada = len(partidas) >= config.CBF_JOGOS_TEMPORADA_COMPLETA
     return {
+        "encerrada": encerrada,
         "serie": serie,
         "ano": ano,
         "partidas": partidas,
@@ -269,8 +352,12 @@ def tabela_comparativa(dados: dict, cods: list[int]) -> list[dict]:
     return sorted(linhas, key=lambda x: x["posicao"])
 
 
-def frases_da_temporada(dados: dict, cods: list[int], nomes: dict[int, str]) -> list[str]:
-    """Leituras por regra entre os times pedidos, cada uma com o número que a sustenta."""
+def frases_da_temporada(
+    dados: dict, cods: list[int], nomes: dict[int, str], erro_entre_temporadas: dict | None = None
+) -> list[str]:
+    """Leituras por regra entre os times pedidos, cada uma com o número que a sustenta.
+    `erro_entre_temporadas` (de `erro_da_projecao_entre_temporadas`), quando existe,
+    substitui o teste de uma temporada só."""
     frases = []
     variacoes = []
     for cod in cods:
@@ -286,7 +373,10 @@ def frases_da_temporada(dados: dict, cods: list[int], nomes: dict[int, str]) -> 
         if desce[1]["variacao"] < 0:
             v = desce[1]
             frases.append(f"Maior queda nas últimas {v['rodadas']} rodadas: {nomes.get(desce[0], desce[0])}, do {v['de']}º para o {v['para']}º.")
-    if dados["erro_projecao"]:
+    entre_temporadas = frase_erro_entre_temporadas(erro_entre_temporadas)
+    if entre_temporadas:
+        frases.append(entre_temporadas)
+    elif dados["erro_projecao"]:
         e = dados["erro_projecao"]
         texto = (
             f"Teste da projeção nesta temporada: projetando da rodada {e['rodada_teste']} até a {e['rodada_atual']}, "

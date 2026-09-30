@@ -26,6 +26,27 @@ CBF_COMPETICOES = [
     ("campeonato-brasileiro", "serie-a", 2026),
     ("campeonato-brasileiro", "serie-b", 2026),
 ]
+# Temporadas passadas (P2 da priorização estatística, autorizado em 30/09/2026): coleta única, com
+# `scripts/coleta_cbf_historico.py`. Conferidas ao vivo: 2019 a 2025 existem completas nas duas séries.
+CBF_TEMPORADAS_PASSADAS = [
+    ("campeonato-brasileiro", serie, ano) for ano in range(2019, 2026) for serie in ("serie-a", "serie-b")
+]
+CBF_JOGOS_TEMPORADA_COMPLETA = 380  # 20 times, turno e returno (REC 2026, art. 14 da Série A e art. 11 da Série B)
+# Diferenças entre a soma dos jogos e a tabela da própria CBF, encontradas na coleta de 30/09/2026 e
+# entendidas. O roteiro de coleta as trata como conhecidas (não como falha). Nada foi inventado para
+# "consertá-las": o jogo que falta continua faltando.
+CBF_ANOMALIAS_CONHECIDAS = {
+    ("serie-b", 2020): {
+        "jogos_faltando": 0,
+        "descricao": "Cruzeiro: 55 pontos na soma dos jogos e 49 na tabela da CBF (exatamente 6 a menos), compatível com "
+                     "perda de pontos por punição; a causa não foi conferida.",
+    },
+    ("serie-b", 2023): {
+        "jogos_faltando": 1,
+        "descricao": "Falta 1 jogo (rodada 20, Juventude x Botafogo-SP) nas páginas dos times; a tabela da CBF o conta "
+                     "(Juventude +3 pontos e +2 gols, Botafogo-SP +2 gols sofridos). 379 de 380 jogos.",
+    },
+}
 CBF_INTERVALO_SEGUNDOS = float(os.environ.get("LOTECA_CBF_INTERVALO_S", "2.0"))
 CBF_TIMEOUT_SEGUNDOS = 30
 # Consulta pública do BID (contratações). Só link para consulta manual: exige

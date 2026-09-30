@@ -148,21 +148,37 @@ def _dado_fresco(conexao, serie: str, ano: int) -> bool:
 
 
 def gravar_classificacao(conexao, serie: str, ano: int, linhas: list[dict], coletado_em: str) -> None:
+    # `cbf_times` guarda o nome MAIS RECENTE do time. Uma temporada antiga não pode
+    # sobrescrevê-lo (coletar 2019 depois de 2026 trocaria "Coritiba SAF" por
+    # "Coritiba" e quebraria a marca de SAF e o link do Transfermarkt). O nome de
+    # cada temporada fica em `cbf_classificacao.nome_no_ano`.
+    ano_mais_recente = conexao.execute("SELECT MAX(ano) FROM cbf_classificacao").fetchone()[0]
+    atualiza_nome_atual = ano_mais_recente is None or ano >= ano_mais_recente
     for linha in linhas:
         cod = _inteiro(linha["cod_time"])
-        conexao.execute(
-            "INSERT INTO cbf_times (cod_time, nome, uf) VALUES (?, ?, ?) "
-            "ON CONFLICT(cod_time) DO UPDATE SET nome=excluded.nome, uf=excluded.uf",
-            (cod, linha["time"], linha.get("uf_time")),
-        )
-        proximo = linha.get("proximo_jogo") or {}
+        if atualiza_nome_atual:
+            conexao.execute(
+                "INSERT INTO cbf_times (cod_time, nome, uf) VALUES (?, ?, ?) "
+                "ON CONFLICT(cod_time) DO UPDATE SET nome=excluded.nome, uf=excluded.uf",
+                (cod, linha["time"], linha.get("uf_time")),
+            )
+        else:
+            conexao.execute(
+                "INSERT INTO cbf_times (cod_time, nome, uf) VALUES (?, ?, ?) ON CONFLICT(cod_time) DO NOTHING",
+                (cod, linha["time"], linha.get("uf_time")),
+            )
+        # Temporada em andamento: objeto {id, time, escudo}. Temporada encerrada: a CBF
+        # devolve uma lista (["nenhum"]) -- sem próximo jogo, não é erro.
+        proximo = linha.get("proximo_jogo")
+        proximo = proximo if isinstance(proximo, dict) else {}
         conexao.execute(
             """
             INSERT INTO cbf_classificacao (serie, ano, cod_time, rodada, posicao, pontos, jogos, vitorias, empates,
                 derrotas, gols_pro, gols_contra, saldo, cartoes_amarelo, cartoes_vermelho, aproveitamento,
-                ultimos_jogos, proximo_adversario, proximo_adversario_id, coletado_em)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ultimos_jogos, proximo_adversario, proximo_adversario_id, coletado_em, nome_no_ano)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(serie, ano, cod_time, rodada) DO UPDATE SET
+                nome_no_ano=excluded.nome_no_ano,
                 posicao=excluded.posicao, pontos=excluded.pontos, jogos=excluded.jogos,
                 vitorias=excluded.vitorias, empates=excluded.empates, derrotas=excluded.derrotas,
                 gols_pro=excluded.gols_pro, gols_contra=excluded.gols_contra, saldo=excluded.saldo,
@@ -178,7 +194,7 @@ def gravar_classificacao(conexao, serie: str, ano: int, linhas: list[dict], cole
                 _inteiro(linha.get("gols_contra")), _inteiro(linha.get("gols_saldo")),
                 _inteiro(linha.get("cartoes_amarelo")), _inteiro(linha.get("cartoes_vermelho")),
                 _decimal(linha.get("aproveitamento")), ",".join(linha.get("ultimos_jogos") or []),
-                proximo.get("time"), _inteiro(proximo.get("id")), coletado_em,
+                proximo.get("time"), _inteiro(proximo.get("id")), coletado_em, linha["time"],
             ),
         )
 
@@ -255,6 +271,48 @@ def coletar_competicao(conexao, campeonato: str, serie: str, ano: int, forcar: b
         gravar_pagina_time(conexao, serie, ano, cod, dados, coletado_em)
         coletados += 1
     return {"serie": serie, "ano": ano, "pulou": False, "times": coletados}
+
+
+def preencher_nome_do_ano_mais_recente(conexao) -> int:
+    """Linhas da temporada mais recente coletadas antes de existir `nome_no_ano`
+    recebem o nome atual do time (que, para essa temporada, é o nome dela). Só a
+    temporada mais recente: nas antigas, o nome atual pode ser outro."""
+    return conexao.execute(
+        """
+        UPDATE cbf_classificacao
+        SET nome_no_ano = (SELECT t.nome FROM cbf_times t WHERE t.cod_time = cbf_classificacao.cod_time)
+        WHERE nome_no_ano IS NULL AND ano = (SELECT MAX(ano) FROM cbf_classificacao)
+        """
+    ).rowcount
+
+
+def divergencias_de_resultado(validacao: dict) -> list[dict]:
+    """Das divergências entre a tabela reconstruída e a classificação da CBF, só as que
+    mudam RESULTADO: jogo faltando, ou pontos diferentes. Diferença de gols (achada
+    em 2019: 1 gol a mais na lista de jogos do que na tabela da CBF, com jogos e pontos
+    iguais) é inconsistência dentro das páginas da CBF e não invalida a temporada."""
+    return [
+        d for d in validacao["divergencias_numeros"]
+        if "motivo" in d or d.get("campo") in ("jogos", "pontos")
+    ]
+
+
+def temporada_completa(conexao, serie: str, ano: int) -> bool:
+    """Todos os jogos da temporada estão no banco e os resultados batem com a
+    classificação final da CBF (jogos e pontos de cada time). Serve para a coleta
+    histórica pular o que já está bom."""
+    from stats.competicao import validar_temporada
+
+    jogos = conexao.execute(
+        "SELECT COUNT(*) FROM cbf_partidas WHERE serie = ? AND ano = ? AND gols_mandante IS NOT NULL", (serie, ano)
+    ).fetchone()[0]
+    anomalia = config.CBF_ANOMALIAS_CONHECIDAS.get((serie, ano))
+    minimo = config.CBF_JOGOS_TEMPORADA_COMPLETA - (anomalia["jogos_faltando"] if anomalia else 0)
+    if jogos < minimo:
+        return False
+    # Temporada com anomalia conhecida (config.CBF_ANOMALIAS_CONHECIDAS): basta ter todos os jogos que
+    # a CBF publica; as diferenças já foram entendidas e registradas.
+    return bool(anomalia) or not divergencias_de_resultado(validar_temporada(conexao, serie, ano))
 
 
 def coletar_todas(conexao, forcar: bool = False) -> list[dict]:

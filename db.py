@@ -103,6 +103,7 @@ CREATE TABLE IF NOT EXISTS cbf_classificacao (
     proximo_adversario TEXT,
     proximo_adversario_id INTEGER,
     coletado_em TEXT NOT NULL,
+    nome_no_ano TEXT,
     PRIMARY KEY (serie, ano, cod_time, rodada)
 );
 
@@ -228,7 +229,8 @@ def _garantir_colunas(conexao: sqlite3.Connection) -> None:
     """Bancos criados antes de uma coluna existir ganham a coluna sem perder dado."""
     novas = {
         "concursos": [("horario_fim_apostas", "INTEGER")],
-        "cbf_classificacao": [("proximo_adversario_id", "INTEGER")],
+        # nome_no_ano: nome do time NAQUELA temporada (ex.: "Coritiba" em 2019, "Coritiba SAF" em 2026).
+        "cbf_classificacao": [("proximo_adversario_id", "INTEGER"), ("nome_no_ano", "TEXT")],
         "fatores_externos": [("evidencias", "TEXT")],
         # Análise do palpite (item 20): guardada com o bilhete para aprendizado.
         "bilhetes": [("chance_todos", "REAL"), ("chance_todos_menos_um", "REAL"), ("acertos_esperados", "REAL")],

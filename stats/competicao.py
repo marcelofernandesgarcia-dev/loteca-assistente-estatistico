@@ -34,12 +34,14 @@ def carregar_partidas(conexao, serie: str, ano: int) -> list[dict]:
 
 
 def serie_do_time(conexao, cod_time: int) -> tuple[str, int] | None:
-    """(serie, ano) mais recente em que o time tem jogos coletados."""
+    """(serie, ano) em que o time tem jogos na temporada MAIS RECENTE coletada, ou None.
+    Um time que só aparece em temporadas passadas (coleta histórica) não tem
+    competição "atual": as telas de time usam este resultado para saber se ele joga agora."""
     linha = conexao.execute(
         """
         SELECT serie, ano FROM cbf_partidas
-        WHERE mandante_id = ? OR visitante_id = ?
-        ORDER BY ano DESC, serie LIMIT 1
+        WHERE (mandante_id = ? OR visitante_id = ?) AND ano = (SELECT MAX(ano) FROM cbf_partidas)
+        ORDER BY serie LIMIT 1
         """,
         (cod_time, cod_time),
     ).fetchone()

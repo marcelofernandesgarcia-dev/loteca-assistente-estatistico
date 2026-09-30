@@ -146,6 +146,93 @@ def test_instrucao_do_bid_usa_o_codigo_da_cbf_e_a_uf():
     assert instrucao_consulta_bid(20031, None) is None and instrucao_consulta_bid(None, "CE") is None
 
 
+def _antiga(nome_alfa="Time Alfa"):
+    """A mesma classificação numa temporada passada, com o nome antigo do time 100."""
+    linhas = [dict(l) for l in CLASSIFICACAO]
+    linhas[0]["time"] = nome_alfa
+    return linhas
+
+
+def test_temporada_antiga_nao_sobrescreve_o_nome_atual_do_time(conexao):
+    """Coletar 2019 depois de 2026 não pode trocar 'Time Alfa SAF' por 'Time Alfa'."""
+    gravar_classificacao(conexao, "serie-a", 2026, CLASSIFICACAO, "2026-09-27T10:00:00")
+    gravar_classificacao(conexao, "serie-a", 2019, _antiga(), "2026-09-30T10:00:00")
+    assert conexao.execute("SELECT nome FROM cbf_times WHERE cod_time = 100").fetchone()[0] == "Time Alfa SAF"
+    nomes = dict(conexao.execute("SELECT ano, nome_no_ano FROM cbf_classificacao WHERE cod_time = 100").fetchall())
+    assert nomes == {2026: "Time Alfa SAF", 2019: "Time Alfa"}  # o nome de cada temporada fica guardado
+
+
+@pytest.mark.parametrize("proximo_jogo", [["nenhum"], [], None])
+def test_temporada_encerrada_sem_proximo_jogo_grava_sem_erro(conexao, proximo_jogo):
+    """Na CBF, temporada encerrada traz `proximo_jogo` como lista (["nenhum"]), não como objeto."""
+    linhas = [dict(l, proximo_jogo=proximo_jogo) for l in CLASSIFICACAO]
+    gravar_classificacao(conexao, "serie-a", 2019, linhas, "2026-09-30T10:00:00")
+    linha = conexao.execute("SELECT proximo_adversario, proximo_adversario_id FROM cbf_classificacao WHERE ano = 2019").fetchone()
+    assert (linha["proximo_adversario"], linha["proximo_adversario_id"]) == (None, None)
+
+
+def test_time_novo_de_temporada_antiga_entra_com_o_nome_daquele_ano(conexao):
+    gravar_classificacao(conexao, "serie-a", 2026, CLASSIFICACAO, "2026-09-27T10:00:00")
+    extra = [dict(CLASSIFICACAO[0], cod_time="300", time="Time Gama", uf_time="MG")]
+    gravar_classificacao(conexao, "serie-a", 2019, extra, "2026-09-30T10:00:00")
+    assert conexao.execute("SELECT nome FROM cbf_times WHERE cod_time = 300").fetchone()[0] == "Time Gama"
+
+
+def test_temporada_mais_recente_continua_atualizando_o_nome_atual(conexao):
+    gravar_classificacao(conexao, "serie-a", 2025, _antiga(), "2025-12-10T10:00:00")
+    gravar_classificacao(conexao, "serie-a", 2026, CLASSIFICACAO, "2026-09-27T10:00:00")
+    assert conexao.execute("SELECT nome FROM cbf_times WHERE cod_time = 100").fetchone()[0] == "Time Alfa SAF"
+    gravar_classificacao(conexao, "serie-a", 2026, _antiga("Time Alfa Renomeado"), "2026-10-05T10:00:00")  # nova coleta de 2026
+    assert conexao.execute("SELECT nome FROM cbf_times WHERE cod_time = 100").fetchone()[0] == "Time Alfa Renomeado"
+
+
+def test_preencher_nome_so_na_temporada_mais_recente(conexao):
+    from importer.cbf_client import preencher_nome_do_ano_mais_recente
+
+    gravar_classificacao(conexao, "serie-a", 2026, CLASSIFICACAO, "2026-09-27T10:00:00")
+    gravar_classificacao(conexao, "serie-a", 2019, _antiga(), "2026-09-30T10:00:00")
+    conexao.execute("UPDATE cbf_classificacao SET nome_no_ano = NULL")  # como estava antes da coluna existir
+    assert preencher_nome_do_ano_mais_recente(conexao) == 2  # só as 2 linhas de 2026
+    nomes = {(a, c): n for a, c, n in conexao.execute("SELECT ano, cod_time, nome_no_ano FROM cbf_classificacao")}
+    assert nomes[(2026, 100)] == "Time Alfa SAF" and nomes[(2019, 100)] is None  # 2019 fica sem nome: não dá para saber
+
+
+def test_diferenca_so_de_gols_nao_invalida_a_temporada_mas_jogo_ou_ponto_diferente_sim():
+    from importer.cbf_client import divergencias_de_resultado
+
+    so_gols = {"divergencias_numeros": [{"cod_time": 1, "campo": "gols_pro", "reconstruido": 45, "cbf": 44}]}
+    assert divergencias_de_resultado(so_gols) == []
+    grave = {"divergencias_numeros": [
+        {"cod_time": 1, "campo": "gols_pro", "reconstruido": 45, "cbf": 44},
+        {"cod_time": 2, "campo": "pontos", "reconstruido": 50, "cbf": 47},
+        {"cod_time": 3, "campo": "jogos", "reconstruido": 37, "cbf": 38},
+        {"cod_time": 4, "motivo": "time sem jogos na base"},
+    ]}
+    assert [d["cod_time"] for d in divergencias_de_resultado(grave)] == [2, 3, 4]
+
+
+def test_anomalia_conhecida_aceita_o_numero_de_jogos_que_a_cbf_publica(conexao, monkeypatch):
+    """Série B 2023 tem 379 de 380 jogos nas páginas da CBF (a tabela conta o que falta):
+    conta como completa porque a anomalia foi entendida e registrada, sem inventar o jogo."""
+    from importer.cbf_client import temporada_completa
+
+    monkeypatch.setattr("config.CBF_JOGOS_TEMPORADA_COMPLETA", 2)
+    monkeypatch.setattr("config.CBF_ANOMALIAS_CONHECIDAS", {("serie-a", 2019): {"jogos_faltando": 1, "descricao": "x"}})
+    assert temporada_completa(conexao, "serie-a", 2019) is False  # 0 jogos: nem o mínimo da anomalia (1)
+    gravar_pagina_time(conexao, "serie-a", 2019, 100, PAGINA_TIME, "2026-09-30T10:00:00")  # 1 jogo com placar
+    assert temporada_completa(conexao, "serie-a", 2019) is True
+    assert temporada_completa(conexao, "serie-b", 2019) is False  # sem anomalia registrada, continua exigindo 2
+
+
+def test_temporada_completa_exige_380_jogos_e_tabela_que_confere(conexao, monkeypatch):
+    from importer.cbf_client import temporada_completa
+
+    monkeypatch.setattr("config.CBF_JOGOS_TEMPORADA_COMPLETA", 2)
+    assert temporada_completa(conexao, "serie-a", 2019) is False  # nada coletado
+    gravar_pagina_time(conexao, "serie-a", 2019, 100, PAGINA_TIME, "2026-09-30T10:00:00")
+    assert temporada_completa(conexao, "serie-a", 2019) is False  # só 1 jogo com placar (o outro é futuro)
+
+
 def test_gravar_duas_vezes_nao_duplica(conexao):
     for _ in range(2):
         gravar_classificacao(conexao, "serie-b", 2026, CLASSIFICACAO, "2026-09-27T10:00:00")

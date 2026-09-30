@@ -18,16 +18,19 @@ from stats.concursos import concurso_a_jogar
 from stats.contexto import NOMES_ZONA
 from stats.painel import (
     dados_da_temporada,
+    erro_da_projecao_entre_temporadas,
     frase_amostra_pequena,
     frase_de_projecao,
     frases_da_loteca,
     frases_da_temporada,
     jogos_loteca,
+    nomes_da_temporada,
     participantes_com_minimo,
     participantes_do_concurso,
     resumo_loteca,
     reta_anual,
     tabela_comparativa,
+    temporadas_atuais,
     temporadas_disponiveis,
     tendencia_anual_loteca,
     tendencia_do_aproveitamento,
@@ -254,7 +257,20 @@ def mapa_de_calor(dados: dict, nomes: dict[int, str]) -> go.Figure:
     )
 
 
-def mostrar_temporada(dados: dict, cods: list[int], nomes: dict[int, str], chave: str) -> None:
+@st.cache_data(show_spinner=False)
+def _erro_entre_temporadas(_conexao, versao_dos_jogos: int):
+    """O erro da projeção medido em todas as temporadas completas leva alguns segundos;
+    fica em cache e é refeito quando entram jogos novos (`versao_dos_jogos`)."""
+    return erro_da_projecao_entre_temporadas(_conexao)
+
+
+def _versao_dos_jogos(conexao) -> int:
+    return conexao.execute("SELECT COUNT(*) FROM cbf_partidas WHERE gols_mandante IS NOT NULL").fetchone()[0]
+
+
+def mostrar_temporada(
+    dados: dict, cods: list[int], nomes: dict[int, str], chave: str, erro_entre: dict | None = None
+) -> None:
     """Tabela, leituras, gráficos e mapa de calor de uma série, para os times pedidos."""
     linhas = tabela_comparativa(dados, cods)
     cods = [linha["cod_time"] for linha in linhas]
@@ -262,9 +278,11 @@ def mostrar_temporada(dados: dict, cods: list[int], nomes: dict[int, str], chave
         st.info("Nenhum dos times escolhidos tem jogos coletados nesta série.")
         return
 
-    for frase in frases_da_temporada(dados, cods, nomes):
+    for frase in frases_da_temporada(dados, cods, nomes, erro_entre):
         st.markdown(f"- {frase}")
-    if dados["projecao"] is None:
+    if dados["projecao"] is None and dados.get("encerrada"):
+        st.caption("Temporada encerrada: todos os jogos foram disputados, não há o que projetar.")
+    elif dados["projecao"] is None:
         st.info(
             "Sem projeção para esta série: o número de jogos da temporada não está cadastrado a partir do "
             "regulamento (config.TEMPORADA_JOGOS_POR_TIME). O app não supõe o tamanho da temporada."
@@ -369,8 +387,11 @@ def aba_temporada(conexao, jogos_concurso: list[dict], numero_concurso: int | No
         )
         return
     nomes = nomes_dos_times(conexao)
-    dados_series = {t: dados_da_temporada(conexao, *t) for t in temporadas}
+    # O modo "todos do concurso" usa só a temporada mais recente (a de agora). As passadas
+    # (coleta histórica) só entram no modo livre, para comparar; calculadas quando escolhidas.
+    dados_series = {t: dados_da_temporada(conexao, *t) for t in temporadas_atuais(temporadas)}
     dados_por_cod = {cod: d for d in dados_series.values() if d for cod in d["times"]}
+    erro_entre = _erro_entre_temporadas(conexao, _versao_dos_jogos(conexao))
     modo = st.radio(
         "Quais times analisar", ["Todos os times do concurso a jogar", "Escolher livremente"], horizontal=True,
         key="modo_temporada",
@@ -390,7 +411,7 @@ def aba_temporada(conexao, jogos_concurso: list[dict], numero_concurso: int | No
             cods = [c for c in dados["times"] if c in cods_concurso]
             if cods:
                 st.subheader(f"{NOME_SERIE.get(serie, serie)} {ano}")
-                mostrar_temporada(dados, cods, nomes, f"concurso_{serie}_{ano}")
+                mostrar_temporada(dados, cods, nomes, f"concurso_{serie}_{ano}", erro_entre)
         st.subheader("Jogo a jogo do concurso")
         for jogo in jogos_concurso:
             if not (jogo["casa_cod"] in dados_por_cod or jogo["fora_cod"] in dados_por_cod):
@@ -428,23 +449,31 @@ def aba_temporada(conexao, jogos_concurso: list[dict], numero_concurso: int | No
                     )
     else:
         rotulos = {t: f"{NOME_SERIE.get(t[0], t[0])} {t[1]}" for t in temporadas}
-        escolhida = st.selectbox("Série", temporadas, format_func=rotulos.get, key="serie_livre")
-        dados = dados_series[escolhida]
+        rotulo_escolhido = st.selectbox("Série e ano", list(rotulos.values()), key="serie_livre")
+        escolhida = next(t for t, rotulo in rotulos.items() if rotulo == rotulo_escolhido)
+        dados = dados_series.get(escolhida) or dados_da_temporada(conexao, *escolhida)
         if not dados:
             st.info("Sem jogos com placar nesta série.")
             return
+        # Nome do time naquela temporada (ex.: "Coritiba" em 2019, "Coritiba SAF" em 2026).
+        nomes_da_serie = nomes_da_temporada(conexao, *escolhida)
+        if escolhida not in dados_series:
+            st.caption(
+                f"Temporada passada ({rotulos[escolhida]}): a tabela mostra o resultado final e o nome que cada time tinha "
+                "naquele ano. Sem zonas nem projeção, porque não há mais jogos a disputar."
+            )
         cods_concurso = {cod for j in jogos_concurso for cod in (j["casa_cod"], j["fora_cod"]) if cod}
         padrao = [c for c in dados["times"] if c in cods_concurso] or [
             l["cod_time"] for l in dados["tabelas"][max(dados["tabelas"])][:4]
         ]
         escolhidos = st.multiselect(
-            "Times", options=dados["times"], default=padrao, format_func=lambda c: nomes.get(c, str(c)),
+            "Times", options=dados["times"], default=padrao, format_func=lambda c: nomes_da_serie.get(c, str(c)),
             key=f"times_livre_{escolhida[0]}_{escolhida[1]}",
         )
         if not escolhidos:
             st.info("Escolha ao menos um time para comparar.")
             return
-        mostrar_temporada(dados, escolhidos, nomes, f"livre_{escolhida[0]}_{escolhida[1]}")
+        mostrar_temporada(dados, escolhidos, nomes_da_serie, f"livre_{escolhida[0]}_{escolhida[1]}", erro_entre)
 
 
 # --- aba 2: histórico na Loteca --------------------------------------------------

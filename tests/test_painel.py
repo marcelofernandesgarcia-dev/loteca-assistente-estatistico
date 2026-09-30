@@ -111,6 +111,114 @@ def test_tendencia_do_aproveitamento_fica_entre_0_e_100():
     assert tendencia_do_aproveitamento(movel, ate_rodada=None) is None
 
 
+# --- Várias temporadas (coleta histórica) ------------------------------------------------
+
+import random
+import sqlite3
+
+import db
+from stats.painel import (
+    erro_da_projecao_entre_temporadas,
+    frase_erro_entre_temporadas,
+    nomes_da_temporada,
+    temporadas_atuais,
+    temporadas_disponiveis,
+)
+
+
+def _banco_com_temporadas(anos=(2024, 2025), semente=1):
+    """4 times, turno e returno (12 jogos, 6 rodadas) por temporada, resultados sorteados."""
+    conexao = sqlite3.connect(":memory:")
+    conexao.row_factory = sqlite3.Row
+    conexao.executescript(db.SCHEMA)
+    rng = random.Random(semente)
+    turno = [[(1, 2), (3, 4)], [(1, 3), (2, 4)], [(1, 4), (2, 3)]]
+    id_jogo = 0
+    for ano in anos:
+        rodadas = turno + [[(b, a) for a, b in r] for r in turno]
+        for numero, pares in enumerate(rodadas, start=1):
+            for casa, fora in pares:
+                id_jogo += 1
+                conexao.execute(
+                    "INSERT INTO cbf_partidas (id_jogo, serie, ano, rodada, data_jogo, mandante_id, visitante_id,"
+                    " gols_mandante, gols_visitante, coletado_em) VALUES (?, 'serie-a', ?, ?, ?, ?, ?, ?, ?, 'x')",
+                    (id_jogo, ano, numero, f"{ano}-05-{numero:02d}", casa, fora, rng.randint(0, 3), rng.randint(0, 2)),
+                )
+    return conexao
+
+
+def test_temporadas_atuais_sao_so_as_do_ano_mais_recente():
+    todas = [("serie-a", 2026), ("serie-b", 2026), ("serie-a", 2025), ("serie-b", 2019)]
+    assert temporadas_atuais(todas) == [("serie-a", 2026), ("serie-b", 2026)]
+    assert temporadas_atuais([]) == []
+
+
+def test_temporadas_disponiveis_lista_todas_da_mais_recente_para_a_mais_antiga():
+    assert temporadas_disponiveis(_banco_com_temporadas((2019, 2025, 2022))) == [
+        ("serie-a", 2025), ("serie-a", 2022), ("serie-a", 2019),
+    ]
+
+
+def test_nome_do_time_naquela_temporada_cai_no_nome_atual_quando_falta():
+    conexao = _banco_com_temporadas()
+    conexao.execute("INSERT INTO cbf_times (cod_time, nome) VALUES (1, 'Time Um SAF'), (2, 'Time Dois')")
+    conexao.execute(
+        "INSERT INTO cbf_classificacao (serie, ano, cod_time, rodada, coletado_em, nome_no_ano)"
+        " VALUES ('serie-a', 2019, 1, 38, 'x', 'Time Um')"
+    )
+    assert nomes_da_temporada(conexao, "serie-a", 2019) == {1: "Time Um", 2: "Time Dois"}  # 1 tem nome do ano; 2 cai no atual
+    assert nomes_da_temporada(conexao, "serie-a", 2026)[1] == "Time Um SAF"  # sem nome guardado para 2026: nome atual
+
+
+def test_erro_entre_temporadas_mede_so_temporadas_completas(monkeypatch):
+    monkeypatch.setattr(config, "CBF_JOGOS_TEMPORADA_COMPLETA", 12)
+    monkeypatch.setattr(config, "COMPETICAO_JANELA_MOVEL", 2)
+    conexao = _banco_com_temporadas((2024, 2025))
+    conexao.execute("DELETE FROM cbf_partidas WHERE ano = 2025 AND rodada = 6")  # 2025 incompleta: fica de fora
+    resumo = erro_da_projecao_entre_temporadas(conexao, rodadas_de_teste=(2, 4))
+    assert resumo["temporadas"] == [("serie-a", 2024)]
+    assert set(resumo["por_rodada"]) == {2, 4}
+    r2, r4 = resumo["por_rodada"][2], resumo["por_rodada"][4]
+    assert (r2["temporadas"], r2["jogos_restantes"], r4["jogos_restantes"]) == (1, 4, 2)
+    assert r2["erro_temporada"] >= 0 and r2["erro_recente"] >= 0 and r2["com_recente"] == 1
+    assert 0 <= r2["recente_melhor_em"] <= 1
+
+
+def test_erro_entre_temporadas_sem_temporada_completa_devolve_none():
+    assert erro_da_projecao_entre_temporadas(_banco_com_temporadas((2025,))) is None  # 12 jogos < 380
+
+
+def test_erro_entre_temporadas_calcula_a_media_das_temporadas(monkeypatch):
+    monkeypatch.setattr(config, "CBF_JOGOS_TEMPORADA_COMPLETA", 12)
+    monkeypatch.setattr(config, "COMPETICAO_JANELA_MOVEL", 2)
+    conexao = _banco_com_temporadas((2023, 2024, 2025))
+    resumo = erro_da_projecao_entre_temporadas(conexao, rodadas_de_teste=(3,))
+    from stats.painel import erro_da_projecao
+    from stats import competicao
+
+    esperado = [
+        erro_da_projecao(competicao.carregar_partidas(conexao, "serie-a", ano), rodada_teste=3)["erro_medio_temporada"]
+        for ano in (2023, 2024, 2025)
+    ]
+    assert resumo["por_rodada"][3]["temporadas"] == 3
+    assert resumo["por_rodada"][3]["erro_temporada"] == pytest.approx(sum(esperado) / 3)
+
+
+def test_frase_do_erro_entre_temporadas_traz_os_numeros_e_o_periodo():
+    resumo = {
+        "temporadas": [("serie-a", 2019), ("serie-b", 2025)],
+        "por_rodada": {
+            28: {"temporadas": 2, "jogos_restantes": 10, "erro_temporada": 2.5, "erro_recente": 3.5, "recente_melhor_em": 0, "com_recente": 2},
+            19: {"temporadas": 2, "jogos_restantes": 19, "erro_temporada": 4.0, "erro_recente": None, "recente_melhor_em": 0, "com_recente": 0},
+        },
+    }
+    frase = frase_erro_entre_temporadas(resumo)
+    assert "2 temporadas completas (2019 a 2025, Séries A e B)" in frase
+    assert "faltando 10 jogos, o ritmo da temporada errou 2,5 pontos por time e o ritmo recente 3,5 (o recente foi melhor em 0 de 2 temporadas)" in frase
+    assert "faltando 19 jogos, o ritmo da temporada errou 4,0 pontos por time" in frase and "4,0 pontos por time e o ritmo" not in frase
+    assert frase_erro_entre_temporadas(None) is None and frase_erro_entre_temporadas({"temporadas": [], "por_rodada": {}}) is None
+
+
 def _jogo_loteca(ano, resultado, mando="casa", pro=1, contra=0):
     pontos = {"V": 3, "E": 1, "D": 0}[resultado]
     return {"ano": ano, "mando": mando, "gols_pro": pro, "gols_contra": contra, "resultado": resultado, "pontos": pontos}

@@ -6,7 +6,10 @@ import re
 
 def classificacao_do_participante(conexao, participante_id: int) -> dict | None:
     """Última linha de classificação oficial (CBF) do time pareado com o
-    participante da Loteca, ou None se não houver par ou coleta."""
+    participante da Loteca, ou None se não houver par ou coleta. Só da temporada
+    MAIS RECENTE coletada: as temporadas passadas (coleta histórica, 2019 a 2025)
+    ficam no banco para análise, mas um clube que só aparece nelas não é mostrado
+    como se estivesse na competição de agora."""
     linha = conexao.execute(
         """
         SELECT c.*, t.nome AS nome_cbf, t.uf AS uf_cbf
@@ -14,6 +17,7 @@ def classificacao_do_participante(conexao, participante_id: int) -> dict | None:
         JOIN cbf_classificacao c ON c.cod_time = m.cod_time
         JOIN cbf_times t ON t.cod_time = c.cod_time
         WHERE m.participante_id = ?
+          AND c.ano = (SELECT MAX(ano) FROM cbf_classificacao)
         ORDER BY c.ano DESC, c.rodada DESC
         LIMIT 1
         """,
@@ -29,6 +33,7 @@ def estatisticas_do_participante(conexao, participante_id: int) -> dict | None:
         FROM mapa_cbf_participante m
         JOIN cbf_estatisticas_time e ON e.cod_time = m.cod_time
         WHERE m.participante_id = ?
+          AND e.ano = (SELECT MAX(ano) FROM cbf_classificacao)
         ORDER BY e.ano DESC LIMIT 1
         """,
         (participante_id,),
@@ -48,6 +53,7 @@ def partidas_do_participante(conexao, participante_id: int) -> list[dict]:
         JOIN cbf_times tm ON tm.cod_time = p.mandante_id
         JOIN cbf_times tv ON tv.cod_time = p.visitante_id
         WHERE m.participante_id = ?
+          AND p.ano = (SELECT MAX(ano) FROM cbf_partidas)
         ORDER BY p.data_jogo DESC, p.rodada DESC
         """,
         (participante_id,),
