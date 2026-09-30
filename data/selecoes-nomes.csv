@@ -1,0 +1,78 @@
+# Nome da seleção na Loteca (sem acento, maiúsculo) -> nome na base aberta de resultados internacionais
+# (data/externos/international_results.csv, licença CC0). Todos os nomes foram conferidos contra a base em 30/09/2026.
+# "IRLANDA" da Loteca é a República da Irlanda (a Irlanda do Norte tem linha própria). Acrescente uma linha por seleção nova.
+nome_loteca;nome_base
+AFRICA DO SUL;South Africa
+ALBANIA;Albania
+ALEMANHA;Germany
+ANDORRA;Andorra
+ARABIA SAUDITA;Saudi Arabia
+ARGELIA;Algeria
+ARGENTINA;Argentina
+ARMENIA;Armenia
+AUSTRALIA;Australia
+AUSTRIA;Austria
+BELGICA;Belgium
+BOLIVIA;Bolivia
+BRASIL;Brazil
+BULGARIA;Bulgaria
+CAMAROES;Cameroon
+CANADA;Canada
+CATAR;Qatar
+CAZAQUISTAO;Kazakhstan
+CHILE;Chile
+CHIPRE;Cyprus
+COLOMBIA;Colombia
+COREIA DO SUL;South Korea
+CROACIA;Croatia
+DINAMARCA;Denmark
+EGITO;Egypt
+EQUADOR;Ecuador
+ESCOCIA;Scotland
+ESLOVAQUIA;Slovakia
+ESLOVENIA;Slovenia
+ESPANHA;Spain
+ESTADOS UNIDOS;United States
+ESTONIA;Estonia
+FINLANDIA;Finland
+FRANCA;France
+GANA;Ghana
+GEORGIA;Georgia
+GIBRALTAR;Gibraltar
+GRECIA;Greece
+HOLANDA;Netherlands
+HUNGRIA;Hungary
+INGLATERRA;England
+IRA;Iran
+IRLANDA;Republic of Ireland
+IRLANDA DO NORTE;Northern Ireland
+ISLANDIA;Iceland
+ISRAEL;Israel
+ITALIA;Italy
+JAPAO;Japan
+LETONIA;Latvia
+LITUANIA;Lithuania
+LUXEMBURGO;Luxembourg
+MALTA;Malta
+MARROCOS;Morocco
+MEXICO;Mexico
+MONTENEGRO;Montenegro
+NIGERIA;Nigeria
+NORUEGA;Norway
+PAIS DE GALES;Wales
+PARAGUAI;Paraguay
+PERU;Peru
+POLONIA;Poland
+PORTUGAL;Portugal
+REPUBLICA TCHECA;Czech Republic
+ROMENIA;Romania
+RUSSIA;Russia
+SENEGAL;Senegal
+SERVIA;Serbia
+SUECIA;Sweden
+SUICA;Switzerland
+TUNISIA;Tunisia
+TURQUIA;Turkey
+UCRANIA;Ukraine
+URUGUAI;Uruguay
+VENEZUELA;Venezuela

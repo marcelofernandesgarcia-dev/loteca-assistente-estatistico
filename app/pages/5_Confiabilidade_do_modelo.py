@@ -13,7 +13,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 import streamlit as st
 from util import mostrar_aviso_responsabilidade, obter_conexao
 
+import config
 from stats.backtest import executar_backtest
+from stats.selecoes import backtest_selecoes
 
 st.title("Confiabilidade do modelo")
 mostrar_aviso_responsabilidade()
@@ -26,6 +28,10 @@ st.caption(
 conexao = obter_conexao()
 with st.spinner("Calculando..."):
     resultado = executar_backtest(conexao)
+    try:
+        resultado_selecoes = backtest_selecoes(conexao)
+    except (FileNotFoundError, ValueError):
+        resultado_selecoes = None  # base aberta de seleções ausente: a página segue sem essa seção
 conexao.close()
 
 if resultado["jogos_avaliados"] == 0:
@@ -94,10 +100,55 @@ else:
         f"{p11['sempre_mandante']:.1f}%, {p11['favorito_do_modelo']:.1f}%, {p11['com_cobertura']:.1f}%."
     )
 
+st.subheader("Jogos entre duas seleções (força por Elo)")
+if resultado_selecoes is None:
+    st.info(
+        "Base aberta de resultados de seleções não encontrada (data/externos/international_results.csv): "
+        "os jogos entre seleções usam o modelo acima."
+    )
+elif resultado_selecoes["avaliados"] == 0:
+    st.info("Ainda não há jogos entre seleções da Loteca suficientes, depois do corte do teste, para avaliar o Elo.")
+else:
+    s = resultado_selecoes
+    rotulos = {
+        "elo": "Elo, campo desconhecido (o que o app usa)",
+        "elo_campo_conhecido": "Elo, campo conhecido (só para dimensionar)",
+        "atual": "Modelo anterior (só jogos da Loteca)",
+        "frequencia": "Frequência histórica simples",
+    }
+    st.caption(
+        "Os jogos entre duas seleções usam a força por Elo, calculada com a base aberta de resultados "
+        "internacionais (cerca de 49 mil jogos, licença CC0), porque a Loteca tem só de 2 a 45 jogos de cada seleção. "
+        "O teste abaixo é jogo a jogo e sem olhar o futuro: a curva foi ajustada só com jogos anteriores a "
+        f"{config.SELECOES_CORTE_TESTE[:4]}, e o rating de cada jogo usa só partidas anteriores àquele dia."
+    )
+    contra = s["contra_atual"]
+    getattr(st, "success" if contra["veredito"] == "melhor que a referência" else "warning")(
+        f"**Veredito:** o Elo é **{contra['veredito']}** do modelo anterior, com 95% de confiança, em "
+        f"{s['avaliados']} jogos de seleções da Loteca (diferença na perda logarítmica {contra['diferenca']:+.3f}; "
+        "menor é melhor)."
+    )
+    linhas_metricas = "".join(
+        f"| {rotulos[nome]} | {m['acuracia']:.1f}% | {m['brier']:.4f} | {m['perda_log']:.4f} | {m['prob_media_do_real']:.1f}% |\n"
+        for nome, m in s["metricas"].items()
+    )
+    st.markdown(
+        "| Modelo | Acerto do favorito | Brier | Perda log | Chance dada ao que aconteceu |\n|---|---|---|---|---|\n"
+        + linhas_metricas
+    )
+    st.caption(
+        f"Qualidade da conferência: dos {s['jogos_da_loteca']} jogos de seleções da Loteca, {s['casados_com_a_base']} "
+        f"foram casados com a base aberta (mesmos times, data com até {config.SELECOES_TOLERANCIA_DIAS} dias de diferença). "
+        f"{s['sem_par_na_base']} não têm par (torneios de base ou feminino, que a Loteca lista com o nome da seleção principal). "
+        f"Em {s['resultado_diferente']} o resultado difere: são mata-matas de Copa do Mundo em que a Loteca conta os 90 "
+        "minutos e a base soma a prorrogação. O app não sabe, antes do jogo, se ele é em campo neutro; por isso usa a fração "
+        "de jogos em campo não-neutro dos últimos anos. Os pesos do Elo são valores de convenção, não ajustados aos jogos da Loteca."
+    )
+
 st.subheader("O que isso quer dizer")
 if veredito == "pior que a referência":
     st.warning(
-        "Hoje, o percentual calculado (Poisson sobre o histórico) **não supera** simplesmente usar a frequência "
+        "Nos jogos que envolvem clubes, o percentual calculado (Poisson sobre o histórico) **não supera** simplesmente usar a frequência "
         "histórica de 1/X/2 (47%/26%/27%) -- e é mais confiante do que deveria nas faixas altas (veja a calibração "
         "acima). Isso não muda o objetivo do app (organizar a análise), mas significa que os percentuais de hoje "
         "devem ser lidos como **estimativa exploratória**, não como vantagem estatística comprovada. Antes de "

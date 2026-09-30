@@ -721,8 +721,9 @@ def renderizar_proximo_jogo(conexao, participante_id, cod_time, classif, partida
         st.write(f"**Concurso {a_jogar['numero']} · jogo {jogo['num_jogo']}: {jogo['casa']} x {jogo['fora']}** ({formatar_data_br(jogo['data_jogo'])})")
         atual = percentual_historico(conexao, jogo["casa_id"], jogo["fora_id"])
         origem = origem_do_percentual(conexao, jogo["casa_id"], jogo["fora_id"])
+        por_elo = origem["metodo"] == "elo_selecoes"
         linhas = [{
-            "Modelo": "Atual (histórico da Loteca)",
+            "Modelo": "Atual (força por Elo, base aberta de seleções)" if por_elo else "Atual (histórico da Loteca)",
             f"Vitória {jogo['casa']}": f"{atual['1']:.0f}%", "Empate": f"{atual['X']:.0f}%", f"Vitória {jogo['fora']}": f"{atual['2']:.0f}%",
         }]
         cod_casa, cod_fora = cod_time_do_participante(conexao, jogo["casa_id"]), cod_time_do_participante(conexao, jogo["fora_id"])
@@ -736,7 +737,14 @@ def renderizar_proximo_jogo(conexao, participante_id, cod_time, classif, partida
                 f"Vitória {jogo['fora']}": f"{analise['p_fora'] * 100:.0f}%",
             })
         st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
-        if origem["metodo"] == "frequencia_global":
+        if por_elo:
+            st.caption(
+                "Modelo atual (jogo entre duas seleções): força de cada seleção pelo rating Elo, calculado com os cerca de "
+                "49 mil jogos da base aberta de resultados internacionais (licença CC0), e não só com os poucos jogos que "
+                "caíram na Loteca. Em teste jogo a jogo, sem olhar o futuro, acertou mais que o modelo anterior (página "
+                "'Confiabilidade do modelo'). O campo do jogo (neutro ou não) é desconhecido antes da partida."
+            )
+        elif origem["metodo"] == "frequencia_global":
             st.caption(
                 f"Modelo atual: amostra pequena na base da Loteca (menor cenário com {origem['menor_amostra']} jogos, mínimo "
                 f"{origem['minimo_necessario']}); por isso o resultado é a frequência global de 1/X/2, igual para vários jogos, "

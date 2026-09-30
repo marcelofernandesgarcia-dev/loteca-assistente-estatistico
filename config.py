@@ -252,6 +252,35 @@ PAINEL_JANELA_RECENTE_LOTECA = 10  # jogos do "ritmo recente" no histórico da L
 PAINEL_RODADA_TESTE_PROJECAO = 19  # rodada de onde se mede quanto a projeção por ritmo teria errado
 PAINEL_ANOS_MINIMOS_RETA = 3  # anos com base mínima para desenhar a reta de tendência anual
 
+# Seleções (stats/selecoes.py; P1 da priorização estatística, 30/09/2026).
+# Base aberta de resultados internacionais (licença CC0-1.0), baixada de
+# github.com/martj42/international_results, e a lista curada de nomes.
+SELECOES_BASE_CSV = BASE_DIR / "data" / "externos" / "international_results.csv"
+SELECOES_NOMES_CSV = BASE_DIR / "data" / "selecoes-nomes.csv"
+# Força por Elo. Estes valores seguem a convenção dos sistemas Elo de futebol de
+# seleções (não conferida nesta sessão); são PARÂMETROS, e quem decide se servem é
+# o teste jogo a jogo contra o resultado real (stats/selecoes.backtest_selecoes).
+ELO_RATING_INICIAL = 1500.0
+ELO_VANTAGEM_MANDANTE = 100.0  # pontos de Elo somados a quem joga em casa (só se o campo não é neutro)
+ELO_K = {  # quanto um jogo mexe no rating, por tipo de torneio
+    "copa_do_mundo": 60.0,
+    "continental": 50.0,
+    "eliminatorias_e_liga_das_nacoes": 40.0,
+    "outros": 30.0,
+    "amistoso": 20.0,
+}
+ELO_TORNEIOS_CONTINENTAIS = {  # nomes como aparecem na base, em minúsculas
+    "uefa euro", "copa américa", "african cup of nations", "afc asian cup", "gold cup",
+    "confederations cup", "oceania nations cup", "concacaf championship",
+}
+SELECOES_TREINO_DESDE = "1990-01-01"  # o ajuste da curva Elo -> probabilidade usa jogos a partir daqui
+SELECOES_CORTE_TESTE = "2010-01-01"  # a curva é ajustada só com jogos ANTES disto; o teste usa jogos DEPOIS
+SELECOES_TOLERANCIA_DIAS = 3  # dias de diferença aceitos ao casar um jogo da Loteca com a base
+# Modelo dos jogos entre duas seleções: "elo" (força pela base aberta) ou "historico" (o modelo
+# anterior, só com os jogos da Loteca). Mudar o padrão exige o teste mostrar ganho; para voltar
+# ao anterior: variável de ambiente LOTECA_MODELO_SELECOES=historico.
+MODELO_SELECOES = os.environ.get("LOTECA_MODELO_SELECOES", "elo")
+
 # Ficha do time: abaixo disso, a amostra é sinalizada como pequena (baixa confiança)
 FICHA_AMOSTRA_PEQUENA = 10
 

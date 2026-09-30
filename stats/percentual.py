@@ -12,6 +12,7 @@ Quando faltam jogos suficientes de um participante, cai para a frequência
 global (regressão à média) em vez de extrapolar de amostra pequena --
 evita apresentar um percentual "confiante" sem base.
 """
+import logging
 import math
 
 import config
@@ -73,8 +74,37 @@ def _forca_defesa_fora(conexao, participante_id: int) -> tuple[float, int]:
     return (linha["media"] or 0.0), linha["n"]
 
 
+logger = logging.getLogger(__name__)
+
+
+def _prever_selecoes(conexao, casa_id: int, fora_id: int) -> dict | None:
+    """Jogo entre duas seleções: força pela base aberta de resultados internacionais
+    (stats/selecoes.py), que no teste jogo a jogo acertou bem mais que o histórico
+    da Loteca (poucos jogos por seleção). None quando não se aplica (clube na jogada,
+    chave desligada) ou quando a base não está disponível: cai no modelo anterior."""
+    if config.MODELO_SELECOES != "elo":
+        return None
+    linhas = conexao.execute(
+        "SELECT id, nome, tipo FROM participantes WHERE id IN (?, ?)", (casa_id, fora_id)
+    ).fetchall()
+    por_id = {linha["id"]: linha for linha in linhas}
+    if casa_id not in por_id or fora_id not in por_id or any(l["tipo"] != "selecao" for l in por_id.values()):
+        return None
+    try:
+        from stats.selecoes import modelo_em_cache
+
+        return modelo_em_cache(conexao).prever(por_id[casa_id]["nome"], por_id[fora_id]["nome"])
+    except (FileNotFoundError, ValueError) as erro:
+        logger.warning("Base de seleções indisponível (%s); usando o modelo anterior.", erro)
+        return None
+
+
 def percentual_historico(conexao, casa_id: int, fora_id: int) -> dict:
-    """Retorna {'1': %, 'X': %, '2': %} a partir do histórico próprio."""
+    """Retorna {'1': %, 'X': %, '2': %} a partir do histórico próprio (ou, entre
+    duas seleções, da força pela base aberta de resultados internacionais)."""
+    selecoes = _prever_selecoes(conexao, casa_id, fora_id)
+    if selecoes is not None:
+        return selecoes
     media_geral = _media_gols_geral(conexao)
 
     ataque_casa, n1 = _forca_ataque_casa(conexao, casa_id)
@@ -117,9 +147,11 @@ def percentual_historico(conexao, casa_id: int, fora_id: int) -> dict:
 
 
 def origem_do_percentual(conexao, casa_id: int, fora_id: int) -> dict:
-    """Diz se `percentual_historico` usou a força própria dos times (Poisson) ou
-    caiu na frequência global por amostra pequena, e quantos jogos há na base
-    da Loteca no cenário mais escasso."""
+    """Diz se `percentual_historico` usou a força própria dos times (Poisson), a
+    força por Elo da base aberta (duas seleções) ou caiu na frequência global por
+    amostra pequena, e quantos jogos há na base da Loteca no cenário mais escasso."""
+    if _prever_selecoes(conexao, casa_id, fora_id) is not None:
+        return {"metodo": "elo_selecoes", "menor_amostra": None, "minimo_necessario": None}
     menor_amostra = min(
         _forca_ataque_casa(conexao, casa_id)[1],
         _forca_defesa_fora(conexao, fora_id)[1],
