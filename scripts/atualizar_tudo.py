@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Atualiza as três fontes de dado (CAIXA, CBF, notícias) numa só chamada,
+"""Atualiza as fontes de dado (CAIXA, CBF, calibração dos percentuais, notícias) numa só chamada,
 registrando o resultado de cada uma em `execucoes` -- o painel "Status dos
 dados" da página inicial lê essa tabela (etapa D1 do roteiro).
 
@@ -15,10 +15,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import config
 import db
-from externo.varredura import concurso_alvo_da_semana, executar_para_concurso
+from externo.varredura import concurso_alvo_da_semana, executar_para_concurso, recalcular_percentuais_gravados
 from importer.caixa_client import importar_concurso, importar_programacao
 from importer.cbf_client import coletar_todas
+from stats import calibracao
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("atualizar_tudo")
@@ -43,6 +45,26 @@ def _atualizar_cbf(conexao) -> None:
     logger.info("CBF: %s times coletados, %s erro(s)", total_times, len(erros))
 
 
+def _atualizar_calibracao(conexao) -> None:
+    """Refaz a calibração dos percentuais quando entrou concurso apurado novo (ou ainda não há parâmetros) e
+    regrava os percentuais já calculados pelas varreduras. Roda antes das notícias, que usam o percentual corrigido."""
+    if not config.CALIBRACAO_ATIVA:
+        logger.info("Calibração: desligada (LOTECA_CALIBRACAO=0); nada a fazer.")
+        return
+    if not calibracao.precisa_recalibrar(conexao):
+        logger.info("Calibração: parâmetros já em dia com o último concurso apurado.")
+        return
+    parametros = calibracao.recalibrar(conexao)
+    if parametros is None:
+        raise RuntimeError("sem jogos apurados suficientes para calibrar")
+    refeitos = recalcular_percentuais_gravados(conexao)
+    conexao.commit()
+    db.registrar_execucao(conexao, "calibracao", sucesso=True, quantidade=sum(p["jogos"] for p in parametros.values()))
+    conexao.commit()
+    logger.info("Calibração: %s; %s concurso(s) com percentuais regravados.",
+                "; ".join(f"{o} expoente {p['expoente']:.2f} mistura {p['mistura']:.2f}" for o, p in parametros.items()), refeitos)
+
+
 def _atualizar_noticias(conexao) -> None:
     alvo = concurso_alvo_da_semana(conexao)
     if not alvo:
@@ -60,7 +82,9 @@ def main() -> int:
     conexao = db.conectar()
     falhas = 0
     try:
-        for nome, funcao in (("caixa", _atualizar_caixa), ("cbf", _atualizar_cbf), ("noticias", _atualizar_noticias)):
+        for nome, funcao in (
+            ("caixa", _atualizar_caixa), ("cbf", _atualizar_cbf), ("calibracao", _atualizar_calibracao), ("noticias", _atualizar_noticias),
+        ):
             try:
                 funcao(conexao)
             except Exception as erro:

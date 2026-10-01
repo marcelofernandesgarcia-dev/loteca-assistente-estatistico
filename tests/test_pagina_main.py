@@ -26,7 +26,7 @@ def banco(tmp_path, monkeypatch):
 def test_sem_nenhuma_execucao_mostra_nunca_rodou(banco):
     at = AppTest.from_file(str(PAGINA), default_timeout=60).run()
     assert not at.exception, [e.value for e in at.exception]
-    assert sum(1 for c in at.caption if "Nunca rodou" in c.value) == 3
+    assert sum(1 for c in at.caption if "Nunca rodou" in c.value) == 4  # CAIXA, CBF, calibração e notícias
 
 
 def test_execucao_recente_com_sucesso_mostra_ok(banco):

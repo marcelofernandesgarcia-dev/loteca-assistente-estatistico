@@ -165,6 +165,17 @@ CREATE TABLE IF NOT EXISTS execucoes (
     erro TEXT
 );
 
+-- Parâmetros da calibração dos percentuais (E4, stats/calibracao.py): um por origem do percentual
+-- (poisson, frequencia_global, elo_selecoes). Refeitos quando entra concurso apurado novo.
+CREATE TABLE IF NOT EXISTS calibracao (
+    origem TEXT PRIMARY KEY,
+    expoente REAL NOT NULL,
+    mistura REAL NOT NULL,
+    jogos INTEGER NOT NULL,
+    ate_concurso INTEGER NOT NULL,
+    ajustado_em TEXT NOT NULL
+);
+
 -- Bilhetes salvos pelo usuário (etapa A3). Só neste computador -- loteca.db
 -- não vai ao GitHub. Sem dado pessoal: não há nome, CPF nem qualquer
 -- identificação de quem marcou, só a marcação em si e o gasto.

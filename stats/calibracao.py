@@ -18,8 +18,10 @@ dois isolados e a ausência de correção como casos particulares).
 
 O ajuste de notícias não tem histórico para ser calibrado: continua aplicado por cima, como hoje.
 """
+import datetime as dt
 import logging
 import random
+import sqlite3
 from collections import defaultdict
 
 import numpy as np
@@ -337,6 +339,106 @@ def estudar(registros: list[dict]) -> dict | None:
         "distribuicao_corrigida": distribuicao_de_acertos_por_concurso(registros, principal, mascara),
         "parametros_finais": parametros_finais(registros),
     }
+
+
+# ------------------------------------------------------------------ uso no app (Fase 2)
+
+ORIGEM_TEXTO = {
+    "poisson": "Histórico dos clubes",
+    "frequencia_global": "Frequência simples (poucos jogos)",
+    "elo_selecoes": "Elo das seleções",
+}
+
+
+def gravar_parametros(conexao, parametros: dict[str, dict], ate_concurso: int) -> None:
+    """Grava (substitui) os parâmetros por origem. `parametros` vem de `parametros_finais`."""
+    agora = _agora()
+    for origem, p in parametros.items():
+        conexao.execute(
+            "INSERT INTO calibracao (origem, expoente, mistura, jogos, ate_concurso, ajustado_em) VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(origem) DO UPDATE SET expoente = excluded.expoente, mistura = excluded.mistura, jogos = excluded.jogos, "
+            "ate_concurso = excluded.ate_concurso, ajustado_em = excluded.ajustado_em",
+            (origem, p["expoente"], p["mistura"], p["jogos"], ate_concurso, agora),
+        )
+
+
+def carregar_parametros(conexao) -> dict[str, dict]:
+    """{origem: {expoente, mistura, jogos, ate_concurso, ajustado_em}}; vazio se a tabela não existe ou não tem linhas."""
+    try:
+        linhas = conexao.execute("SELECT origem, expoente, mistura, jogos, ate_concurso, ajustado_em FROM calibracao").fetchall()
+    except sqlite3.OperationalError:
+        return {}  # banco ainda sem a tabela: o app segue sem correção até `inicializar_schema` rodar
+    return {l["origem"]: dict(l) for l in linhas}
+
+
+def ultimo_concurso_apurado(conexao) -> int:
+    linha = conexao.execute("SELECT COALESCE(MAX(concurso_numero), 0) FROM jogos WHERE resultado IS NOT NULL").fetchone()
+    return int(linha[0])
+
+
+def precisa_recalibrar(conexao) -> bool:
+    """True quando não há parâmetros ou entrou concurso apurado depois do último ajuste."""
+    parametros = carregar_parametros(conexao)
+    if not parametros:
+        return True
+    return ultimo_concurso_apurado(conexao) > max(p["ate_concurso"] for p in parametros.values())
+
+
+def recalibrar(conexao) -> dict | None:
+    """Refaz os parâmetros com todos os concursos apurados e grava. Devolve {origem: parâmetros} ou None se
+    não há jogos suficientes. Não faz commit."""
+    registros = carregar_registros(conexao)
+    if not registros:
+        return None
+    parametros = parametros_finais(registros)
+    gravar_parametros(conexao, parametros, max(r["concurso"] for r in registros))
+    return parametros
+
+
+def corrigir_percentual(original: dict, origem: str, frequencia: dict, parametros: dict) -> dict:
+    """Percentual corrigido ({'1','X','2'} em %) com os parâmetros da origem."""
+    P = como_matriz([original])
+    F = como_matriz([frequencia])
+    Q = aplicar(P, F, parametros["expoente"], parametros["mistura"])[0]
+    return {c: 100.0 * float(v) for c, v in zip(COLUNAS, Q)}
+
+
+def calibrar_jogo(conexao, casa_id: int, fora_id: int, original: dict | None = None) -> dict:
+    """O percentual de um jogo com a calibração aplicada.
+
+    Devolve {'original', 'calibrado', 'origem', 'aplicada', 'expoente', 'mistura', 'motivo'}. `calibrado` é igual a
+    `original` quando a correção não se aplica (interruptor desligado, origem não calibrada ou sem parâmetros
+    gravados); `motivo` diz qual foi o caso."""
+    from stats.frequencia import frequencia_global
+    from stats.percentual import origem_do_percentual, percentual_historico
+
+    original = original if original is not None else percentual_historico(conexao, casa_id, fora_id)
+    origem = origem_do_percentual(conexao, casa_id, fora_id)["metodo"]
+    resultado = {"original": original, "calibrado": original, "origem": origem, "aplicada": False,
+                 "expoente": None, "mistura": None, "motivo": None}
+    if not config.CALIBRACAO_ATIVA:
+        resultado["motivo"] = "interruptor desligado"
+        return resultado
+    if origem not in config.CALIBRACAO_ORIGENS_APLICADAS:
+        resultado["motivo"] = "origem não corrigida"
+        return resultado
+    parametros = carregar_parametros(conexao).get(origem)
+    if parametros is None:
+        resultado["motivo"] = "sem parâmetros gravados"
+        return resultado
+    frequencia = frequencia_global(conexao)
+    if not frequencia.get("total_jogos"):
+        resultado["motivo"] = "sem frequência de referência"
+        return resultado
+    resultado.update(
+        calibrado=corrigir_percentual(original, origem, frequencia, parametros), aplicada=True,
+        expoente=parametros["expoente"], mistura=parametros["mistura"], motivo=None,
+    )
+    return resultado
+
+
+def _agora() -> str:
+    return dt.datetime.now().isoformat(timespec="seconds")
 
 
 def carregar_registros(conexao) -> list[dict]:

@@ -378,6 +378,12 @@ B2_JOGOS_ANTERIORES_MINIMOS = 5  # os dois times com pelo menos 5 jogos já conh
 B2_REPETICOES_BOOTSTRAP = 2000
 B2_SEMENTE = 20261002
 
+# Calibração aplicada nos percentuais do app (E4, Fase 2, aprovada pelo usuário em 01/10/2026): clubes e
+# frequência simples são corrigidos; o Elo das seleções NÃO (o estudo mostrou que a correção não ajuda).
+# Para voltar ao cálculo anterior: variável de ambiente LOTECA_CALIBRACAO=0.
+CALIBRACAO_ATIVA = os.environ.get("LOTECA_CALIBRACAO", "1") == "1"
+CALIBRACAO_ORIGENS_APLICADAS = ("poisson", "frequencia_global")
+
 # Calibração dos percentuais (E4, stats/calibracao.py), fixada antes de ver o resultado (01/10/2026).
 # Correção: q ∝ p^expoente (expoente < 1 achata percentuais confiantes demais), misturada com a frequência
 # simples: q = mistura * q + (1 - mistura) * frequência. Expoente 1 e mistura 1 = sem correção.

@@ -94,6 +94,16 @@ def executar_para_concurso(conexao, numero_concurso: int) -> list[dict]:
     return resultados
 
 
+def recalcular_percentuais_gravados(conexao) -> int:
+    """Refaz o registro de `percentuais` dos concursos que já tiveram varredura, com a calibração atual.
+    Devolve quantos concursos foram refeitos. Não faz commit."""
+    agora = dt.datetime.now().isoformat(timespec="seconds")
+    concursos = [linha[0] for linha in conexao.execute("SELECT DISTINCT concurso_numero FROM fatores_externos ORDER BY 1")]
+    for numero in concursos:
+        _recalcular_percentuais_do_concurso(conexao, numero, agora)
+    return len(concursos)
+
+
 def _recalcular_percentuais_do_concurso(conexao, numero_concurso: int, agora: str) -> None:
     """Grava em `percentuais` o que a varredura calculou: histórico, ajuste do
     participante e percentual final já normalizado para somar 100%."""

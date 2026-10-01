@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import streamlit as st
 from ano_em_curso_ui import mostrar_ano_em_curso, resumo_do_ano
+from calibracao_ui import mostrar_calibracao
 from estilo_caixa import renderizar_cartao, renderizar_tabela, renderizar_titulo_cartao
 from premiacao_ui import mostrar_premiacao
 from sugestoes_ui import (
@@ -342,6 +343,7 @@ else:
         st.caption(f"Última varredura de notícias: {quando} · {n_ajustados} de {len(ajustes)} participantes com ajuste.")
     else:
         st.caption("Sem varredura de notícias para este concurso: os percentuais são só o histórico.")
+    mostrar_calibracao(jogos_vigente, calculos)
     mostrar_motivos_do_ajuste(jogos_vigente, calculos)
     mostrar_noticias_de_contexto(jogos_vigente, ajustes)
 

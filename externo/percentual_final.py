@@ -7,6 +7,7 @@ Calculado na hora com o histórico atual, aplicando os ajustes GUARDADOS em
 import json
 
 from externo.ajuste import aplicar_ajuste
+from stats.calibracao import calibrar_jogo
 from stats.percentual import percentual_historico
 
 
@@ -34,10 +35,17 @@ def ajustes_do_concurso(conexao, numero_concurso: int) -> dict[int, dict]:
 
 
 def percentuais_do_jogo(conexao, casa_id: int, fora_id: int, ajustes: dict[int, dict]) -> dict:
-    historico = percentual_historico(conexao, casa_id, fora_id)
+    """Percentual do jogo em três camadas: `original` (modelo, sem correção), `historico` (a base do app: o original
+    já com a calibração quando ela se aplica) e `final` (a base mais o ajuste das notícias). O deslocamento das
+    notícias é sempre medido contra `historico`. `calibracao` explica a correção (origem, parâmetros, motivo)."""
+    original = percentual_historico(conexao, casa_id, fora_id)
+    calibracao = calibrar_jogo(conexao, casa_id, fora_id, original)
+    historico = calibracao["calibrado"]
     da_casa, do_fora = ajustes.get(casa_id), ajustes.get(fora_id)
     resultado = aplicar_ajuste(historico, da_casa["ajuste"] if da_casa else 0.0, do_fora["ajuste"] if do_fora else 0.0)
     return {
+        "original": original,
+        "calibracao": calibracao,
         "historico": historico,
         "final": resultado["final"],
         "deslocamento": resultado["deslocamento"],

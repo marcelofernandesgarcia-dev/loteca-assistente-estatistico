@@ -54,7 +54,8 @@ from stats.forma import forma_recente
 from stats.frequencia import frequencia_global, frequencia_participante
 from stats.modelo_temporada import analisar_confronto, forcas_da_serie
 from stats.participantes import rotulos_de_participantes
-from stats.percentual import origem_do_percentual, percentual_historico
+from stats.calibracao import calibrar_jogo
+from stats.percentual import origem_do_percentual
 from stats.temporada import desempenho_no_ano
 
 NOMES_SERIE = {"serie-a": "Série A", "serie-b": "Série B"}
@@ -735,11 +736,13 @@ def renderizar_proximo_jogo(conexao, participante_id, cod_time, classif, partida
         return
     for jogo in jogos_loteca:
         st.write(f"**Concurso {a_jogar['numero']} · jogo {jogo['num_jogo']}: {jogo['casa']} x {jogo['fora']}** ({formatar_data_br(jogo['data_jogo'])})")
-        atual = percentual_historico(conexao, jogo["casa_id"], jogo["fora_id"])
+        calibrado = calibrar_jogo(conexao, jogo["casa_id"], jogo["fora_id"])
+        atual = calibrado["calibrado"]
         origem = origem_do_percentual(conexao, jogo["casa_id"], jogo["fora_id"])
         por_elo = origem["metodo"] == "elo_selecoes"
         linhas = [{
-            "Modelo": "Atual (força por Elo, base aberta de seleções)" if por_elo else "Atual (histórico da Loteca)",
+            "Modelo": "Atual (força por Elo, base aberta de seleções)" if por_elo else (
+                "Atual (histórico da Loteca, corrigido pela calibração)" if calibrado["aplicada"] else "Atual (histórico da Loteca)"),
             f"Vitória {jogo['casa']}": f"{atual['1']:.0f}%", "Empate": f"{atual['X']:.0f}%", f"Vitória {jogo['fora']}": f"{atual['2']:.0f}%",
         }]
         cod_casa, cod_fora = cod_time_do_participante(conexao, jogo["casa_id"]), cod_time_do_participante(conexao, jogo["fora_id"])

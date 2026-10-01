@@ -11,8 +11,11 @@ from stats.concursos import concurso_a_jogar
 from stats.painel import participantes_do_concurso
 from stats.prazo import formatar_restante, situacao_do_prazo
 
-NOMES_FONTE = {"caixa": "CAIXA (concursos e programação)", "cbf": "CBF (classificação e jogos)", "noticias": "Notícias (ajuste externo)"}
-IDADE_ALERTA_HORAS = {"caixa": 24, "cbf": 7 * 24, "noticias": 8 * 24}
+NOMES_FONTE = {
+    "caixa": "CAIXA (concursos e programação)", "cbf": "CBF (classificação e jogos)",
+    "calibracao": "Calibração dos percentuais", "noticias": "Notícias (ajuste externo)",
+}
+IDADE_ALERTA_HORAS = {"caixa": 24, "cbf": 7 * 24, "calibracao": 10 * 24, "noticias": 8 * 24}
 
 st.set_page_config(page_title="Loteca -- Assistente Estatístico", page_icon="⚽", layout="wide")
 
