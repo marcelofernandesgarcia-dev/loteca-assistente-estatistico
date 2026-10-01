@@ -351,6 +351,23 @@ MODELO_TEMPORADA_PESO_PRIOR = float(os.environ.get("LOTECA_MODELO_PESO_PRIOR", "
 # Forma recente -- quantidade de jogos considerados
 FORMA_JANELA_JOGOS = int(os.environ.get("LOTECA_FORMA_JANELA", "8"))
 
+# Estudo de associação (stats/associacao.py, Fase Q4/P3). Limiares fixados ANTES de ver o resultado,
+# para não ajustar o critério ao achado; mudar um deles exige registrar o motivo no relatório.
+# Método: o fator "melhora a previsão fora da amostra?" (treino nas outras temporadas, teste na temporada
+# deixada de fora). A 1ª versão comparava dentro do time com permutação de rótulos e foi descartada em
+# 01/10/2026: o fator é calculado do histórico do próprio time, o que cria viés negativo e valor p inflado.
+ASSOCIACAO_AMOSTRA_MINIMA = 30  # jogos por grupo (com e sem o fator); abaixo, "amostra insuficiente"
+ASSOCIACAO_REPETICOES_BOOTSTRAP = 2000  # reamostragens de times na temporada, para o ganho de previsão
+ASSOCIACAO_REPETICOES_COEFICIENTE = 500  # idem, para o intervalo do coeficiente (refaz o ajuste a cada vez)
+ASSOCIACAO_NIVEL_SIGNIFICANCIA = 0.05  # aplicado ao valor q (correção de Benjamini-Hochberg entre todos os testes)
+ASSOCIACAO_SEMENTE = 20261001  # resultado reprodutível
+ASSOCIACAO_JOGOS_ANTERIORES_MINIMOS = 5  # só entra o jogo com pelo menos 5 jogos do time antes dele na temporada
+ASSOCIACAO_FORMA_JANELA = 5  # forma = pontos por jogo nos 5 jogos anteriores
+ASSOCIACAO_FORMA_BOA = 2.0  # pontos por jogo >= isto
+ASSOCIACAO_FORMA_RUIM = 0.8  # pontos por jogo <= isto
+ASSOCIACAO_SEQUENCIA_MINIMA = 3  # 3 vitórias seguidas / 3 jogos seguidos sem vencer
+ASSOCIACAO_ZONA_TAMANHO = 4  # "topo" = 4 primeiros; "fundo" = 4 últimos, pela tabela da rodada anterior
+
 # Aviso de responsabilidade (ver docs/carta-servicos-caixa-oficial.md e
 # docs/pesquisa-complementar-27-09.md -- certificação WLA nível 3 e Soto Costa 1980)
 AVISO_RESPONSABILIDADE = (
