@@ -372,6 +372,12 @@ ASSOCIACAO_DESCANSO_CURTO_DIAS = 3  # jogo a até 3 dias do anterior; datas fora
 ASSOCIACAO_RETA_FINAL_A_PARTIR_DA_RODADA = 29  # as 10 últimas das 38 rodadas das Séries A e B
 # Força do adversário (pontos por jogo dele até o jogo) entra como CONTROLE do modelo base, não como fator.
 
+# Teste do modelo por competição (B2, stats/backtest_competicao.py): três modelos de 1/X/2 contra a
+# frequência simples, andando no tempo (treino só em anos anteriores ao testado).
+B2_JOGOS_ANTERIORES_MINIMOS = 5  # os dois times com pelo menos 5 jogos já conhecidos na temporada
+B2_REPETICOES_BOOTSTRAP = 2000
+B2_SEMENTE = 20261002
+
 # Aviso de responsabilidade (ver docs/carta-servicos-caixa-oficial.md e
 # docs/pesquisa-complementar-27-09.md -- certificação WLA nível 3 e Soto Costa 1980)
 AVISO_RESPONSABILIDADE = (
