@@ -378,6 +378,24 @@ B2_JOGOS_ANTERIORES_MINIMOS = 5  # os dois times com pelo menos 5 jogos já conh
 B2_REPETICOES_BOOTSTRAP = 2000
 B2_SEMENTE = 20261002
 
+# Calibração dos percentuais (E4, stats/calibracao.py), fixada antes de ver o resultado (01/10/2026).
+# Correção: q ∝ p^expoente (expoente < 1 achata percentuais confiantes demais), misturada com a frequência
+# simples: q = mistura * q + (1 - mistura) * frequência. Expoente 1 e mistura 1 = sem correção.
+# Método principal (pré-definido): expoente e mistura juntos; os dois isolados aparecem só para comparação.
+CALIBRACAO_GRADE_EXPOENTE = tuple(round(0.05 * i, 2) for i in range(0, 31))  # 0,00 a 1,50
+CALIBRACAO_GRADE_MISTURA = tuple(round(0.05 * i, 2) for i in range(0, 21))  # 0,00 a 1,00
+CALIBRACAO_REAJUSTE_A_CADA = 25  # concursos: os parâmetros são reajustados com o passado a cada bloco
+CALIBRACAO_MINIMO_JOGOS = {"poisson": 500, "frequencia_global": 500, "elo_selecoes": 150}  # treino mínimo por origem
+CALIBRACAO_REPETICOES_BOOTSTRAP = 2000
+CALIBRACAO_SEMENTE = 20261004
+# Bilhetes usados para conferir a chance (duplos, triplos, como as colunas são escolhidas):
+# "regra" = colunas de maior percentual, múltiplos nos jogos mais incertos (como a sugestão do app);
+# "sorteada" = jogos e colunas sorteados, para testar também marcações contra o favorito.
+CALIBRACAO_BILHETES_DE_TESTE = (
+    (1, 0, "regra"), (0, 1, "regra"), (3, 0, "regra"), (2, 1, "regra"), (5, 3, "regra"),
+    (1, 0, "sorteada"), (3, 0, "sorteada"), (2, 1, "sorteada"),
+)
+
 # Estudo anti-manada (Q7, stats/anti_manada.py): concursos com mais jogos fora da coluna 1 têm menos
 # ganhadores de 14 acertos, descontadas a arrecadação e a época?
 Q7_PERMUTACOES = 5000
