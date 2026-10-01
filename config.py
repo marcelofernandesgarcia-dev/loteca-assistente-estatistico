@@ -378,6 +378,14 @@ B2_JOGOS_ANTERIORES_MINIMOS = 5  # os dois times com pelo menos 5 jogos já conh
 B2_REPETICOES_BOOTSTRAP = 2000
 B2_SEMENTE = 20261002
 
+# Estudo anti-manada (Q7, stats/anti_manada.py): concursos com mais jogos fora da coluna 1 têm menos
+# ganhadores de 14 acertos, descontadas a arrecadação e a época?
+Q7_PERMUTACOES = 5000
+Q7_REPETICOES_BOOTSTRAP = 2000
+Q7_SEMENTE = 20261003
+Q7_CONCURSOS_MINIMOS_POR_ANO = 10  # ano com menos concursos úteis fica fora do cálculo estratificado
+Q7_FAIXAS_DE_JOGOS_FORA_DA_COLUNA_1 = ((0, 4), (5, 6), (7, 8), (9, 14))  # só para a tabela descritiva
+
 # Aviso de responsabilidade (ver docs/carta-servicos-caixa-oficial.md e
 # docs/pesquisa-complementar-27-09.md -- certificação WLA nível 3 e Soto Costa 1980)
 AVISO_RESPONSABILIDADE = (
