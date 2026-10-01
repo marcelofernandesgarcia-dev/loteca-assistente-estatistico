@@ -1,5 +1,7 @@
 """stats/associacao.py: estudo de associação. Dados sintéticos, sem rede e sem
 tocar no banco real."""
+import datetime as dt
+
 import numpy as np
 import pytest
 
@@ -29,18 +31,19 @@ def _temporada_sintetica(rng, ano, n_times=20, vantagem_casa=0.25):
     entre si: nenhum fator do histórico tem informação além do retrospecto."""
     forca = rng.normal(0, 0.3, n_times)
     times = list(range(n_times))
-    partidas, rodada = [], 0
+    partidas, rodada, data = [], 0, dt.date(ano, 1, 1)
     for volta in range(2):
         rotativos = times[1:]
         for _ in range(n_times - 1):
             rodada += 1
+            data += dt.timedelta(days=int(rng.choice([3, 7])))  # descanso curto em parte das rodadas, sem relação com o resultado
             ordem = [times[0]] + rotativos
             for i in range(n_times // 2):
                 a, b = ordem[i], ordem[n_times - 1 - i]
                 casa, fora = (a, b) if volta == 0 else (b, a)
                 gm = rng.poisson(np.exp(vantagem_casa + 0.3 * (forca[casa] - forca[fora])))
                 gv = rng.poisson(np.exp(-0.05 + 0.3 * (forca[fora] - forca[casa])))
-                partidas.append(_partida(rodada, casa, fora, int(gm), int(gv)))
+                partidas.append(_partida(rodada, casa, fora, int(gm), int(gv)) | {"data_jogo": data.isoformat()})
             rotativos = rotativos[-1:] + rotativos[:-1]
     return partidas
 
@@ -65,6 +68,8 @@ def test_fatores_usam_so_o_que_veio_antes_do_jogo():
         assert vitoria[0][chave] == derrota[0][chave]
     assert vitoria[0]["forma_boa"] and vitoria[0]["seq_vitorias"] and not vitoria[0]["mando_casa"]
     assert vitoria[0]["retrospecto"] == 3.0
+    assert vitoria[0]["adversario"] == 0.0  # B perdeu os 5 jogos anteriores
+    assert vitoria[0]["descanso_curto"] is True and vitoria[0]["reta_final"] is False  # rodadas em dias seguidos
 
 
 def test_time_com_poucos_jogos_nao_gera_observacao():
@@ -81,6 +86,31 @@ def test_saf_vem_do_nome_do_clube_na_cbf():
     assert por_cluster["serie-a-2026-2"]["saf"] is False
 
 
+@pytest.mark.parametrize(
+    "anterior, atual, esperado",
+    [("2026-01-01", "2026-01-04", 3), ("2026-01-01", "2026-01-02", 1), (None, "2026-01-04", None),
+     ("2026-01-04", "2026-01-01", None), ("2026-01-01", "2026-01-01", None), ("lixo", "2026-01-04", None)],
+)
+def test_dias_entre_jogos_ignora_data_ausente_invalida_ou_fora_de_ordem(anterior, atual, esperado):
+    assert associacao._dias_entre(anterior, atual) == esperado
+
+
+def test_descanso_curto_e_reta_final_vem_das_datas_e_da_rodada():
+    partidas = _liga_de_dois_times("V")
+    partidas[5]["data_jogo"] = "2026-01-20"  # 6º jogo, 15 dias depois do 5º
+    partidas[5]["rodada"] = config.ASSOCIACAO_RETA_FINAL_A_PARTIR_DA_RODADA
+    obs = [o for o in associacao.observacoes_de_jogos(partidas, "serie-a", 2026) if o["cluster"].endswith("-1")][0]
+    assert obs["descanso_curto"] is False and obs["reta_final"] is True
+
+
+def test_jogo_com_data_fora_de_ordem_fica_de_fora_do_fator_de_descanso_mas_nao_do_estudo():
+    partidas = _liga_de_dois_times("V")
+    partidas[5]["data_jogo"] = "2025-12-01"  # adiado: data anterior à do jogo anterior
+    obs = [o for o in associacao.observacoes_de_jogos(partidas, "serie-a", 2026) if o["cluster"].endswith("-1")][0]
+    assert obs["descanso_curto"] is None
+    assert obs["pontos"] == 3
+
+
 def _observacoes_com_efeito(efeito, semente, temporadas=4, times=15, jogos=25):
     rng = np.random.default_rng(semente)
     observacoes = []
@@ -93,9 +123,29 @@ def _observacoes_com_efeito(efeito, semente, temporadas=4, times=15, jogos=25):
                 casa = bool(rng.random() < 0.5)
                 observacoes.append(
                     {"temporada": f"s-{t}", "cluster": f"s-{t}-{c}", "retrospecto": retro, "mando_casa": casa,
+                     "adversario": float(rng.uniform(0.5, 2.0)),
                      "pontos": forca + 0.4 * casa + efeito * marcado + rng.normal(0, 1.0), "fator_x": marcado}
                 )
     return observacoes
+
+
+def test_fator_ligado_apenas_a_forca_do_adversario_nao_vira_achado_com_o_controle():
+    falsos = 0
+    for semente in range(10):
+        rng = np.random.default_rng(500 + semente)
+        obs = []
+        for t in range(3):
+            for c in range(12):
+                for _ in range(25):
+                    adv = float(rng.uniform(0.5, 2.0))
+                    obs.append(
+                        {"temporada": f"s-{t}", "cluster": f"s-{t}-{c}", "retrospecto": 1.3, "mando_casa": False,
+                         "adversario": adv, "pontos": 2.2 - 0.6 * adv + rng.normal(0, 1.0),
+                         "fator_x": bool(rng.random() < (adv - 0.5) / 1.5)}  # só enfrenta time forte
+                    )
+        r = associacao.avaliar_fator(obs, "fator_x", repeticoes=200, repeticoes_coeficiente=20, semente=semente)
+        falsos += r["p"] < 0.05
+    assert falsos <= 2
 
 
 def test_efeito_plantado_melhora_a_previsao_e_o_intervalo_exclui_zero():
@@ -153,7 +203,8 @@ def test_regressao_do_artefato_historico_puro_nao_vira_achado(monkeypatch):
     for ano in range(2019, 2023):
         observacoes += associacao.observacoes_de_jogos(_temporada_sintetica(rng, ano), "serie-a", ano)
     resultados = {r["fator"]: r for r in associacao.estudar(observacoes)}
-    for chave in ("forma_boa", "forma_ruim", "seq_vitorias", "seq_sem_vencer", "zona_topo", "zona_fundo"):
+    for chave in ("forma_boa", "forma_ruim", "seq_vitorias", "seq_sem_vencer", "zona_topo", "zona_fundo",
+                  "descanso_curto", "reta_final"):
         assert resultados[chave]["conclusao"] != "melhora a previsão fora da amostra", chave
     assert resultados["saf"]["conclusao"] == "amostra insuficiente"  # ninguém é SAF nesta simulação
     assert resultados["mando_casa"]["conclusao"] == "melhora a previsão fora da amostra"

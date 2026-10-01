@@ -367,6 +367,10 @@ ASSOCIACAO_FORMA_BOA = 2.0  # pontos por jogo >= isto
 ASSOCIACAO_FORMA_RUIM = 0.8  # pontos por jogo <= isto
 ASSOCIACAO_SEQUENCIA_MINIMA = 3  # 3 vitórias seguidas / 3 jogos seguidos sem vencer
 ASSOCIACAO_ZONA_TAMANHO = 4  # "topo" = 4 primeiros; "fundo" = 4 últimos, pela tabela da rodada anterior
+# Fatores acrescentados em 01/10/2026 (limiares fixados antes de ver o resultado):
+ASSOCIACAO_DESCANSO_CURTO_DIAS = 3  # jogo a até 3 dias do anterior; datas fora de ordem (jogo adiado) ficam de fora
+ASSOCIACAO_RETA_FINAL_A_PARTIR_DA_RODADA = 29  # as 10 últimas das 38 rodadas das Séries A e B
+# Força do adversário (pontos por jogo dele até o jogo) entra como CONTROLE do modelo base, não como fator.
 
 # Aviso de responsabilidade (ver docs/carta-servicos-caixa-oficial.md e
 # docs/pesquisa-complementar-27-09.md -- certificação WLA nível 3 e Soto Costa 1980)

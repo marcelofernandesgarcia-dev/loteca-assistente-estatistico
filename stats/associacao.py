@@ -6,7 +6,9 @@ Método (decidido antes de ver o resultado; parâmetros em `config.ASSOCIACAO_*`
 - unidade: um jogo de um time na temporada; resultado = pontos (0, 1 ou 3). Só entram jogos
   com pelo menos `ASSOCIACAO_JOGOS_ANTERIORES_MINIMOS` jogos anteriores do time na temporada;
 - modelo base: pontos ~ retrospecto do time na temporada (pontos por jogo até o jogo anterior)
-  + mando. Modelo com o fator: o mesmo mais o fator (mínimos quadrados);
+  + retrospecto do adversário (idem) + mando. Modelo com o fator: o mesmo mais o fator
+  (mínimos quadrados). O adversário entrou no modelo base em 01/10/2026: sem ele, qualquer
+  fator ligado a enfrentar times fortes ou fracos parecia efeito próprio;
 - validação fora da amostra: cada temporada (série e ano) é deixada de fora, os dois modelos
   são ajustados nas outras e comparados na que ficou. Ganho = erro quadrático do modelo base
   menos o do modelo com o fator, jogo a jogo (positivo = o fator ajudou);
@@ -21,6 +23,8 @@ resultado eram sete "associações" com sinais coerentes demais -- artefato, nã
 Limites que valem para qualquer resultado: associação não é causa; a marca de SAF vem do nome do
 clube na CBF, que não prova a ausência de SAF, e a adoção do modelo não é aleatória.
 """
+import datetime as dt
+
 import numpy as np
 
 import config
@@ -42,7 +46,24 @@ FATORES = (
     ("zona_topo", "Estar entre os primeiros da tabela antes do jogo"),
     ("zona_fundo", "Estar entre os últimos da tabela antes do jogo"),
     ("saf", "Time com SAF no nome da CBF na temporada"),
+    ("descanso_curto", "Jogar com poucos dias de descanso desde o jogo anterior"),
+    ("reta_final", "Jogar na reta final da temporada (últimas 10 rodadas)"),
 )
+
+
+def _dias_entre(data_anterior: str | None, data_atual: str | None) -> int | None:
+    """Dias entre dois jogos; None se faltar data, não puder ser lida ou vier fora de ordem (jogo adiado)."""
+    try:
+        dias = (dt.date.fromisoformat(data_atual) - dt.date.fromisoformat(data_anterior)).days
+    except (TypeError, ValueError):
+        return None
+    return dias if dias > 0 else None
+
+
+def _retrospecto_ate(jogos_do_adversario: list[dict], rodada: int) -> float | None:
+    """Pontos por jogo do adversário nos jogos de rodada anterior à informada; None sem jogos."""
+    anteriores = [j["pontos"] for j in jogos_do_adversario if j["rodada"] < rodada]
+    return sum(anteriores) / len(anteriores) if anteriores else None
 
 
 def observacoes_de_jogos(partidas: list[dict], serie: str, ano: int, nomes: dict[int, str | None] | None = None) -> list[dict]:
@@ -60,12 +81,17 @@ def observacoes_de_jogos(partidas: list[dict], serie: str, ano: int, nomes: dict
     zona = config.ASSOCIACAO_ZONA_TAMANHO
     observacoes = []
 
+    jogos_por_time = {cod_time: competicao.jogos_do_time(partidas, cod_time) for cod_time in times}
     for cod_time in times:
-        jogos = competicao.jogos_do_time(partidas, cod_time)
+        jogos = jogos_por_time[cod_time]
         saf = registrado_como_saf(nomes.get(cod_time))
         for i, jogo in enumerate(jogos):
             if i < minimo:
                 continue
+            retrospecto_adversario = _retrospecto_ate(jogos_por_time[jogo["adversario_id"]], jogo["rodada"])
+            if retrospecto_adversario is None:
+                continue  # adversário ainda sem jogo anterior: sem controle de força, o jogo não entra
+            dias = _dias_entre(jogos[i - 1]["data"], jogo["data"])
             anteriores = jogos[:i]
             recentes = anteriores[-janela:]
             forma = sum(j["pontos"] for j in recentes) / len(recentes)
@@ -83,6 +109,7 @@ def observacoes_de_jogos(partidas: list[dict], serie: str, ano: int, nomes: dict
                     "cluster": f"{serie}-{ano}-{cod_time}",
                     "pontos": jogo["pontos"],
                     "retrospecto": sum(j["pontos"] for j in anteriores) / len(anteriores),
+                    "adversario": retrospecto_adversario,
                     "mando_casa": jogo["mando"] == "casa",
                     "forma_boa": forma >= config.ASSOCIACAO_FORMA_BOA,
                     "forma_ruim": forma <= config.ASSOCIACAO_FORMA_RUIM,
@@ -91,6 +118,8 @@ def observacoes_de_jogos(partidas: list[dict], serie: str, ano: int, nomes: dict
                     "zona_topo": None if posicao is None else posicao <= zona,
                     "zona_fundo": None if posicao is None else posicao > len(times) - zona,
                     "saf": saf,
+                    "descanso_curto": None if dias is None else dias <= config.ASSOCIACAO_DESCANSO_CURTO_DIAS,
+                    "reta_final": jogo["rodada"] >= config.ASSOCIACAO_RETA_FINAL_A_PARTIR_DA_RODADA,
                 }
             )
     return observacoes
@@ -129,8 +158,10 @@ def ajustar_benjamini_hochberg(valores_p: list[float]) -> list[float]:
     return q
 
 
-def _matriz(retrospecto: np.ndarray, mando: np.ndarray, fator: np.ndarray, com_fator: bool, chave: str) -> np.ndarray:
-    colunas = [np.ones(len(retrospecto)), retrospecto]
+def _matriz(
+    retrospecto: np.ndarray, adversario: np.ndarray, mando: np.ndarray, fator: np.ndarray, com_fator: bool, chave: str
+) -> np.ndarray:
+    colunas = [np.ones(len(retrospecto)), retrospecto, adversario]
     if chave != "mando_casa":
         colunas.append(mando)
     if com_fator:
@@ -148,6 +179,7 @@ def avaliar_fator(observacoes: list[dict], chave: str, repeticoes: int, repetico
     usadas = [o for o in observacoes if o.get(chave) is not None]
     y = np.array([o["pontos"] for o in usadas], dtype=float)
     retro = np.array([o["retrospecto"] for o in usadas], dtype=float)
+    adversario = np.array([o["adversario"] for o in usadas], dtype=float)
     mando = np.array([o["mando_casa"] for o in usadas], dtype=float)
     fator = np.array([o[chave] for o in usadas], dtype=float)
     temporada = np.array([o["temporada"] for o in usadas])
@@ -157,8 +189,8 @@ def avaliar_fator(observacoes: list[dict], chave: str, repeticoes: int, repetico
     if n1 < config.ASSOCIACAO_AMOSTRA_MINIMA or n0 < config.ASSOCIACAO_AMOSTRA_MINIMA:
         return resultado | {"avaliado": False}
 
-    X0 = _matriz(retro, mando, fator, False, chave)
-    X1 = _matriz(retro, mando, fator, True, chave)
+    X0 = _matriz(retro, adversario, mando, fator, False, chave)
+    X1 = _matriz(retro, adversario, mando, fator, True, chave)
     perda_base = np.zeros(len(y))
     perda_com_fator = np.zeros(len(y))
     for t in np.unique(temporada):

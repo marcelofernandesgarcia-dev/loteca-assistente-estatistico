@@ -48,7 +48,10 @@ def montar_relatorio(resultados: list[dict], n_jogos: int, n_temporadas: int) ->
         "## Base e método",
         f"- **{n_jogos}** jogos de time (Séries A e B da CBF, {n_temporadas} temporadas), com pelo menos "
         f"{config.ASSOCIACAO_JOGOS_ANTERIORES_MINIMOS} jogos anteriores do time na temporada. Resultado = pontos (0, 1 ou 3).",
-        "- Modelo base: pontos ~ retrospecto (pontos por jogo até o jogo anterior) + mando. Modelo com o fator: o mesmo mais o fator.",
+        "- Modelo base: pontos ~ retrospecto do time (pontos por jogo até o jogo anterior) + retrospecto do adversário + mando. "
+        "Modelo com o fator: o mesmo mais o fator. O adversário entrou no modelo base em 01/10/2026, para que enfrentar times fortes ou fracos não pareça efeito de outro fator.",
+        f"- Descanso curto = {config.ASSOCIACAO_DESCANSO_CURTO_DIAS} dias ou menos desde o jogo anterior (jogo com data fora de ordem, por adiamento, fica de fora desse fator); "
+        f"reta final = rodada {config.ASSOCIACAO_RETA_FINAL_A_PARTIR_DA_RODADA} em diante.",
         "- Validação fora da amostra: cada temporada (série e ano) é deixada de fora; os modelos são ajustados nas outras e comparados na que ficou. "
         "**Ganho** = erro quadrático do modelo base menos o do modelo com o fator (positivo = o fator ajudou).",
         f"- Intervalo de 95% e valor p por reamostragem de times na temporada ({config.ASSOCIACAO_REPETICOES_BOOTSTRAP} repetições; "
