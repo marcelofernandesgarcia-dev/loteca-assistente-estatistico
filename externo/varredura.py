@@ -21,18 +21,29 @@ logger = logging.getLogger(__name__)
 
 
 def concurso_alvo_da_semana(conexao) -> dict | None:
-    """Concurso cujo prazo de aposta cai dentro da janela de
-    VARREDURA_DIAS_ANTES_DO_PRAZO dias a partir de hoje."""
+    """Concurso ainda não varrido cujo prazo de aposta está a no máximo
+    VARREDURA_DIAS_ANTES_DO_PRAZO dias de hoje (e não venceu).
+
+    Janela de 0 a N dias, e não "exatamente N": com data exata, um dia sem o
+    computador ligado deixava o concurso inteiro sem varredura, sem aviso.
+    O concurso que já tem linha em `fatores_externos` não é varrido de novo.
+    """
     hoje = dt.date.today()
     linhas = conexao.execute(
-        "SELECT numero, data_limite_aposta FROM concursos WHERE data_limite_aposta IS NOT NULL"
+        """
+        SELECT c.numero, c.data_limite_aposta FROM concursos c
+        WHERE c.data_limite_aposta IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM fatores_externos f WHERE f.concurso_numero = c.numero)
+        ORDER BY c.data_limite_aposta
+        """
     ).fetchall()
     for linha in linhas:
         try:
             prazo = dt.date.fromisoformat(linha["data_limite_aposta"])
         except (TypeError, ValueError):
+            logger.warning("Concurso %s com data_limite_aposta inválida; ignorado na varredura.", linha["numero"])
             continue
-        if (prazo - hoje).days == config.VARREDURA_DIAS_ANTES_DO_PRAZO:
+        if 0 <= (prazo - hoje).days <= config.VARREDURA_DIAS_ANTES_DO_PRAZO:
             return {"numero": linha["numero"], "data_limite_aposta": linha["data_limite_aposta"]}
     return None
 

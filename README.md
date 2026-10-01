@@ -106,7 +106,7 @@ schtasks /Create /SC WEEKLY /D MON,THU,FRI /ST 07:30 /TN "Loteca - Coleta CBF" /
 
 ## Varredura semanal de notícias (ajuste externo)
 
-Roda 2 dias antes do prazo de aposta de cada concurso (`config.VARREDURA_DIAS_ANTES_DO_PRAZO`). Busca notícias por participante via RSS público do Google Notícias, extrai sinais estruturados por palavra-chave (lesão, suspensão, desfalque, tendência de imprensa) e aplica um ajuste limitado (`config.AJUSTE_EXTERNO_TETO_PONTOS`) sobre o percentual histórico. Log completo em `fatores_externos`, visível na página "Por time".
+Roda uma vez por concurso, quando faltam de 0 a 2 dias para o prazo de aposta (`config.VARREDURA_DIAS_ANTES_DO_PRAZO`); concurso que já tem linha em `fatores_externos` não é varrido de novo, e um dia perdido é recuperado no dia seguinte. Busca notícias por participante via RSS público do Google Notícias, extrai sinais estruturados por palavra-chave (lesão, suspensão, desfalque, tendência de imprensa) e aplica um ajuste limitado (`config.AJUSTE_EXTERNO_TETO_PONTOS`) sobre o percentual histórico. Log completo em `fatores_externos`, visível na página "Por time".
 
 **Decisão de implementação:** a v1 usa palavra-chave sobre notícia real (RSS), não um modelo de linguagem pago — auditável, sem custo de API de terceiro. Se quiser trocar por leitura de IA depois, o ponto de extensão é `externo/analise.py`.
 
@@ -116,7 +116,13 @@ Para agendar (Windows, roda mesmo com o app fechado — crie você mesmo, o Clau
 schtasks /Create /SC DAILY /ST 08:00 /TN "Loteca - Varredura Semanal" /TR "C:\Users\marce\Projetos\loteca-assistente-estatistico\.venv\Scripts\python.exe C:\Users\marce\Projetos\loteca-assistente-estatistico\scripts\varredura_semanal.py"
 ```
 
-(Roda diariamente, mas o script só faz algo nos dias em que algum concurso está a 2 dias do prazo — ver `externo.varredura.concurso_alvo_da_semana`.)
+(Roda diariamente, mas o script só faz algo quando algum concurso ainda não varrido está a até 2 dias do prazo — ver `externo.varredura.concurso_alvo_da_semana`.)
+
+Tarefa única que atualiza as três fontes (CAIXA, CBF e notícias) de uma vez, às 08:00, e que dispensa as duas anteriores:
+
+```
+schtasks /Create /SC DAILY /ST 08:00 /TN "Loteca - Atualizar Tudo" /TR "C:\Users\marce\Projetos\loteca-assistente-estatistico\.venv\Scripts\python.exe C:\Users\marce\Projetos\loteca-assistente-estatistico\scripts\atualizar_tudo.py"
+```
 
 ## Escopo definido com o usuário (27/09/2026, revisado)
 
