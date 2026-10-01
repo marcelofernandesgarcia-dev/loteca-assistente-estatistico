@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 import streamlit as st
 from ano_em_curso_ui import mostrar_ano_em_curso, resumo_do_ano
 from calibracao_ui import mostrar_calibracao
+from chances_ui import mostrar_chances_do_bilhete
 from estilo_caixa import renderizar_cartao, renderizar_tabela, renderizar_titulo_cartao
 from premiacao_ui import mostrar_premiacao
 from sugestoes_ui import (
@@ -443,6 +444,11 @@ else:
         )
     if volante["apostas"] > config.BILHETE_MAX_APOSTAS:
         st.warning(f"Passa do máximo oficial de {config.BILHETE_MAX_APOSTAS} apostas. Tire algum duplo ou triplo.")
+    elif not volante["jogos_sem_marcacao"]:
+        # Chances do bilhete com as marcações atuais, sem precisar clicar (pedido do usuário, 01/10/2026).
+        mostrar_chances_do_bilhete(
+            jogos_vigente, [dados_por_jogo[j["id"]]["pct"] for j in jogos_vigente], marcacoes_lista
+        )
 
     # Análise do palpite (item 20): por regra, sob demanda, e guardada ao salvar.
     with st.expander("Anotar o motivo das marcações (opcional)"):

@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import pandas as pd
 import streamlit as st
+from chances_ui import mostrar_chances_do_bilhete, mostrar_conjunto, percentuais_atuais_do_concurso, reais, rotulo_do_bilhete
 from util import formatar_data_br, mostrar_aviso_responsabilidade, obter_conexao
 
 import config
@@ -22,6 +23,7 @@ from stats.analise_palpite import (
 from stats.bilhetes_salvos import (
     conferir_bilhete,
     jogos_conferidos_para_historico,
+    jogos_do_bilhete,
     listar_bilhetes,
     pode_conferir,
     registrar_premio,
@@ -169,6 +171,68 @@ st.caption(
 
 mostrar_historico(agregar_historico(jogos_conferidos_para_historico(conexao)))
 mostrar_aprendizado_das_versoes(aprendizado_de_todos_os_concursos(conexao))
+
+_atuais_por_concurso: dict[int, tuple[list[dict], list[dict]]] = {}
+
+
+def _atuais(numero_concurso: int) -> tuple[list[dict], list[dict]]:
+    """Jogos e percentuais de hoje do concurso (calibrados, com notícias), calculados uma vez por execução da página."""
+    if numero_concurso not in _atuais_por_concurso:
+        _atuais_por_concurso[numero_concurso] = percentuais_atuais_do_concurso(conexao, numero_concurso)
+    return _atuais_por_concurso[numero_concurso]
+
+
+def _marcacoes_do_bilhete(bilhete_id: int, jogos: list[dict]) -> list[list[str]] | None:
+    """Marcações do bilhete na ordem dos jogos do concurso; None se o bilhete não cobre todos os jogos."""
+    por_jogo = {j["jogo_id"]: j["marcacoes"] for j in jogos_do_bilhete(conexao, bilhete_id)}
+    if any(j["id"] not in por_jogo for j in jogos):
+        return None
+    return [por_jogo[j["id"]] for j in jogos]
+
+
+def _concurso_aberto(numero_concurso: int) -> bool:
+    """Concurso com jogos ainda sem resultado: dá para decidir em que apostar."""
+    sem_resultado, total = conexao.execute(
+        "SELECT SUM(resultado IS NULL), COUNT(*) FROM jogos WHERE concurso_numero = ?", (numero_concurso,)
+    ).fetchone()
+    return bool(total) and bool(sem_resultado)
+
+
+st.subheader("Conjunto de bilhetes do concurso")
+concursos_abertos = sorted({b["concurso_numero"] for b in bilhetes if _concurso_aberto(b["concurso_numero"])}, reverse=True)
+if not concursos_abertos:
+    st.info(
+        "Aparece quando houver bilhetes salvos de um concurso ainda não apurado. Escolha quais bilhetes pretende jogar e veja a "
+        "chance do conjunto, quanto cada um acrescenta e quanto das apostas se repete."
+    )
+else:
+    st.caption(
+        "Escolha os bilhetes que pretende jogar no concurso. Os bilhetes disputam os mesmos jogos, então as chances não se somam: "
+        "o app calcula o conjunto com os percentuais de hoje, já corrigidos pela calibração."
+    )
+    numero_conjunto = st.selectbox("Concurso", concursos_abertos, key="conjunto_concurso")
+    do_concurso = [b for b in bilhetes if b["concurso_numero"] == numero_conjunto]
+    escolhidos = st.multiselect(
+        "Bilhetes que pretendo jogar", options=[b["id"] for b in do_concurso][:12],
+        default=[b["id"] for b in do_concurso][:12], key=f"conjunto_bilhetes_{numero_conjunto}",
+        format_func=lambda i: rotulo_do_bilhete(next(b for b in do_concurso if b["id"] == i)),
+    )
+    if len(do_concurso) > 12:
+        st.caption("O conjunto aceita até 12 bilhetes por vez; os 12 mais recentes estão disponíveis.")
+    if escolhidos:
+        jogos_atuais, pcts_atuais = _atuais(numero_conjunto)
+        montados, incompletos = [], []
+        for b in do_concurso:
+            if b["id"] in escolhidos:
+                marcas = _marcacoes_do_bilhete(b["id"], jogos_atuais)
+                (montados if marcas else incompletos).append({**b, "marcacoes": marcas} if marcas else b)
+        if incompletos:
+            st.warning("Estes bilhetes não cobrem todos os jogos do concurso e ficaram de fora: " + ", ".join(str(b["id"]) for b in incompletos) + ".")
+        if montados:
+            mostrar_conjunto(jogos_atuais, pcts_atuais, montados)
+    else:
+        st.info("Marque pelo menos um bilhete para ver as chances do conjunto.")
+
 st.subheader("Bilhetes")
 
 for bilhete in bilhetes:
@@ -200,6 +264,12 @@ for bilhete in bilhetes:
                     f"{historia['acertos_bilhete']}."
                 )
             st.caption(texto)
+        if bilhete["conferido_em"] is None and _concurso_aberto(bilhete["concurso_numero"]):
+            jogos_atuais, pcts_atuais = _atuais(bilhete["concurso_numero"])
+            marcas_atuais = _marcacoes_do_bilhete(bilhete["id"], jogos_atuais)
+            if marcas_atuais:
+                st.caption("Chances calculadas com os percentuais de hoje (corrigidos pela calibração), não com os do dia em que você salvou.")
+                mostrar_chances_do_bilhete(jogos_atuais, pcts_atuais, marcas_atuais)
         if bilhete["conferido_em"] is None:
             if jogos_apurados_antes:
                 if st.button("Conferir", key=f"conferir_{bilhete['id']}"):
