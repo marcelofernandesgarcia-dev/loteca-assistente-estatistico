@@ -77,6 +77,34 @@ def test_sem_versoes_orienta_e_com_versoes_mostra_como_o_bilhete_foi_montado(con
     assert "Ainda são poucos concursos" in legendas
 
 
+def test_bilhete_sem_retrato_avisa_e_com_retrato_mostra_a_tabela(conexao_pronta):
+    # Item A1 do plano v2 (07/10/2026).
+    at = AppTest.from_file(str(PAGINA), default_timeout=60).run()
+    assert any("o retrato completo do que o app mostrava não foi guardado" in c.value for c in at.caption)
+    from stats.retrato import gravar_retrato, retrato_geral
+
+    with db.sessao() as c:
+        bilhete_id = c.execute("SELECT id FROM bilhetes").fetchone()["id"]
+        c.execute("INSERT INTO bilhetes (concurso_numero, criado_em, apostas, custo) VALUES (9001, '2026-10-09T10:00:00', 1, 2.0)")
+        novo = c.execute("SELECT MAX(id) FROM bilhetes").fetchone()[0]
+        jogo_id = c.execute("SELECT id FROM jogos").fetchone()["id"]
+        c.execute("INSERT INTO bilhete_jogos (bilhete_id, jogo_id, marcacoes) VALUES (?, ?, '1')", (novo, jogo_id))
+        gravar_retrato(c, novo, retrato_geral(), {jogo_id: {
+            "num_jogo": 1, "casa": "ALFA", "fora": "BETA", "origem": "poisson",
+            "percentual": {"final": {"1": 50.0, "X": 30.0, "2": 20.0}},
+            "noticias": {"casa": None, "fora": None, "deslocamento": 0.0},
+            "cobertura": {"nivel": "parcial", "nome_nivel": "Parcial", "faltas": [], "alta_incerteza": True},
+            "sugestao_do_app": ["1"], "marcacao": ["1"],
+        }})
+    at = AppTest.from_file(str(PAGINA), default_timeout=60).run()
+    assert not at.exception, [e.value for e in at.exception]
+    at.toggle(key=f"retrato_{novo}").set_value(True).run()
+    textos = " ".join(m.value for m in at.markdown)
+    assert "O que o app mostrava ao salvar" in textos and "histórico da Loteca (Poisson)" in textos
+    assert "⚠ Parcial" in textos and "sem leitura" in textos
+    assert bilhete_id != novo
+
+
 def test_historico_aparece_so_depois_de_conferir_e_bilhete_mostra_o_que_ensina(conexao_pronta):
     at = AppTest.from_file(str(PAGINA), default_timeout=60).run()
     assert any("Aparece depois do primeiro bilhete conferido" in i.value for i in at.info)

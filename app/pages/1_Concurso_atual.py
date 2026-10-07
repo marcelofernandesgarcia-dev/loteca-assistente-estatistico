@@ -31,6 +31,9 @@ from stats.concursos import concurso_a_jogar, ultimo_encerrado as buscar_ultimo_
 from stats.analise_palpite import NOME_CATEGORIA, ZEBRA, analisar_palpite, formatar_uma_em
 from stats.bilhete import montar_bilhete, validar_volante
 from stats.bilhetes_salvos import salvar_bilhete
+from stats.ano_em_curso import frase_do_lado
+from stats.cobertura import cobertura_do_concurso
+from stats.retrato import gravar_retrato, retrato_do_jogo, retrato_geral
 from stats.painel import participantes_do_concurso
 from stats.percentual import origem_do_percentual
 from stats.prazo import formatar_restante, situacao_do_prazo
@@ -380,6 +383,31 @@ else:
         "passados, o favorito dos dados acertou cerca de 50% nos jogos de complexidade baixa, 44% nos de média e 37% "
         "nos de alta. É uma leitura, não uma previsão."
     )
+    # Cobertura de dados (item A2 do plano v2, 07/10/2026): o app diz quando sabe pouco de um jogo.
+    cobertura_por_jogo = cobertura_do_concurso(conexao, jogos_vigente, resumo_ano_concurso, ajustes, dt.datetime.now())
+    n_incertos = sum(1 for c in cobertura_por_jogo.values() if c["alta_incerteza"])
+    with st.expander(f"Cobertura de dados dos jogos ({n_incertos} com alta incerteza)"):
+        st.caption(
+            "Quanto o app sabe de cada jogo: completa (temporada da CBF, Séries A e B), seleções (Elo), parcial "
+            "(Série C ou só jogos da Loteca) ou baixa (sem base própria). Parcial e baixa levam o aviso de alta "
+            "incerteza no volante. A sugestão do app não muda por causa disso."
+        )
+        st.markdown(
+            renderizar_tabela(
+                "Cobertura por jogo",
+                ["Jogo", "Nível", "O que falta"],
+                [
+                    [
+                        f"{j['num_jogo']}. {html.escape(j['casa'])} x {html.escape(j['fora'])}",
+                        ("⚠ " if cobertura_por_jogo[j["id"]]["alta_incerteza"] else "")
+                        + html.escape(cobertura_por_jogo[j["id"]]["nome_nivel"]),
+                        "<br>".join(html.escape(f) for f in cobertura_por_jogo[j["id"]]["faltas"]) or "-",
+                    ]
+                    for j in jogos_vigente
+                ],
+            ),
+            unsafe_allow_html=True,
+        )
 
     # Card 3 -- volante: 3 quadrados por jogo (1, X, 2), como o volante da
     # CAIXA. Começa em branco (pedido do usuário, 29/09/2026); a sugestão do
@@ -430,6 +458,9 @@ else:
             maior = max(pct, key=pct.get)
             with st.container(border=True, width=LARGURA_BLOCO_JOGO):
                 st.markdown(f"**{j['num_jogo']}.** {html.escape(j['casa'])} **x** {html.escape(j['fora'])}")
+                if cobertura_por_jogo[j["id"]]["alta_incerteza"]:
+                    st.caption(f":material/warning: **Alta incerteza:** poucos dados "
+                               f"({cobertura_por_jogo[j['id']]['nome_nivel'].lower()})")
                 with st.container(horizontal=True, wrap=False, gap="small"):
                     for coluna in COLUNAS_VOLANTE:
                         with st.container(width=LARGURA_QUADRADO, gap=None):
@@ -615,6 +646,19 @@ else:
             bilhete_id = salvar_bilhete(
                 conexao, numero_vigente, marcacoes, percentuais_por_jogo, analise=analise, motivos=motivos
             )
+            # Retrato imutável do que estava na tela (item A1 do plano v2): a revisão pós-jogo e a
+            # comparação de modelos leem daqui, não do cálculo de hoje.
+            ano_por_jogo = {r["num_jogo"]: r for r in resumo_ano_concurso}
+            gravar_retrato(conexao, bilhete_id, retrato_geral(), {
+                j["id"]: retrato_do_jogo(
+                    dict(j), calculos[j["id"]], ajustes, cobertura_por_jogo[j["id"]],
+                    complexidade_por_jogo.get(j["num_jogo"]),
+                    frase_do_lado(ano_por_jogo[j["num_jogo"]]["casa"]) if j["num_jogo"] in ano_por_jogo else None,
+                    frase_do_lado(ano_por_jogo[j["num_jogo"]]["fora"]) if j["num_jogo"] in ano_por_jogo else None,
+                    proposta["marcacoes"][i], marcacoes[j["id"]],
+                )
+                for i, j in enumerate(jogos_vigente)
+            })
             # Todo bilhete salvo fica ligado a uma versão (a igual já guardada, ou uma nova),
             # para o aprendizado comparar a primeira tentativa com a que virou bilhete.
             aviso_versao = ""

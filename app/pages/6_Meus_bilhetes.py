@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 import pandas as pd
 import streamlit as st
 from chances_ui import mostrar_chances_do_bilhete, mostrar_conjunto, percentuais_atuais_do_concurso, reais, rotulo_do_bilhete
+from retrato_ui import mostrar_retrato
 from util import formatar_data_br, mostrar_aviso_responsabilidade, obter_conexao
 
 import config
@@ -30,6 +31,7 @@ from stats.bilhetes_salvos import (
     resumo_financeiro,
 )
 from stats.premiacao import reais
+from stats.retrato import retrato_do_bilhete
 from stats.versoes_palpite import (
     agregar_aprendizado,
     aprendizado_de_todos_os_concursos,
@@ -265,6 +267,7 @@ for bilhete in bilhetes:
                     f"{historia['acertos_bilhete']}."
                 )
             st.caption(texto)
+        mostrar_retrato(retrato_do_bilhete(conexao, bilhete["id"]), f"retrato_{bilhete['id']}")
         if bilhete["conferido_em"] is None and _concurso_aberto(bilhete["concurso_numero"]):
             jogos_atuais, pcts_atuais = _atuais(bilhete["concurso_numero"])
             marcas_atuais = _marcacoes_do_bilhete(bilhete["id"], jogos_atuais)

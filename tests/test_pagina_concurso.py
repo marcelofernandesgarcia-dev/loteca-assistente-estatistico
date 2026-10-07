@@ -161,6 +161,26 @@ def test_salvar_com_duplo_marcado_grava_as_colunas_escolhidas(banco):
         assert c.execute("SELECT marcacoes FROM bilhete_jogos").fetchone()[0] == "1,2"
 
 
+def test_salvar_grava_o_retrato_do_que_estava_na_tela(banco):
+    # Item A1 do plano v2: origem, percentual, notícias, cobertura e sugestão guardados com o bilhete.
+    from stats.retrato import retrato_do_bilhete
+
+    at = _abrir()
+    quadrados = {q.key.rsplit("_", 1)[1]: q for q in _quadrados(at)}
+    quadrados["1"].check()
+    quadrados["X"].check().run()  # o volante exige ao menos um duplo
+    next(b for b in at.button if b.label == "Salvar bilhete").click().run()
+    assert not at.exception and not at.error, [e.value for e in at.error]
+    with db.sessao() as c:
+        bilhete_id = c.execute("SELECT id FROM bilhetes").fetchone()[0]
+        retrato = retrato_do_bilhete(c, bilhete_id)
+    jogo = retrato["jogos"][0]
+    assert jogo["marcacao"] == ["1", "X"] and jogo["casa"] == "ALFA" and jogo["noticias"]["casa"]["ajuste"] == -4.0
+    assert sum(jogo["percentual"]["final"].values()) == pytest.approx(100.0)
+    assert "nivel" in jogo["cobertura"] and jogo["sugestao_do_app"]
+    assert retrato["geral"]["versao_app"]
+
+
 # --- Análise do palpite (item 20) ---
 
 def _marcar_duplo_1_2(at: AppTest) -> AppTest:
@@ -270,6 +290,16 @@ def test_salvar_guarda_a_analise_e_o_motivo(banco):
         linha = c.execute("SELECT categoria, motivos, sem_base_propria FROM bilhete_jogos").fetchone()
         assert linha["categoria"] is not None and linha["motivos"] == '["Intuição"]' and linha["sem_base_propria"] == 1
         assert c.execute("SELECT acertos_esperados FROM bilhetes").fetchone()[0] is not None
+
+
+def test_cobertura_por_jogo_aparece_com_aviso_de_alta_incerteza(banco):
+    # Item A2 do plano v2: ALFA e BETA não têm CBF nem jogos no ano -> parcial ou baixa, com aviso.
+    at = _abrir()
+    assert any(e.label == "Cobertura de dados dos jogos (1 com alta incerteza)" for e in at.expander)
+    assert any("Alta incerteza:" in c.value for c in at.caption)
+    textos = " ".join(m.value for m in at.markdown)
+    assert "ALFA: sem dados da CBF na temporada, só os jogos que caíram na Loteca" in textos
+    assert "BETA: notícias não lidas para este concurso" in textos
 
 
 def test_manchetes_lidas_mostram_decisao_motivo_e_quem_ficou_sem_leitura(banco):

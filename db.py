@@ -97,6 +97,21 @@ CREATE TABLE IF NOT EXISTS noticias_lidas (
 );
 CREATE INDEX IF NOT EXISTS idx_noticias_lidas_concurso ON noticias_lidas (concurso_numero, participante_id);
 
+-- Retrato do que o app mostrava ao salvar o bilhete (item A1 do plano v2, 07/10/2026). Imutável: os
+-- gatilhos recusam alteração e exclusão; corrigir é salvar outro bilhete.
+CREATE TABLE IF NOT EXISTS retratos_bilhete (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bilhete_id INTEGER NOT NULL REFERENCES bilhetes(id),
+    jogo_id INTEGER REFERENCES jogos(id),
+    criado_em TEXT NOT NULL,
+    conteudo TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_retratos_bilhete ON retratos_bilhete (bilhete_id);
+CREATE TRIGGER IF NOT EXISTS retratos_bilhete_sem_alteracao BEFORE UPDATE ON retratos_bilhete
+BEGIN SELECT RAISE(ABORT, 'O retrato do bilhete não pode ser alterado.'); END;
+CREATE TRIGGER IF NOT EXISTS retratos_bilhete_sem_exclusao BEFORE DELETE ON retratos_bilhete
+BEGIN SELECT RAISE(ABORT, 'O retrato do bilhete não pode ser excluído.'); END;
+
 -- Dados lidos das páginas públicas da CBF (ver docs/cbf-fonte-de-dados.md).
 -- Ficam só neste banco local (loteca.db não vai para o GitHub).
 CREATE TABLE IF NOT EXISTS cbf_times (
