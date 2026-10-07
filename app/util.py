@@ -27,7 +27,31 @@ def obter_conexao():
     return db.conectar()
 
 
+# O Streamlit serve a página como inglês (<html lang="en">), e o navegador oferece tradução automática: no print
+# do usuário de 07/10/2026, "Por time" virou "Por tempo". O script declara a página como pt-BR e marca
+# translate="no" (sugestão S5, aprovada em 07/10/2026). Roda num componente invisível, que alcança a página.
+_DECLARAR_PORTUGUES = """
+<script>
+  const raiz = window.parent.document.documentElement;
+  raiz.lang = "pt-BR";
+  raiz.setAttribute("translate", "no");
+  if (!window.parent.document.querySelector('meta[name="google"]')) {
+    const meta = window.parent.document.createElement("meta");
+    meta.name = "google"; meta.content = "notranslate";
+    window.parent.document.head.appendChild(meta);
+  }
+</script>
+"""
+
+
+def declarar_portugues():
+    import streamlit.components.v1 as componentes
+
+    componentes.html(_DECLARAR_PORTUGUES, height=0)
+
+
 def mostrar_aviso_responsabilidade():
+    declarar_portugues()
     st.caption(config.AVISO_RESPONSABILIDADE)
 
 
