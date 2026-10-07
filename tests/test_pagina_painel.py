@@ -77,7 +77,7 @@ def test_modo_concurso_mostra_as_duas_abas_com_todos_os_participantes(banco):
     textos = _textos(at)
     assert "Comparação na temporada" in textos and "Alfa FC" in textos and "Beta EC" in textos
     assert "2 dos 4 participantes têm dados da CBF" in textos
-    assert "GAMA**: sem dados da CBF" in textos  # seleção: aponta para a outra aba
+    assert "GAMA**: sem tabela da CBF neste painel" in textos  # seleção: aponta para a outra aba
     assert "Projeção: se o desempenho persistir" in [e.label for e in at.expander]
     # Aba da Loteca: todos os 4 participantes, inclusive a seleção com pouca amostra.
     assert "todos os 4 participantes" in textos and "Amostra pequena" in textos

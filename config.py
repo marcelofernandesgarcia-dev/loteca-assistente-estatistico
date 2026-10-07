@@ -25,7 +25,17 @@ CBF_COMPETICOES = [
     # (campeonato, serie, ano)
     ("campeonato-brasileiro", "serie-a", 2026),
     ("campeonato-brasileiro", "serie-b", 2026),
+    # Série C (plano aprovado em 07/10/2026, Fase 2): no concurso 1273, 8 clubes de 4 jogos eram do
+    # quadrangular do acesso da Série C e o app não tinha nenhum dado deles. A página pública da CBF tem o
+    # mesmo formato das Séries A e B (conferido em 07/10/2026), com duas fases e grupos.
+    ("campeonato-brasileiro", "serie-c", 2026),
 ]
+# Séries disputadas em pontos corridos (turno e returno numa tabela só). Só nelas o app reconstrói a tabela
+# rodada a rodada (Ficha do time "Evolução", Painel "Temporada"); a Série C tem fases e grupos, e misturar
+# as fases daria posições falsas.
+CBF_SERIES_PONTOS_CORRIDOS = ("serie-a", "serie-b")
+CBF_NOMES_SERIE = {"serie-a": "Série A", "serie-b": "Série B", "serie-c": "Série C"}
+CBF_MAX_TIMES_POR_COMPETICAO = 40  # teto de páginas de time por competição (Série C: os 20 clubes da 1ª fase)
 # Temporadas passadas (P2 da priorização estatística, autorizado em 30/09/2026): coleta única, com
 # `scripts/coleta_cbf_historico.py`. Conferidas ao vivo: 2019 a 2025 existem completas nas duas séries.
 CBF_TEMPORADAS_PASSADAS = [
@@ -62,7 +72,13 @@ TRANSFERMARKT_TERMOS_CSV = BASE_DIR / "data" / "busca-transfermarkt.csv"
 CBF_VALIDADE_HORAS = int(os.environ.get("LOTECA_CBF_VALIDADE_H", "20"))
 CBF_USER_AGENT = "Mozilla/5.0 (compatible; LotecaAssistenteLocal/1.0; uso pessoal)"
 # Palavras que não ajudam a comparar nome de time da CBF com o da Loteca
-CBF_TOKENS_IGNORADOS = {"SAF", "FC", "S", "A", "F", "DE", "DA", "DO", "EC"}
+# "CLUB" (07/10/2026): "ATHLETIC CLUB" na Loteca é o "Athletic SAF" da CBF; sem ignorar a palavra, a regra
+# de pareamento (toda palavra da Loteca no nome da CBF) perderia esse par.
+CBF_TOKENS_IGNORADOS = {"SAF", "FC", "S", "A", "F", "DE", "DA", "DO", "EC", "CLUB"}
+# Nomes da Loteca com estes prefixos são de outra categoria e nunca pareiam com os times da CBF coletados
+# (masculino profissional). "F ": todos os jogos com esse prefixo (concursos 624 a 627 e 682, 2014-2015) são
+# entre times com o mesmo prefixo -- uma categoria à parte, provavelmente feminina (conferido em 07/10/2026).
+LOTECA_PREFIXOS_OUTRA_CATEGORIA = ("F ",)
 
 # Regras de apuração (ver docs/manual-produtos-caixa-v21.md, item 10)
 # Concurso mais antigo confirmado na API é o nº 1 (18/02/2002).

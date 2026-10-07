@@ -58,18 +58,19 @@ from stats.calibracao import calibrar_jogo
 from stats.percentual import origem_do_percentual
 from stats.temporada import desempenho_no_ano
 
-NOMES_SERIE = {"serie-a": "Série A", "serie-b": "Série B"}
+NOMES_SERIE = config.CBF_NOMES_SERIE
 
 
 def renderizar_classificacao_oficial(conexao, participante_id, classif):
     st.subheader("Classificação oficial (CBF)")
     if classif is None:
         st.caption(
-            "Sem dado da CBF para este participante -- só clubes das Séries A e B do Brasileirão são coletados "
+            "Sem dado da CBF para este participante -- só clubes das Séries A, B e C do Brasileirão são coletados "
             "(atualize com scripts/coleta_cbf.py)."
         )
     else:
-        serie = {"serie-a": "Série A", "serie-b": "Série B"}.get(classif["serie"], classif["serie"])
+        serie = NOMES_SERIE.get(classif["serie"], classif["serie"])
+        fase, grupo = classif.get("fase"), (classif.get("grupo") or "").title()
         est = estatisticas_do_participante(conexao, participante_id) or {}
         saf = historico_saf_na_cbf(conexao, classif.get("cod_time"))
         if saf:
@@ -93,21 +94,28 @@ def renderizar_classificacao_oficial(conexao, participante_id, classif):
                 f"**Zona atual: {selo}.** Segundo o Regulamento Específico da Competição "
                 f"({serie} {classif['ano']}) -- ver docs/fontes-oficiais/. Reflete a posição na última coleta, não é previsão."
             )
+        if fase:
+            st.caption(
+                f"A {serie} é disputada em fases. Posição, pontos, aproveitamento, V-E-D e gols abaixo são só da "
+                f"{fase}{f' ({grupo})' if grupo else ''}; o calendário no fim desta seção traz a temporada inteira."
+            )
         c1, c2, c3, c4, c5, c6 = st.columns(6)
-        c1.metric(f"Posição ({serie})", f"{classif['posicao']}º")
+        c1.metric(f"Posição no {grupo}" if fase and grupo else f"Posição ({serie})", f"{classif['posicao']}º")
         c2.metric("Pontos", classif["pontos"])
         c3.metric("Aproveitamento", f"{(classif['aproveitamento'] or 0):.0f}%")
         c4.metric("V-E-D", f"{classif['vitorias']}-{classif['empates']}-{classif['derrotas']}")
         c5.metric("Gols (pró / contra)", f"{classif['gols_pro']} / {classif['gols_contra']}", delta=f"saldo {classif['saldo']:+d}")
-        c6.metric("Jogos sem sofrer gol", est.get("jogos_sem_sofrer_gol", "-"))
+        # A página do time na CBF dá este número pela temporada inteira, não pela fase.
+        c6.metric("Jogos sem sofrer gol (temporada)" if fase else "Jogos sem sofrer gol", est.get("jogos_sem_sofrer_gol", "-"))
         ultimos = (classif.get("ultimos_jogos") or "").replace(",", " ") or "-"
         st.write(
             f"Últimos jogos: **{ultimos}** · Cartões: {classif['cartoes_amarelo']} amarelos, "
             f"{classif['cartoes_vermelho']} vermelhos · Próximo adversário: {classif.get('proximo_adversario') or '-'}"
         )
         coletado = dt.datetime.fromisoformat(classif["coletado_em"]).strftime("%d/%m/%Y %H:%M")
+        momento = f"{classif['rodada_fase']}ª rodada da {fase}" if fase else f"rodada {classif['rodada']}"
         st.caption(
-            f"Fonte: páginas públicas da CBF ({serie} {classif['ano']}, após a rodada {classif['rodada']}); coletado em {coletado}. "
+            f"Fonte: páginas públicas da CBF ({serie} {classif['ano']}, após a {momento}); coletado em {coletado}. "
             "Dado guardado só neste computador."
         )
         instrucao = instrucao_consulta_bid(classif["cod_time"], classif.get("uf_cbf"))
@@ -871,7 +879,7 @@ st.title("Ficha do time")
 mostrar_aviso_responsabilidade()
 st.caption(
     "Desempenho de um clube ou seleção. Para clubes das Séries A e B do Brasileirão, a ficha usa a temporada "
-    "completa lida da CBF. Para os demais, só os jogos que caíram na grade da Loteca -- e isso NÃO é a classificação "
+    "completa lida da CBF; para os da Série C, a classificação no grupo e o calendário da CBF. Para os demais, só os jogos que caíram na grade da Loteca -- e isso NÃO é a classificação "
     "oficial de nenhum campeonato."
 )
 
@@ -925,9 +933,18 @@ with aba_visao:
             st.write("- " + frase)
         if aviso_divergencia:
             st.warning(aviso_divergencia)
+    elif classif and classif.get("fase"):
+        st.info(
+            f"Ficha parcial: a {NOMES_SERIE.get(classif['serie'], classif['serie'])} é disputada em fases e grupos. "
+            "A classificação no grupo e o calendário da temporada inteira estão abaixo; a evolução rodada a rodada "
+            "e a comparação com a liga só existem para as Séries A e B, de pontos corridos."
+        )
+        jogos_loteca = jogos_da_loteca(conexao, participante_id)
+        for frase in frases_da_loteca(jogos_loteca, frequencia_participante(conexao, participante_id), frequencia_global(conexao)):
+            st.write("- " + frase)
     else:
         st.info(
-            "Ficha reduzida: este participante não tem dados da CBF (só clubes das Séries A e B são coletados). "
+            "Ficha reduzida: este participante não tem dados da CBF (só clubes das Séries A, B e C são coletados). "
             "Os números abaixo e as demais informações da aba 'Na Loteca' vêm apenas dos jogos que caíram na grade."
         )
         jogos_loteca = jogos_da_loteca(conexao, participante_id)
@@ -941,7 +958,10 @@ with aba_evolucao:
     if evolucao:
         renderizar_evolucao(evolucao, jogos_time, quantidade_times, aviso_divergencia)
     else:
-        st.info("A evolução rodada a rodada só existe para clubes das Séries A e B, cujos jogos vêm da CBF.")
+        st.info(
+            "A evolução rodada a rodada só existe para clubes das Séries A e B (pontos corridos), cujos jogos vêm "
+            "da CBF. A Série C tem fases e grupos: misturar as fases daria posições falsas."
+        )
 
 with aba_jogos:
     st.header("Jogo a jogo")

@@ -109,6 +109,9 @@ CREATE TABLE IF NOT EXISTS cbf_classificacao (
     proximo_adversario_id INTEGER,
     coletado_em TEXT NOT NULL,
     nome_no_ano TEXT,
+    fase TEXT,
+    grupo TEXT,
+    rodada_fase INTEGER,
     PRIMARY KEY (serie, ano, cod_time, rodada)
 );
 
@@ -140,7 +143,10 @@ CREATE TABLE IF NOT EXISTS cbf_partidas (
     gols_visitante INTEGER,
     penaltis_mandante INTEGER,
     penaltis_visitante INTEGER,
-    coletado_em TEXT NOT NULL
+    coletado_em TEXT NOT NULL,
+    fase TEXT,
+    grupo TEXT,
+    rodada_fase INTEGER
 );
 
 -- Pareamento entre participante da Loteca e time da CBF (só clubes brasileiros).
@@ -275,7 +281,13 @@ def _garantir_colunas(conexao: sqlite3.Connection) -> None:
             ("valor_acumulado_especial", "REAL"), ("valor_acumulado_proximo", "REAL"), ("valores_consultados_em", "TEXT"),
         ],
         # nome_no_ano: nome do time NAQUELA temporada (ex.: "Coritiba" em 2019, "Coritiba SAF" em 2026).
-        "cbf_classificacao": [("proximo_adversario_id", "INTEGER"), ("nome_no_ano", "TEXT")],
+        # Série C (07/10/2026): fase, grupo e rodada dentro da fase; nas Séries A e B ficam vazios. A coluna
+        # `rodada` segue numerada em sequência pela temporada (rodada 1 da 2ª fase = 20), para nunca colidir.
+        "cbf_classificacao": [
+            ("proximo_adversario_id", "INTEGER"), ("nome_no_ano", "TEXT"), ("fase", "TEXT"), ("grupo", "TEXT"),
+            ("rodada_fase", "INTEGER"),
+        ],
+        "cbf_partidas": [("fase", "TEXT"), ("grupo", "TEXT"), ("rodada_fase", "INTEGER")],
         "fatores_externos": [("evidencias", "TEXT")],
         # Análise do palpite (item 20): guardada com o bilhete para aprendizado.
         "bilhetes": [("chance_todos", "REAL"), ("chance_todos_menos_um", "REAL"), ("acertos_esperados", "REAL")],

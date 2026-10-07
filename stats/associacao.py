@@ -127,7 +127,9 @@ def observacoes_de_jogos(partidas: list[dict], serie: str, ano: int, nomes: dict
 
 def carregar_observacoes(conexao) -> list[dict]:
     """Observações de jogos de todas as temporadas coletadas. Só lê o banco."""
-    temporadas = conexao.execute("SELECT DISTINCT serie, ano FROM cbf_partidas ORDER BY ano, serie").fetchall()
+    temporadas = conexao.execute(
+        f"SELECT DISTINCT serie, ano FROM cbf_partidas WHERE {competicao.so_pontos_corridos()} ORDER BY ano, serie"
+    ).fetchall()
     nomes_atuais = {linha["cod_time"]: linha["nome"] for linha in conexao.execute("SELECT cod_time, nome FROM cbf_times")}
     observacoes = []
     for temporada in temporadas:

@@ -205,11 +205,13 @@ def participantes_do_concurso(conexao, numero: int) -> list[dict]:
 
 
 def temporadas_disponiveis(conexao) -> list[tuple[str, int]]:
-    """Todas as temporadas com jogos coletados, da mais recente para a mais antiga."""
+    """Todas as temporadas de pontos corridos com jogos coletados, da mais recente para a mais antiga
+    (a Série C, com fases e grupos, não entra na tabela rodada a rodada do painel)."""
     return [
         (linha["serie"], linha["ano"])
         for linha in conexao.execute(
-            "SELECT DISTINCT serie, ano FROM cbf_partidas WHERE gols_mandante IS NOT NULL ORDER BY ano DESC, serie"
+            "SELECT DISTINCT serie, ano FROM cbf_partidas WHERE gols_mandante IS NOT NULL"
+            f" AND {competicao.so_pontos_corridos()} ORDER BY ano DESC, serie"
         )
     ]
 

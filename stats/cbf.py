@@ -45,7 +45,7 @@ def partidas_do_participante(conexao, participante_id: int) -> list[dict]:
     """Calendário e resultados da temporada, do mais recente para o mais antigo."""
     linhas = conexao.execute(
         """
-        SELECT p.rodada, p.data_jogo, p.hora, p.local, p.gols_mandante, p.gols_visitante,
+        SELECT p.rodada, p.fase, p.grupo, p.rodada_fase, p.data_jogo, p.hora, p.local, p.gols_mandante, p.gols_visitante,
                p.mandante_id, p.visitante_id, m.cod_time AS meu_time,
                tm.nome AS nome_mandante, tv.nome AS nome_visitante
         FROM mapa_cbf_participante m
@@ -63,7 +63,11 @@ def partidas_do_participante(conexao, participante_id: int) -> list[dict]:
         em_casa = linha["mandante_id"] == linha["meu_time"]
         partidas.append(
             {
-                "rodada": linha["rodada"],
+                # Série C: "5ª da 2ª fase (Grupo B)"; Séries A e B: o número da rodada.
+                "rodada": (
+                    f"{linha['rodada_fase']}ª da {linha['fase']}" + (f" ({linha['grupo'].title()})" if linha["grupo"] else "")
+                    if linha["fase"] and linha["rodada_fase"] is not None else linha["rodada"]
+                ),
                 "data": linha["data_jogo"],
                 "hora": linha["hora"],
                 "local": linha["local"],
@@ -77,14 +81,53 @@ def partidas_do_participante(conexao, participante_id: int) -> list[dict]:
     return partidas
 
 
+def totais_da_temporada(conexao, cod_time: int, serie: str, ano: int) -> dict:
+    """V/E/D, gols e resultados em ordem de data de TODOS os jogos com placar do time na temporada,
+    somando as fases. Na Série C, a tabela da CBF mostra só a fase atual (5 jogos na 2ª fase de 2026);
+    o ano em curso precisa da temporada inteira."""
+    linhas = conexao.execute(
+        """
+        SELECT mandante_id, gols_mandante, gols_visitante FROM cbf_partidas
+        WHERE serie = ? AND ano = ? AND (mandante_id = ? OR visitante_id = ?)
+          AND gols_mandante IS NOT NULL AND gols_visitante IS NOT NULL
+        ORDER BY data_jogo, rodada, id_jogo
+        """,
+        (serie, ano, cod_time, cod_time),
+    ).fetchall()
+    totais = {"jogos": 0, "vitorias": 0, "empates": 0, "derrotas": 0, "gols_pro": 0, "gols_contra": 0, "sequencia": []}
+    for linha in linhas:
+        em_casa = linha["mandante_id"] == cod_time
+        feitos = linha["gols_mandante"] if em_casa else linha["gols_visitante"]
+        sofridos = linha["gols_visitante"] if em_casa else linha["gols_mandante"]
+        totais["jogos"] += 1
+        totais["gols_pro"] += feitos
+        totais["gols_contra"] += sofridos
+        chave, letra = ("vitorias", "V") if feitos > sofridos else ("empates", "E") if feitos == sofridos else ("derrotas", "D")
+        totais[chave] += 1
+        totais["sequencia"].append(letra)
+    return totais
+
+
+def rotulo_da_posicao(classificacao: dict) -> str:
+    """'3º' nas Séries A e B; '1º no Grupo B (2ª fase)' numa competição com fases (Série C), em que a
+    posição é dentro do grupo e não na competição inteira."""
+    posicao = classificacao.get("posicao")
+    if not posicao:
+        return "-"
+    if classificacao.get("grupo") and classificacao.get("fase"):
+        return f"{posicao}º no {classificacao['grupo'].title()} ({classificacao['fase']})"
+    return f"{posicao}º"
+
+
 def resumo_curto_cbf(classificacao: dict | None) -> str:
-    """Ex.: 'CBF: 3º · 60% aprov. · V E V' -- para anotar ao lado do time."""
+    """Ex.: 'CBF: 3º · 60% aprov. · V E V' -- para anotar ao lado do time. Na Série C, o
+    aproveitamento da tabela é só da fase atual e o texto diz isso."""
     if not classificacao:
         return "sem dado CBF"
     ultimos = (classificacao.get("ultimos_jogos") or "").replace(",", " ")
-    posicao = classificacao.get("posicao")
     aproveitamento = classificacao.get("aproveitamento") or 0
-    partes = [f"CBF: {posicao}º" if posicao else "CBF: -", f"{aproveitamento:.0f}% aprov."]
+    na_fase = " na fase" if classificacao.get("fase") else ""
+    partes = [f"CBF: {rotulo_da_posicao(classificacao)}", f"{aproveitamento:.0f}% aprov.{na_fase}"]
     if ultimos:
         partes.append(ultimos)
     return " · ".join(partes)

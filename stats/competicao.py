@@ -18,6 +18,13 @@ PONTOS_VITORIA = 3
 PONTOS_EMPATE = 1
 
 
+def so_pontos_corridos(coluna: str = "serie") -> str:
+    """Trecho de SQL que deixa só as séries de pontos corridos (config.CBF_SERIES_PONTOS_CORRIDOS). A
+    Série C tem fases e grupos: reconstruir a tabela, ou medir modelos de temporada, com ela misturaria
+    as fases. Os valores entram no próprio texto porque vêm do config, nunca do usuário."""
+    return f"{coluna} IN ({', '.join(repr(serie) for serie in config.CBF_SERIES_PONTOS_CORRIDOS)})"
+
+
 def carregar_partidas(conexao, serie: str, ano: int) -> list[dict]:
     """Jogos com placar da competição, ordenados por rodada e data."""
     linhas = conexao.execute(
@@ -36,11 +43,13 @@ def carregar_partidas(conexao, serie: str, ano: int) -> list[dict]:
 def serie_do_time(conexao, cod_time: int) -> tuple[str, int] | None:
     """(serie, ano) em que o time tem jogos na temporada MAIS RECENTE coletada, ou None.
     Um time que só aparece em temporadas passadas (coleta histórica) não tem
-    competição "atual": as telas de time usam este resultado para saber se ele joga agora."""
+    competição "atual": as telas de time usam este resultado para saber se ele joga agora.
+    Só séries de pontos corridos: a evolução rodada a rodada não vale para a Série C."""
     linha = conexao.execute(
-        """
+        f"""
         SELECT serie, ano FROM cbf_partidas
         WHERE (mandante_id = ? OR visitante_id = ?) AND ano = (SELECT MAX(ano) FROM cbf_partidas)
+          AND {so_pontos_corridos()}
         ORDER BY serie LIMIT 1
         """,
         (cod_time, cod_time),

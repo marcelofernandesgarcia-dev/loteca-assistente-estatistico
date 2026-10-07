@@ -18,31 +18,58 @@ def tokens(nome: str) -> frozenset[str]:
     return frozenset(p for p in palavras if p not in config.CBF_TOKENS_IGNORADOS)
 
 
-def _compativeis(a: frozenset[str], b: frozenset[str]) -> bool:
-    return bool(a) and bool(b) and (a <= b or b <= a)
+def _compativeis(loteca: frozenset[str], cbf: frozenset[str]) -> bool:
+    """Toda palavra do nome da Loteca precisa estar no nome da CBF (a Loteca abrevia: "SPORT" ->
+    "Sport Recife"). O sentido contrário NÃO vale: palavra a mais na Loteca indica outro time
+    ("PALMEIRAS B", time reserva; "VITORIA CONQUISTA", "GREMIO MARINGA"), achado ao repetir o
+    pareamento com as temporadas de 2019 a 2026 em 07/10/2026."""
+    return bool(loteca) and bool(cbf) and loteca <= cbf
 
 
-def parear(conexao) -> dict:
+def parear(conexao, equivalentes: dict[int, list[int]] | None = None) -> dict:
     """Recalcula `mapa_cbf_participante`. Retorna contagem de pareados e a
-    lista de clubes brasileiros sem par único (para revisão manual)."""
+    lista de clubes brasileiros sem par único (para revisão manual). Um par
+    automático que a regra deixou de sustentar (o time da CBF não é mais
+    candidato) é removido; par ambíguo já existente fica como está.
+
+    `equivalentes` ({código atual: [anteriores]}, padrão: a tabela validada de
+    stats.cbf.codigos_equivalentes): dois códigos do MESMO clube contam como um
+    candidato só, o atual. Sem isso, um clube que trocou de código na CBF (ex.:
+    Bahia, Atlético Mineiro) fica sempre "ambíguo"."""
+    if equivalentes is None:
+        from stats.cbf import codigos_equivalentes
+
+        equivalentes = codigos_equivalentes()
+    atual_de = {anterior: atual for atual, anteriores in equivalentes.items() for anterior in anteriores}
     times_cbf = conexao.execute("SELECT cod_time, nome, uf FROM cbf_times WHERE uf IS NOT NULL").fetchall()
     clubes = conexao.execute(
         "SELECT id, nome, pais_ou_uf FROM participantes WHERE tipo = 'clube' AND length(pais_ou_uf) = 2"
     ).fetchall()
 
-    pareados, pendentes = 0, []
+    atuais = {
+        linha["participante_id"]: linha["cod_time"]
+        for linha in conexao.execute("SELECT participante_id, cod_time FROM mapa_cbf_participante WHERE metodo = 'uf+nome'")
+    }
+    pareados, pendentes, removidos = 0, [], []
     for clube in clubes:
         alvo = tokens(clube["nome"])
-        candidatos = [
-            t for t in times_cbf if t["uf"] == clube["pais_ou_uf"] and _compativeis(alvo, tokens(t["nome"]))
-        ]
+        brutos = set()
+        if not clube["nome"].upper().startswith(config.LOTECA_PREFIXOS_OUTRA_CATEGORIA):
+            brutos = {
+                t["cod_time"] for t in times_cbf
+                if t["uf"] == clube["pais_ou_uf"] and _compativeis(alvo, tokens(t["nome"]))
+            }
+        candidatos = sorted({atual_de.get(cod, cod) for cod in brutos})
+        if clube["id"] in atuais and atuais[clube["id"]] not in brutos | set(candidatos):
+            conexao.execute("DELETE FROM mapa_cbf_participante WHERE participante_id = ?", (clube["id"],))
+            removidos.append(f"{clube['nome']}/{clube['pais_ou_uf']}")
         if len(candidatos) == 1:
             conexao.execute(
                 "INSERT INTO mapa_cbf_participante (participante_id, cod_time, metodo) VALUES (?, ?, 'uf+nome') "
                 "ON CONFLICT(participante_id) DO UPDATE SET cod_time=excluded.cod_time, metodo=excluded.metodo",
-                (clube["id"], candidatos[0]["cod_time"]),
+                (clube["id"], candidatos[0]),
             )
             pareados += 1
         elif len(candidatos) > 1:
             pendentes.append(f"{clube['nome']}/{clube['pais_ou_uf']}: {len(candidatos)} candidatos")
-    return {"pareados": pareados, "ambiguos": pendentes}
+    return {"pareados": pareados, "ambiguos": pendentes, "removidos": removidos}

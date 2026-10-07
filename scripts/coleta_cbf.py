@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Coleta agendada das páginas públicas da CBF (Série A e B). Chamado pelo
+"""Coleta agendada das páginas públicas da CBF (Séries A, B e C). Chamado pelo
 Agendador de Tarefas do Windows (comando `schtasks` no README.md); roda
 sozinho, sem a UI aberta. Pula competições cujo dado ainda é recente
 (config.CBF_VALIDADE_HORAS), então pode ser agendado com folga.
@@ -30,6 +30,8 @@ def main() -> int:
         logger.info("Pareamento CBF x Loteca: %s times pareados", pareamento["pareados"])
         for aviso in pareamento["ambiguos"]:
             logger.warning("Sem par único: %s", aviso)
+        for removido in pareamento["removidos"]:
+            logger.warning("Par removido (a regra não o sustenta mais): %s", removido)
     return 0
 
 

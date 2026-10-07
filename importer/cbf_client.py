@@ -65,6 +65,66 @@ def parse_classificacao(html: str) -> list[dict]:
     return dados
 
 
+_TABELA = '"data":[{"cod_time"'
+_TITULO_DA_TABELA = re.compile(r'"title":"([^"]*)",$')
+
+
+def parse_tabela_completa(html: str) -> dict:
+    """Todas as tabelas da página e as fases da competição. Séries A e B: uma tabela
+    ("GRUPO ÚNICO") e uma fase. Série C (conferido em 07/10/2026): a página mostra só a
+    fase atual -- na 2ª fase, uma tabela por grupo ("GRUPO B", "GRUPO C") -- e a lista
+    de fases (`phasesList`), em que a fase atual vem como referência ao objeto `phase`.
+
+    Devolve {"grupos": [{"titulo", "linhas"}], "fases": [{fase_nome, rodadas_qtd, partidas, ...}],
+    "indice_fase_atual": posição da fase atual em "fases" (None se a página não disser)}.
+    O título só é guardado quando há mais de uma tabela (com uma só, ele não diz nada)."""
+    texto = decodificar_fluxo(html)
+    grupos, inicio = [], texto.find(_TABELA)
+    if inicio < 0:
+        raise ErroColetaCBF("Tabela de classificação não encontrada na página")
+    while inicio >= 0:
+        linhas, _ = json.JSONDecoder().raw_decode(texto[inicio + len('"data":'):])
+        titulo = _TITULO_DA_TABELA.search(texto[max(0, inicio - 200):inicio])
+        grupos.append({"titulo": titulo.group(1) if titulo else None, "linhas": linhas})
+        inicio = texto.find(_TABELA, inicio + 1)
+    if len(grupos) == 1:
+        grupos[0]["titulo"] = None
+    fase_atual = json_apos(texto, '"phase":')
+    fase_atual = fase_atual if isinstance(fase_atual, dict) else None
+    fases = [f if isinstance(f, dict) else fase_atual for f in (json_apos(texto, '"phasesList":') or [])]
+    fases = [f for f in fases if isinstance(f, dict)]
+    indice_atual = next(
+        (i for i, f in enumerate(fases) if fase_atual and f.get("fase_id") == fase_atual.get("fase_id")), None
+    )
+    return {"grupos": grupos, "fases": fases, "indice_fase_atual": indice_atual}
+
+
+def calendario_de_fases(fases: list[dict]) -> list[dict]:
+    """Para cada fase, em ordem: nome, quantas rodadas vêm antes dela (para numerar a rodada em
+    sequência pela temporada) e o último `num_jogo` dela. Vazio quando a competição tem uma
+    fase só (Séries A e B): aí nada muda na gravação."""
+    if len(fases) < 2:
+        return []
+    calendario, rodadas_antes, partidas_antes = [], 0, 0
+    for fase in fases:
+        partidas_antes += _inteiro(fase.get("partidas")) or 0
+        calendario.append({"nome": fase.get("fase_nome"), "rodadas_antes": rodadas_antes, "ultimo_num_jogo": partidas_antes})
+        rodadas_antes += _inteiro(fase.get("rodadas_qtd")) or 0
+    return calendario
+
+
+def fase_do_jogo(num_jogo: int | None, calendario: list[dict]) -> dict | None:
+    """Fase de um jogo pelo número dele na competição (os jogos são numerados em sequência:
+    na Série C 2026, 1 a 190 são da 1ª fase). A última fase fica com todo número acima das
+    anteriores, porque a contagem de partidas da CBF pode ser por grupo."""
+    if not calendario or num_jogo is None:
+        return None
+    for fase in calendario[:-1]:
+        if num_jogo <= fase["ultimo_num_jogo"]:
+            return fase
+    return calendario[-1]
+
+
 def parse_pagina_time(html: str) -> dict:
     texto = decodificar_fluxo(html)
     estatisticas = json_apos(texto, '"estatisticas":') or []
@@ -147,7 +207,13 @@ def _dado_fresco(conexao, serie: str, ano: int) -> bool:
     return idade < dt.timedelta(hours=config.CBF_VALIDADE_HORAS)
 
 
-def gravar_classificacao(conexao, serie: str, ano: int, linhas: list[dict], coletado_em: str) -> None:
+def gravar_classificacao(
+    conexao, serie: str, ano: int, linhas: list[dict], coletado_em: str, fase: dict | None = None,
+    grupo: str | None = None,
+) -> None:
+    """`fase` (de `calendario_de_fases`) e `grupo` só nas competições com mais de uma fase: a rodada
+    guardada passa a seguir a sequência da temporada e a rodada da fase vai para `rodada_fase`."""
+    rodadas_antes = fase["rodadas_antes"] if fase else 0
     # `cbf_times` guarda o nome MAIS RECENTE do time. Uma temporada antiga não pode
     # sobrescrevê-lo (coletar 2019 depois de 2026 trocaria "Coritiba SAF" por
     # "Coritiba" e quebraria a marca de SAF e o link do Transfermarkt). O nome de
@@ -175,10 +241,12 @@ def gravar_classificacao(conexao, serie: str, ano: int, linhas: list[dict], cole
             """
             INSERT INTO cbf_classificacao (serie, ano, cod_time, rodada, posicao, pontos, jogos, vitorias, empates,
                 derrotas, gols_pro, gols_contra, saldo, cartoes_amarelo, cartoes_vermelho, aproveitamento,
-                ultimos_jogos, proximo_adversario, proximo_adversario_id, coletado_em, nome_no_ano)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ultimos_jogos, proximo_adversario, proximo_adversario_id, coletado_em, nome_no_ano, fase, grupo,
+                rodada_fase)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(serie, ano, cod_time, rodada) DO UPDATE SET
-                nome_no_ano=excluded.nome_no_ano,
+                nome_no_ano=excluded.nome_no_ano, fase=excluded.fase, grupo=excluded.grupo,
+                rodada_fase=excluded.rodada_fase,
                 posicao=excluded.posicao, pontos=excluded.pontos, jogos=excluded.jogos,
                 vitorias=excluded.vitorias, empates=excluded.empates, derrotas=excluded.derrotas,
                 gols_pro=excluded.gols_pro, gols_contra=excluded.gols_contra, saldo=excluded.saldo,
@@ -188,18 +256,23 @@ def gravar_classificacao(conexao, serie: str, ano: int, linhas: list[dict], cole
                 proximo_adversario_id=excluded.proximo_adversario_id, coletado_em=excluded.coletado_em
             """,
             (
-                serie, ano, cod, _inteiro(linha.get("rodada")) or 0, _inteiro(linha.get("posicao")),
+                serie, ano, cod, (_inteiro(linha.get("rodada")) or 0) + rodadas_antes, _inteiro(linha.get("posicao")),
                 _inteiro(linha.get("pontos")), _inteiro(linha.get("jogos")), _inteiro(linha.get("vitorias")),
                 _inteiro(linha.get("empates")), _inteiro(linha.get("derrotas")), _inteiro(linha.get("gols_pro")),
                 _inteiro(linha.get("gols_contra")), _inteiro(linha.get("gols_saldo")),
                 _inteiro(linha.get("cartoes_amarelo")), _inteiro(linha.get("cartoes_vermelho")),
                 _decimal(linha.get("aproveitamento")), ",".join(linha.get("ultimos_jogos") or []),
                 proximo.get("time"), _inteiro(proximo.get("id")), coletado_em, linha["time"],
+                fase["nome"] if fase else None, grupo, _inteiro(linha.get("rodada")) if fase else None,
             ),
         )
 
 
-def gravar_pagina_time(conexao, serie: str, ano: int, cod_time: int, dados: dict, coletado_em: str) -> None:
+def gravar_pagina_time(
+    conexao, serie: str, ano: int, cod_time: int, dados: dict, coletado_em: str, calendario: list[dict] | None = None,
+) -> None:
+    """`calendario` (de `calendario_de_fases`) só nas competições com mais de uma fase: cada jogo
+    recebe a fase (pelo número do jogo), o grupo que a CBF informa e a rodada em sequência."""
     est = dados.get("estatisticas")
     if est:
         conexao.execute(
@@ -227,22 +300,28 @@ def gravar_pagina_time(conexao, serie: str, ano: int, cod_time: int, dados: dict
                     "INSERT INTO cbf_times (cod_time, nome, uf) VALUES (?, ?, NULL) ON CONFLICT(cod_time) DO NOTHING",
                     (_inteiro(lado["id"]), lado["nome"]),
                 )
+        rodada = _inteiro(jogo.get("rodada"))
+        fase = fase_do_jogo(_inteiro(jogo.get("num_jogo")), calendario or [])
         conexao.execute(
             """
             INSERT INTO cbf_partidas (id_jogo, serie, ano, rodada, data_jogo, hora, local, mandante_id, visitante_id,
-                gols_mandante, gols_visitante, penaltis_mandante, penaltis_visitante, coletado_em)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                gols_mandante, gols_visitante, penaltis_mandante, penaltis_visitante, coletado_em, fase, grupo,
+                rodada_fase)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id_jogo) DO UPDATE SET
                 rodada=excluded.rodada, data_jogo=excluded.data_jogo, hora=excluded.hora, local=excluded.local,
                 gols_mandante=excluded.gols_mandante, gols_visitante=excluded.gols_visitante,
                 penaltis_mandante=excluded.penaltis_mandante, penaltis_visitante=excluded.penaltis_visitante,
-                coletado_em=excluded.coletado_em
+                coletado_em=excluded.coletado_em, fase=excluded.fase, grupo=excluded.grupo,
+                rodada_fase=excluded.rodada_fase
             """,
             (
-                _inteiro(jogo.get("id_jogo")), serie, ano, _inteiro(jogo.get("rodada")), data_iso(jogo.get("data")),
+                _inteiro(jogo.get("id_jogo")), serie, ano,
+                rodada + fase["rodadas_antes"] if fase and rodada is not None else rodada, data_iso(jogo.get("data")),
                 jogo.get("hora"), jogo.get("local"), _inteiro(mandante.get("id")), _inteiro(visitante.get("id")),
                 _inteiro(mandante.get("gols")), _inteiro(visitante.get("gols")),
                 _inteiro(mandante.get("panaltis")), _inteiro(visitante.get("panaltis")), coletado_em,
+                fase["nome"] if fase else None, jogo.get("grupo") if fase else None, rodada if fase else None,
             ),
         )
 
@@ -254,22 +333,40 @@ def coletar_competicao(conexao, campeonato: str, serie: str, ano: int, forcar: b
         return {"serie": serie, "ano": ano, "pulou": True, "times": 0}
 
     url_tabela = f"{config.CBF_BASE_URL}/futebol-brasileiro/tabelas/{campeonato}/{serie}/{ano}"
-    linhas = parse_classificacao(_baixar(url_tabela))
+    pagina = parse_tabela_completa(_baixar(url_tabela))
+    calendario = calendario_de_fases(pagina["fases"])
+    indice = pagina["indice_fase_atual"]
+    fase_atual = calendario[indice] if calendario and indice is not None else None
+    if calendario and fase_atual is None:
+        raise ErroColetaCBF(f"{serie} {ano}: a página tem várias fases mas não diz qual é a atual")
     coletado_em = _agora()
-    gravar_classificacao(conexao, serie, ano, linhas, coletado_em)
+    for grupo in pagina["grupos"]:
+        gravar_classificacao(conexao, serie, ano, grupo["linhas"], coletado_em, fase_atual, grupo["titulo"])
 
-    coletados = 0
-    for linha in linhas:
-        cod = _inteiro(linha["cod_time"])
+    # Fila de times: os da tabela e, numa competição com fases, os adversários que aparecem nas páginas
+    # (na 2ª fase da Série C a tabela mostra só 8 dos 20 clubes; os eliminados estão nos jogos da 1ª fase).
+    fila = [_inteiro(linha["cod_time"]) for grupo in pagina["grupos"] for linha in grupo["linhas"]]
+    vistos, coletados = set(fila), 0
+    while fila and coletados < config.CBF_MAX_TIMES_POR_COMPETICAO:
+        cod = fila.pop(0)
         time.sleep(config.CBF_INTERVALO_SEGUNDOS)
         url_time = f"{config.CBF_BASE_URL}/futebol-brasileiro/times/{campeonato}/{serie}/{ano}/{cod}"
         try:
             dados = parse_pagina_time(_baixar(url_time))
         except ErroColetaCBF as erro:
-            logger.warning("Time %s (%s) não coletado: %s", linha.get("time"), cod, erro)
+            logger.warning("Time %s de %s %s não coletado: %s", cod, serie, ano, erro)
             continue
-        gravar_pagina_time(conexao, serie, ano, cod, dados, coletado_em)
+        gravar_pagina_time(conexao, serie, ano, cod, dados, coletado_em, calendario)
         coletados += 1
+        if calendario:
+            for jogo in dados["jogos"]:
+                for lado in (jogo.get("mandante") or {}, jogo.get("visitante") or {}):
+                    novo = _inteiro(lado.get("id"))
+                    if novo is not None and novo not in vistos:
+                        vistos.add(novo)
+                        fila.append(novo)
+    if fila:
+        logger.warning("%s %s: %d time(s) ficaram de fora pelo teto de páginas", serie, ano, len(fila))
     return {"serie": serie, "ano": ano, "pulou": False, "times": coletados}
 
 

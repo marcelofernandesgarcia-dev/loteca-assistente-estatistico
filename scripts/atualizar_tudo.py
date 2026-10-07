@@ -20,6 +20,7 @@ import db
 from externo.varredura import concurso_alvo_da_semana, executar_para_concurso, recalcular_percentuais_gravados
 from importer.caixa_client import importar_concurso, importar_programacao
 from importer.cbf_client import coletar_todas
+from importer.cbf_mapeamento import parear
 from stats import calibracao
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -37,6 +38,13 @@ def _atualizar_caixa(conexao) -> None:
 
 def _atualizar_cbf(conexao) -> None:
     resultados = coletar_todas(conexao)
+    # Pareia de novo a cada coleta: um clube que entra na CBF (ex.: Série C, 07/10/2026) só ganha a
+    # ficha da CBF no app depois de pareado com o participante da Loteca.
+    pareamento = parear(conexao)
+    for aviso in pareamento["ambiguos"]:
+        logger.warning("Sem par único CBF x Loteca: %s", aviso)
+    for removido in pareamento["removidos"]:
+        logger.warning("Par CBF x Loteca removido (a regra não o sustenta mais): %s", removido)
     conexao.commit()
     total_times = sum(r.get("times", 0) for r in resultados if "erro" not in r)
     erros = [r["erro"] for r in resultados if "erro" in r]

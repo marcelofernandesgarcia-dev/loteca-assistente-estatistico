@@ -369,7 +369,7 @@ def mostrar_temporada(
 
 def _resumo_lado_cbf(nome: str, cod: int | None, dados_por_cod: dict, nomes_cbf: dict[int, str]) -> str:
     if not cod or cod not in dados_por_cod:
-        return f"**{html.escape(nome)}**: sem dados da CBF (seleção ou time fora das Séries A e B). Veja a aba 'Histórico na Loteca'."
+        return f"**{html.escape(nome)}**: sem tabela da CBF neste painel (seleção, Série C ou time de outra divisão; o painel cobre as Séries A e B). Veja a aba 'Histórico na Loteca'."
     dados = dados_por_cod[cod]
     linha = tabela_comparativa(dados, [cod])[0]
     zona = f", {NOMES_ZONA[linha['zona']]}" if linha["zona"] else ""

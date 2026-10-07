@@ -81,7 +81,8 @@ def amostra_da_temporada(partidas: list[dict], serie: str, ano: int, com_poisson
 def carregar_amostra(conexao) -> list[dict]:
     """Amostra de todas as temporadas coletadas. Só lê o banco."""
     amostra = []
-    for t in conexao.execute("SELECT DISTINCT serie, ano FROM cbf_partidas ORDER BY ano, serie").fetchall():
+    consulta = f"SELECT DISTINCT serie, ano FROM cbf_partidas WHERE {competicao.so_pontos_corridos()} ORDER BY ano, serie"
+    for t in conexao.execute(consulta).fetchall():
         amostra += amostra_da_temporada(competicao.carregar_partidas(conexao, t["serie"], t["ano"]), t["serie"], t["ano"])
     return amostra
 

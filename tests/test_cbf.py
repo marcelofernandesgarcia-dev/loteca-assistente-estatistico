@@ -359,6 +359,51 @@ def test_pareamento_ambiguo_nao_adivinha(conexao):
     assert conexao.execute("SELECT COUNT(*) FROM mapa_cbf_participante").fetchone()[0] == 0
 
 
+@pytest.mark.parametrize("nome_loteca", ["PALMEIRAS B", "PALMEIRAS-B", "VITORIA CONQUISTA", "GREMIO MARINGA"])
+def test_palavra_a_mais_na_loteca_e_outro_time_e_nao_pareia(conexao, nome_loteca):
+    # Casos reais achados em 07/10/2026 (time reserva e clubes homônimos de outra cidade).
+    _cbf(conexao, 1, "Palmeiras", "SP")
+    _cbf(conexao, 2, "Vitória", "BA")
+    _cbf(conexao, 3, "Maringá FC SAF", "PR")
+    uf = {"PALMEIRAS B": "SP", "PALMEIRAS-B": "SP", "VITORIA CONQUISTA": "BA", "GREMIO MARINGA": "PR"}[nome_loteca]
+    db.obter_ou_criar_participante(conexao, nome_loteca, "clube", uf)
+    assert parear(conexao)["pareados"] == 0
+
+
+def test_par_automatico_que_a_regra_nao_sustenta_e_removido_e_o_ambiguo_fica(conexao):
+    _cbf(conexao, 1, "Palmeiras", "SP")
+    _cbf(conexao, 2, "Bahia", "BA")
+    _cbf(conexao, 3, "Bahia de Feira", "BA")
+    reserva = db.obter_ou_criar_participante(conexao, "PALMEIRAS B", "clube", "SP")
+    bahia = db.obter_ou_criar_participante(conexao, "BAHIA", "clube", "BA")
+    for participante, cod in ((reserva, 1), (bahia, 2)):  # pares gravados pela regra antiga
+        conexao.execute("INSERT INTO mapa_cbf_participante (participante_id, cod_time, metodo) VALUES (?, ?, 'uf+nome')",
+                        (participante, cod))
+    resultado = parear(conexao)
+    assert resultado["removidos"] == ["PALMEIRAS B/SP"] and len(resultado["ambiguos"]) == 1
+    mapa = {r["participante_id"]: r["cod_time"] for r in conexao.execute("SELECT * FROM mapa_cbf_participante")}
+    assert mapa == {bahia: 2}
+
+
+def test_dois_codigos_do_mesmo_clube_validados_contam_como_um_so(conexao):
+    _cbf(conexao, 10, "Time Gama", "SC")
+    _cbf(conexao, 11, "Time Gama", "SC")
+    gama = db.obter_ou_criar_participante(conexao, "TIME GAMA", "clube", "SC")
+    assert parear(conexao, equivalentes={})["pareados"] == 0  # sem a equivalência validada: ambíguo
+    resultado = parear(conexao, equivalentes={11: [10]})
+    assert resultado["pareados"] == 1 and resultado["ambiguos"] == []
+    assert conexao.execute("SELECT cod_time FROM mapa_cbf_participante WHERE participante_id = ?", (gama,)).fetchone()[0] == 11
+
+
+def test_time_de_outra_categoria_nao_pareia_e_par_antigo_sai(conexao):
+    _cbf(conexao, 1, "Ferroviária", "SP")
+    feminino = db.obter_ou_criar_participante(conexao, "F FERROVIARIA", "clube", "SP")
+    conexao.execute("INSERT INTO mapa_cbf_participante (participante_id, cod_time, metodo) VALUES (?, 1, 'uf+nome')",
+                    (feminino,))
+    resultado = parear(conexao, equivalentes={})
+    assert resultado["pareados"] == 0 and resultado["removidos"] == ["F FERROVIARIA/SP"]
+
+
 def test_estrangeiro_e_selecao_nao_pareiam(conexao):
     _cbf(conexao, 1, "Barcelona", "SP")
     db.obter_ou_criar_participante(conexao, "BARCELONA", "clube", "ESP")

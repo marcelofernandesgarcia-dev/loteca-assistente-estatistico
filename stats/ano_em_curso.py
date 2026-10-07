@@ -4,17 +4,18 @@ e em primeiro lugar). Só leitura e aritmética sobre dado coletado; nada aqui �
 previsão.
 
 Ordem das fontes, da mais completa para a mais pobre:
-1. "cbf": temporada do ano nas Séries A e B (classificação oficial);
+1. "cbf": temporada do ano nas Séries A, B e C (classificação oficial; na Série C, que tem fases,
+   os totais somam os jogos de todas as fases);
 2. "selecoes": jogos do ano na base aberta de resultados internacionais (CC0);
 3. "loteca": jogos do ano que caíram na grade da Loteca;
 4. None: nenhum jogo do ano encontrado.
 """
 import config
-from stats.cbf import classificacao_do_participante
+from stats.cbf import classificacao_do_participante, rotulo_da_posicao, totais_da_temporada
 from stats.contexto import selo_da_posicao
 from stats.temporada import desempenho_no_ano
 
-NOME_SERIE = {"serie-a": "Série A", "serie-b": "Série B"}
+NOME_SERIE = config.CBF_NOMES_SERIE
 TEXTO_FONTE = {
     "cbf": "classificação da CBF",
     "selecoes": "jogos de seleções do ano (base aberta)",
@@ -31,7 +32,7 @@ def _lado_vazio(nome: str, ano: int) -> dict:
     return {
         "nome": nome, "ano": ano, "fonte": None, "texto_fonte": "sem jogos do ano encontrados", "jogos": 0,
         "vitorias": 0, "empates": 0, "derrotas": 0, "pontos": 0, "gols_pro": 0, "gols_contra": 0,
-        "aproveitamento": None, "posicao": None, "serie": None, "zona": None, "ultimos": [],
+        "aproveitamento": None, "posicao": None, "rotulo_posicao": None, "serie": None, "zona": None, "ultimos": [],
         "amostra_pequena": True,
     }
 
@@ -87,10 +88,17 @@ def lado_no_ano(conexao, participante: dict, ano: int, jogos_base=None, nomes_se
         lado.update(
             fonte="cbf", jogos=classif["jogos"], vitorias=classif["vitorias"] or 0, empates=classif["empates"] or 0,
             derrotas=classif["derrotas"] or 0, gols_pro=classif["gols_pro"] or 0, gols_contra=classif["gols_contra"] or 0,
-            posicao=classif["posicao"], serie=classif["serie"], ultimos=ultimos[-config.ANO_CURSO_ULTIMOS:],
-            zona=selo_da_posicao(classif["serie"], ano, classif["posicao"]),
+            posicao=classif["posicao"], rotulo_posicao=rotulo_da_posicao(classif), serie=classif["serie"],
+            ultimos=ultimos[-config.ANO_CURSO_ULTIMOS:], zona=selo_da_posicao(classif["serie"], ano, classif["posicao"]),
         )
         lado["texto_fonte"] = f"{TEXTO_FONTE['cbf']} ({NOME_SERIE.get(classif['serie'], classif['serie'])})"
+        if classif.get("fase"):
+            # Competição com fases (Série C): a tabela traz só a fase atual; o ano soma todos os jogos.
+            totais = totais_da_temporada(conexao, classif["cod_time"], classif["serie"], ano)
+            if totais["jogos"]:
+                lado.update({k: v for k, v in totais.items() if k != "sequencia"},
+                            ultimos=totais["sequencia"][-config.ANO_CURSO_ULTIMOS:])
+                lado["texto_fonte"] += ", todas as fases"
         return _completar(lado)
 
     if participante.get("tipo") == "selecao" and jogos_base is not None and nomes_selecoes:
@@ -160,7 +168,9 @@ def frase_do_lado(lado: dict) -> str:
         return f"sem jogos de {lado['ano']} encontrados"
     partes = []
     if lado["posicao"]:
-        partes.append(f"{lado['posicao']}º na {NOME_SERIE.get(lado['serie'], lado['serie'])}")
+        rotulo = lado.get("rotulo_posicao") or f"{lado['posicao']}º"
+        artigo = "da" if " no " in rotulo else "na"  # "1º no Grupo B (2ª fase) da Série C" / "6º na Série A"
+        partes.append(f"{rotulo} {artigo} {NOME_SERIE.get(lado['serie'], lado['serie'])}")
     partes.append(f"{lado['vitorias']}V {lado['empates']}E {lado['derrotas']}D em {lado['jogos']} jogos")
     partes.append(f"aproveitamento {lado['aproveitamento']:.0f}%")
     if lado["ultimos"]:

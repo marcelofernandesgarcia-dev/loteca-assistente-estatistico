@@ -95,7 +95,8 @@ def montar_jogos(conexao, previsoes_atual: dict[int, dict], pesos: dict[int, np.
     }
     serie_do_time: dict[tuple[int, int], str] = {}
     temporadas: dict[tuple[str, int], TemporadaPorData] = {}
-    for t in conexao.execute("SELECT DISTINCT serie, ano FROM cbf_partidas"):
+    # Só pontos corridos: a Série C entra depois que o estudo B2 for repetido com ela (plano de 07/10/2026).
+    for t in conexao.execute(f"SELECT DISTINCT serie, ano FROM cbf_partidas WHERE {competicao.so_pontos_corridos()}"):
         partidas = competicao.carregar_partidas(conexao, t["serie"], t["ano"])
         temporadas[(t["serie"], t["ano"])] = TemporadaPorData(partidas)
         for p in partidas:
