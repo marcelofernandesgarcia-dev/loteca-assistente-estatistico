@@ -290,6 +290,9 @@ ANALISE_MOTIVOS = (
     "Mando de campo",
     "Fase do time",
     "Intuição",
+    # Plano v2, item D3 (07/10/2026): para separar quando a sua leitura acerta mais que a do app.
+    "Notícia da semana",
+    "Poucos dados (cobertura baixa)",
 )
 
 # Ficha do time (stats/competicao.py)
@@ -345,6 +348,12 @@ PAINEL_ANOS_MINIMOS_RETA = 3  # anos com base mínima para desenhar a reta de te
 # Fonte de cada participante, nesta ordem: temporada da CBF do ano, base aberta de
 # seleções (jogos do ano), jogos do ano na grade da Loteca.
 ANO_CURSO_AMOSTRA_PEQUENA = 5  # menos jogos que isso no ano: marcado como amostra pequena
+
+# Diagnóstico do concurso (plano v2, item D4): "fácil", "médio" ou "difícil" pela POSIÇÃO do concurso entre os
+# concursos com ganhador de 14 (ganhadores por milhão arrecadado), em tercis -- sem limiar absoluto inventado.
+# Concurso sem ganhador de 14 é "acumulou". Cortes em fração da posição (0 a 1).
+REVISAO_CORTE_DIFICIL = 1 / 3
+REVISAO_CORTE_FACIL = 2 / 3
 ANO_CURSO_ULTIMOS = 5  # quantos resultados recentes mostrar (V/E/D)
 
 # Lançador (iniciar.pyw; plano aprovado em 30/09/2026). As 5 decisões ficaram nas

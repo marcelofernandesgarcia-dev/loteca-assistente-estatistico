@@ -29,7 +29,7 @@ from stats.cbf import classificacao_do_participante, resumo_curto_cbf
 from stats.contexto import selo_da_posicao
 from stats.concursos import concurso_a_jogar, ultimo_encerrado as buscar_ultimo_encerrado
 from stats.analise_palpite import NOME_CATEGORIA, ZEBRA, analisar_palpite, formatar_uma_em
-from stats.bilhete import montar_bilhete, validar_volante
+from stats.bilhete import justificativa_da_sugestao, montar_bilhete, validar_volante
 from stats.bilhetes_salvos import salvar_bilhete
 from stats.ano_em_curso import frase_do_lado
 from stats.cobertura import cobertura_do_concurso
@@ -440,6 +440,17 @@ else:
         f"A sugestão do app é aposta simples em todos os jogos, com um único {tipo_multiplo} no jogo "
         f"{jogo_multiplo['num_jogo']} ({jogo_multiplo['casa']} x {jogo_multiplo['fora']}), o mais incerto pelo "
         f"histórico -- {proposta['apostas']} apostas, {reais(proposta['custo'])}. É uma estimativa: não garante acerto."
+    )
+    # Justificativa da sugestão (plano v2, item D3): só fatos guardados, sem texto livre.
+    justificativa = justificativa_da_sugestao(
+        [dados_por_jogo[j["id"]]["pct"] for j in jogos_vigente], proposta,
+        [f"{j['casa']} x {j['fora']}" for j in jogos_vigente], [cobertura_por_jogo[j["id"]] for j in jogos_vigente],
+    )
+    st.caption(
+        f"**Por que o {justificativa['tipo']} no jogo {justificativa['jogo']}:** {justificativa['motivo']}"
+        + (f"; apoio: {'; '.join(justificativa['apoio'])}" if justificativa["apoio"] else "")
+        + f". Risco: {justificativa['risco']}."
+        + (f" Alternativa descartada: {justificativa['alternativa']}." if justificativa["alternativa"] else "")
     )
 
     # Cada jogo é um bloco: times em cima, os 3 quadrados embaixo. Os blocos

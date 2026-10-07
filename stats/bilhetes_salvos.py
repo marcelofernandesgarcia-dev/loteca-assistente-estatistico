@@ -162,6 +162,13 @@ def conferir_bilhete(conexao, bilhete_id: int) -> dict | None:
     return {"acertos": acertos, "total_jogos": len(jogos), "acertos_sugestao_do_modelo": acertos_sugestao, "jogos": jogos}
 
 
+def marcar_jogado(conexao, bilhete_id: int, jogado: bool) -> None:
+    """Marca (ou desmarca) o bilhete como apostado de verdade (plano v2, item D1). Só a data da marcação é
+    guardada; nada do comprovante da CAIXA entra no app."""
+    agora = dt.datetime.now().isoformat(timespec="seconds") if jogado else None
+    conexao.execute("UPDATE bilhetes SET jogado_em = ? WHERE id = ?", (agora, bilhete_id))
+
+
 def registrar_premio(conexao, bilhete_id: int, valor: float) -> None:
     """O valor é informado pelo usuário (a CAIXA não é consultada para isso)."""
     conexao.execute("UPDATE bilhetes SET premio_informado = ? WHERE id = ?", (valor, bilhete_id))
@@ -169,11 +176,15 @@ def registrar_premio(conexao, bilhete_id: int, valor: float) -> None:
 
 def resumo_financeiro(conexao) -> dict:
     linha = conexao.execute(
-        "SELECT COUNT(*) AS n, COALESCE(SUM(custo), 0) AS gasto, COALESCE(SUM(premio_informado), 0) AS premio FROM bilhetes"
+        "SELECT COUNT(*) AS n, COALESCE(SUM(custo), 0) AS gasto, COALESCE(SUM(premio_informado), 0) AS premio,"
+        " COUNT(jogado_em) AS jogados, COALESCE(SUM(CASE WHEN jogado_em IS NOT NULL THEN custo END), 0) AS gasto_jogado"
+        " FROM bilhetes"
     ).fetchone()
     return {
         "bilhetes": linha["n"],
         "gasto_total": linha["gasto"],
         "premio_total": linha["premio"],
         "saldo": linha["premio"] - linha["gasto"],
+        "jogados": linha["jogados"],
+        "gasto_jogado": linha["gasto_jogado"],
     }

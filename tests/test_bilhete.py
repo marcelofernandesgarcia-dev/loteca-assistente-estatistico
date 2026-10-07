@@ -87,3 +87,22 @@ def test_volante_no_limite_exato_de_864_pode_salvar():
 def test_volante_vazio_lista_todos_os_jogos():
     r = validar_volante([[] for _ in range(14)])
     assert r["jogos_sem_marcacao"] == list(range(1, 15)) and r["marcados"] == 0
+
+
+def test_justificativa_da_sugestao_usa_so_fatos_guardados():
+    # Plano v2, item D3: motivo, apoio, risco e alternativa descartada.
+    from stats.bilhete import justificativa_da_sugestao
+
+    grade = _grade(3)
+    grade[1] = {"1": 44.0, "X": 30.0, "2": 26.0}  # o favorito mais fraco
+    grade[2] = {"1": 52.0, "X": 28.0, "2": 20.0}  # o segundo mais incerto
+    proposta = montar_bilhete(grade)
+    cobertura = [{"alta_incerteza": False, "nome_nivel": "Completa (temporada da CBF)"},
+                 {"alta_incerteza": True, "nome_nivel": "Parcial"},
+                 {"alta_incerteza": False, "nome_nivel": "Seleções (Elo)"}]
+    j = justificativa_da_sugestao(grade, proposta, ["A x B", "C x D", "E x F"], cobertura)
+    assert j["jogo"] == 2 and j["tipo"] == "triplo"  # 44% < limiar de 45%: triplo
+    assert j["motivo"] == "o favorito mais fraco do concurso: 1 com 44%"
+    assert "cobertura de dados parcial (alta incerteza)" in j["apoio"]
+    assert j["alternativa"] == "jogo 3 (E x F), favorito com 52%"
+    assert j["risco"]

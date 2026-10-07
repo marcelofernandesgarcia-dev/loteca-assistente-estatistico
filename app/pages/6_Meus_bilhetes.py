@@ -10,6 +10,7 @@ import pandas as pd
 import streamlit as st
 from chances_ui import mostrar_chances_do_bilhete, mostrar_conjunto, percentuais_atuais_do_concurso, reais, rotulo_do_bilhete
 from retrato_ui import mostrar_retrato
+from revisao_ui import mostrar_revisao
 from util import formatar_data_br, mostrar_aviso_responsabilidade, obter_conexao
 
 import config
@@ -26,10 +27,15 @@ from stats.bilhetes_salvos import (
     jogos_conferidos_para_historico,
     jogos_do_bilhete,
     listar_bilhetes,
+    marcar_jogado,
     pode_conferir,
     registrar_premio,
     resumo_financeiro,
 )
+from stats.anti_manada import carregar_concursos
+from stats.painel_bilhetes import DIMENSOES, jogos_conferidos
+from stats.painel_bilhetes import painel as painel_por_tipo
+from stats.frequencia import frequencia_global
 from stats.premiacao import reais
 from stats.retrato import retrato_do_bilhete
 from stats.versoes_palpite import (
@@ -169,10 +175,32 @@ c3.metric("Total em prêmios (informado por você)", reais(resumo["premio_total"
 c4.metric("Saldo", reais(resumo["saldo"]), delta=None)
 st.caption(
     "O prêmio só entra aqui se você informar (abaixo, em cada bilhete apurado) -- o app não consulta a CAIXA "
-    "para saber se você ganhou."
+    "para saber se você ganhou. "
+    f"Marcados como apostados de verdade: {resumo['jogados']} de {resumo['bilhetes']} bilhetes "
+    f"({reais(resumo['gasto_jogado'])}); os demais são rascunhos. O total gasto soma todos os bilhetes salvos."
 )
 
 mostrar_historico(agregar_historico(jogos_conferidos_para_historico(conexao)))
+
+# Painel por tipo de jogo (plano v2, item D5).
+st.subheader("Acertos por tipo de jogo")
+so_apostados = st.toggle("Só bilhetes apostados de verdade", key="painel_so_apostados")
+jogos_painel = jogos_conferidos(conexao, so_apostados)
+if not jogos_painel:
+    st.info("Aparece depois do primeiro bilhete conferido" + (" e marcado como apostado." if so_apostados else "."))
+else:
+    dimensao = st.radio("Separar por", list(DIMENSOES), format_func=DIMENSOES.get, horizontal=True, key="painel_dimensao")
+    st.markdown(
+        "| Grupo | Marcações | Acertos | Taxa de acerto | Surpresa média do app |\n|---|---|---|---|---|\n"
+        + "".join(
+            f"| {g['grupo']} | {g['marcacoes']} | {g['acertos']} | {_taxa_ou_espera(g, config.ANALISE_AMOSTRA_MINIMA)} | {_decimal(g['surpresa_media'])} |\n"
+            for g in painel_por_tipo(jogos_painel)[dimensao]
+        )
+    )
+    st.caption(
+        "Surpresa = −ln(chance que o app deu ao resultado), média dos jogos do grupo: quanto maior, mais o app foi "
+        "surpreendido. Origem, cobertura e notícia só existem para bilhetes salvos a partir de 07/10/2026."
+    )
 mostrar_aprendizado_das_versoes(aprendizado_de_todos_os_concursos(conexao))
 
 _atuais_por_concurso: dict[int, tuple[list[dict], list[dict]]] = {}
@@ -191,6 +219,22 @@ def _marcacoes_do_bilhete(bilhete_id: int, jogos: list[dict]) -> list[list[str]]
     if any(j["id"] not in por_jogo for j in jogos):
         return None
     return [por_jogo[j["id"]] for j in jogos]
+
+
+_cache_revisao: dict[str, object] = {}
+
+
+def _concursos_para_diagnostico() -> list[dict]:
+    if "concursos" not in _cache_revisao:
+        _cache_revisao["concursos"] = carregar_concursos(conexao)[0]
+    return _cache_revisao["concursos"]
+
+
+def _referencia() -> dict | None:
+    if "referencia" not in _cache_revisao:
+        freq = frequencia_global(conexao)
+        _cache_revisao["referencia"] = {c: 100.0 * freq[c] for c in ("1", "X", "2")} if freq.get("total_jogos") else None
+    return _cache_revisao["referencia"]
 
 
 def _concurso_aberto(numero_concurso: int) -> bool:
@@ -246,6 +290,7 @@ for bilhete in bilhetes:
     total_jogos_bilhete = len(linhas_bilhete)
     jogos_apurados_antes = pode_conferir(linhas_bilhete)
     titulo = f"Concurso {bilhete['concurso_numero']} · salvo em {formatar_data_br(bilhete['criado_em'][:10])} · {bilhete['apostas']} apostas · {reais(bilhete['custo'])}"
+    titulo += " · apostado" if bilhete["jogado_em"] else " · rascunho"
     if bilhete["conferido_em"] is not None:
         titulo += f" · {bilhete['acertos']}/{total_jogos_bilhete} acertos"
     with st.expander(titulo):
@@ -267,6 +312,15 @@ for bilhete in bilhetes:
                     f"{historia['acertos_bilhete']}."
                 )
             st.caption(texto)
+        # "Jogado de verdade" (plano v2, item D1): separa rascunho de aposta real sem importar o comprovante.
+        jogado = st.checkbox(
+            "Apostei este bilhete na lotérica", value=bilhete["jogado_em"] is not None, key=f"jogado_{bilhete['id']}",
+            help="Só a marcação é guardada. O comprovante da CAIXA não é importado: ele tem dados pessoais.",
+        )
+        if jogado != (bilhete["jogado_em"] is not None):
+            marcar_jogado(conexao, bilhete["id"], jogado)
+            conexao.commit()
+            st.rerun()
         mostrar_retrato(retrato_do_bilhete(conexao, bilhete["id"]), f"retrato_{bilhete['id']}")
         if bilhete["conferido_em"] is None and _concurso_aberto(bilhete["concurso_numero"]):
             jogos_atuais, pcts_atuais = _atuais(bilhete["concurso_numero"])
@@ -314,6 +368,8 @@ for bilhete in bilhetes:
                         for j in resultado["jogos"]
                     ]
                 )
+            mostrar_revisao(conexao, bilhete, resultado["jogos"], retrato_do_bilhete(conexao, bilhete["id"]),
+                            _concursos_para_diagnostico(), _referencia())
 
             premio = st.number_input(
                 "Prêmio recebido (R$, 0 se não ganhou)", min_value=0.0, step=0.01,

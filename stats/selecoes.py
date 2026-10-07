@@ -356,7 +356,7 @@ def backtest_selecoes(conexao, jogos_base: list[dict] | None = None, nomes: dict
     Compara: Elo (campo desconhecido, como seria na hora de apostar), Elo com o
     campo neutro ou não conhecido (limite superior, só para dimensionar o quanto a
     incerteza sobre o campo custa), o modelo atual do app e a frequência simples."""
-    from stats.backtest import carregar_jogos, comparar_pareado, metricas, prever_walk_forward
+    from stats.backtest import calibracao, carregar_jogos, comparar_pareado, metricas, prever_walk_forward
 
     jogos_base = jogos_base if jogos_base is not None else carregar_resultados()
     nomes = nomes if nomes is not None else carregar_nomes()
@@ -419,6 +419,8 @@ def backtest_selecoes(conexao, jogos_base: list[dict] | None = None, nomes: dict
         "avaliados": len(pares["elo"]),
         "campo_neutro_no_teste": sum(1 for c in teste if c["jogo"]["neutro"]),
         "metricas": {nome: metricas(lista) for nome, lista in pares.items()},
+        # Calibração por faixa do Elo em uso (item C3 do plano v2, 07/10/2026): acompanhada a cada concurso, sem teto.
+        "calibracao_elo": calibracao(pares["elo"]),
         "contra_atual": comparar_pareado(pares["elo"], pares["atual"]),
         "contra_frequencia": comparar_pareado(pares["elo"], pares["frequencia"]),
         "campo_conhecido_contra_atual": comparar_pareado(pares["elo_campo_conhecido"], pares["atual"]),

@@ -112,6 +112,14 @@ BEGIN SELECT RAISE(ABORT, 'O retrato do bilhete não pode ser alterado.'); END;
 CREATE TRIGGER IF NOT EXISTS retratos_bilhete_sem_exclusao BEFORE DELETE ON retratos_bilhete
 BEGIN SELECT RAISE(ABORT, 'O retrato do bilhete não pode ser excluído.'); END;
 
+-- Anotações do usuário na revisão pós-jogo (item D2 do plano v2): só acrescentam, nunca mudam o retrato.
+CREATE TABLE IF NOT EXISTS notas_bilhete (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bilhete_id INTEGER NOT NULL REFERENCES bilhetes(id),
+    criado_em TEXT NOT NULL,
+    texto TEXT NOT NULL
+);
+
 -- Dados lidos das páginas públicas da CBF (ver docs/cbf-fonte-de-dados.md).
 -- Ficam só neste banco local (loteca.db não vai para o GitHub).
 CREATE TABLE IF NOT EXISTS cbf_times (
@@ -179,7 +187,8 @@ CREATE TABLE IF NOT EXISTS cbf_partidas (
     coletado_em TEXT NOT NULL,
     fase TEXT,
     grupo TEXT,
-    rodada_fase INTEGER
+    rodada_fase INTEGER,
+    num_jogo INTEGER
 );
 
 -- Pareamento entre participante da Loteca e time da CBF (só clubes brasileiros).
@@ -229,7 +238,8 @@ CREATE TABLE IF NOT EXISTS bilhetes (
     premio_informado REAL,
     chance_todos REAL,
     chance_todos_menos_um REAL,
-    acertos_esperados REAL
+    acertos_esperados REAL,
+    jogado_em TEXT
 );
 
 CREATE TABLE IF NOT EXISTS bilhete_jogos (
@@ -320,10 +330,13 @@ def _garantir_colunas(conexao: sqlite3.Connection) -> None:
             ("proximo_adversario_id", "INTEGER"), ("nome_no_ano", "TEXT"), ("fase", "TEXT"), ("grupo", "TEXT"),
             ("rodada_fase", "INTEGER"),
         ],
-        "cbf_partidas": [("fase", "TEXT"), ("grupo", "TEXT"), ("rodada_fase", "INTEGER")],
+        "cbf_partidas": [("fase", "TEXT"), ("grupo", "TEXT"), ("rodada_fase", "INTEGER"), ("num_jogo", "INTEGER")],
         "fatores_externos": [("evidencias", "TEXT")],
         # Análise do palpite (item 20): guardada com o bilhete para aprendizado.
-        "bilhetes": [("chance_todos", "REAL"), ("chance_todos_menos_um", "REAL"), ("acertos_esperados", "REAL")],
+        # jogado_em (plano v2, item D1, 07/10/2026): quando o usuário marcou o bilhete como apostado de verdade.
+        # Vazio = rascunho. O comprovante da CAIXA nunca é importado (tem dado pessoal).
+        "bilhetes": [("chance_todos", "REAL"), ("chance_todos_menos_um", "REAL"), ("acertos_esperados", "REAL"),
+                     ("jogado_em", "TEXT")],
         "bilhete_jogos": [("categoria", "TEXT"), ("chance_coberta", "REAL"), ("sem_base_propria", "INTEGER"), ("motivos", "TEXT")],
     }
     for tabela, colunas in novas.items():

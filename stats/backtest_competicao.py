@@ -66,6 +66,7 @@ def amostra_da_temporada(partidas: list[dict], serie: str, ano: int, com_poisson
         forcas = modelo_temporada.forcas_da_serie(conhecidas) if com_poisson else None
         for p in elegiveis:
             registro = {
+                "id_jogo": p["id_jogo"],
                 "temporada": f"{serie}-{ano}", "serie": serie, "ano": ano, "cluster": f"{serie}-{ano}-{rodada}",
                 "retro_casa": pontos[p["mandante_id"]] / jogos[p["mandante_id"]],
                 "retro_fora": pontos[p["visitante_id"]] / jogos[p["visitante_id"]],
@@ -78,10 +79,12 @@ def amostra_da_temporada(partidas: list[dict], serie: str, ano: int, com_poisson
     return amostra
 
 
-def carregar_amostra(conexao) -> list[dict]:
-    """Amostra de todas as temporadas coletadas. Só lê o banco."""
+def carregar_amostra(conexao, series: tuple[str, ...] | None = None) -> list[dict]:
+    """Amostra de todas as temporadas coletadas. Só lê o banco. Sem `series`, só as de pontos corridos
+    (Séries A e B); com `series` (ex.: ("serie-c",)), só as indicadas -- usado no estudo da Série C."""
     amostra = []
-    consulta = f"SELECT DISTINCT serie, ano FROM cbf_partidas WHERE {competicao.so_pontos_corridos()} ORDER BY ano, serie"
+    filtro = competicao.so_pontos_corridos() if series is None else f"serie IN ({', '.join(repr(s) for s in series)})"
+    consulta = f"SELECT DISTINCT serie, ano FROM cbf_partidas WHERE {filtro} ORDER BY ano, serie"
     for t in conexao.execute(consulta).fetchall():
         amostra += amostra_da_temporada(competicao.carregar_partidas(conexao, t["serie"], t["ano"]), t["serie"], t["ano"])
     return amostra

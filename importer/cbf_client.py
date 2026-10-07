@@ -66,6 +66,7 @@ def parse_classificacao(html: str) -> list[dict]:
 
 
 _TABELA = '"data":[{"cod_time"'
+_JOGOS_DA_FASE = '"data":[{"id_jogo"'
 _TITULO_DA_TABELA = re.compile(r'"title":"([^"]*)",$')
 
 
@@ -74,14 +75,15 @@ def parse_tabela_completa(html: str) -> dict:
     ("GRUPO ÚNICO") e uma fase. Série C (conferido em 07/10/2026): a página mostra só a
     fase atual -- na 2ª fase, uma tabela por grupo ("GRUPO B", "GRUPO C") -- e a lista
     de fases (`phasesList`), em que a fase atual vem como referência ao objeto `phase`.
+    Temporada encerrada da Série C: a fase atual é a final (mata-mata), sem tabela; a página
+    traz só os jogos dela, e os times desses jogos servem de ponto de partida da coleta.
 
     Devolve {"grupos": [{"titulo", "linhas"}], "fases": [{fase_nome, rodadas_qtd, partidas, ...}],
-    "indice_fase_atual": posição da fase atual em "fases" (None se a página não disser)}.
+    "indice_fase_atual": posição da fase atual em "fases" (None se a página não disser),
+    "times_dos_jogos": códigos dos times nos jogos mostrados quando não há tabela}.
     O título só é guardado quando há mais de uma tabela (com uma só, ele não diz nada)."""
     texto = decodificar_fluxo(html)
     grupos, inicio = [], texto.find(_TABELA)
-    if inicio < 0:
-        raise ErroColetaCBF("Tabela de classificação não encontrada na página")
     while inicio >= 0:
         linhas, _ = json.JSONDecoder().raw_decode(texto[inicio + len('"data":'):])
         titulo = _TITULO_DA_TABELA.search(texto[max(0, inicio - 200):inicio])
@@ -89,6 +91,17 @@ def parse_tabela_completa(html: str) -> dict:
         inicio = texto.find(_TABELA, inicio + 1)
     if len(grupos) == 1:
         grupos[0]["titulo"] = None
+    times_dos_jogos = []
+    if not grupos:
+        inicio = texto.find(_JOGOS_DA_FASE)
+        if inicio < 0:
+            raise ErroColetaCBF("Tabela de classificação não encontrada na página")
+        jogos, _ = json.JSONDecoder().raw_decode(texto[inicio + len('"data":'):])
+        for jogo in jogos:
+            for lado in (jogo.get("mandante") or {}, jogo.get("visitante") or {}):
+                cod = _inteiro(lado.get("id"))
+                if cod is not None and cod not in times_dos_jogos:
+                    times_dos_jogos.append(cod)
     fase_atual = json_apos(texto, '"phase":')
     fase_atual = fase_atual if isinstance(fase_atual, dict) else None
     fases = [f if isinstance(f, dict) else fase_atual for f in (json_apos(texto, '"phasesList":') or [])]
@@ -96,33 +109,61 @@ def parse_tabela_completa(html: str) -> dict:
     indice_atual = next(
         (i for i, f in enumerate(fases) if fase_atual and f.get("fase_id") == fase_atual.get("fase_id")), None
     )
-    return {"grupos": grupos, "fases": fases, "indice_fase_atual": indice_atual}
+    return {"grupos": grupos, "fases": fases, "indice_fase_atual": indice_atual, "times_dos_jogos": times_dos_jogos}
 
 
 def calendario_de_fases(fases: list[dict]) -> list[dict]:
-    """Para cada fase, em ordem: nome, quantas rodadas vêm antes dela (para numerar a rodada em
-    sequência pela temporada) e o último `num_jogo` dela. Vazio quando a competição tem uma
-    fase só (Séries A e B): aí nada muda na gravação."""
+    """Para cada fase, em ordem: nome, número de rodadas e quantas rodadas vêm antes dela (para numerar
+    a rodada em sequência pela temporada). Vazio quando a competição tem uma fase só (Séries A e B):
+    aí nada muda na gravação. A contagem de partidas da CBF NÃO é usada: ela é por grupo (2ª fase da
+    Série C 2024: "12" partidas, 24 jogos em dois grupos)."""
     if len(fases) < 2:
         return []
-    calendario, rodadas_antes, partidas_antes = [], 0, 0
+    calendario, rodadas_antes = [], 0
     for fase in fases:
-        partidas_antes += _inteiro(fase.get("partidas")) or 0
-        calendario.append({"nome": fase.get("fase_nome"), "rodadas_antes": rodadas_antes, "ultimo_num_jogo": partidas_antes})
-        rodadas_antes += _inteiro(fase.get("rodadas_qtd")) or 0
+        rodadas = _inteiro(fase.get("rodadas_qtd")) or 0
+        calendario.append({"nome": fase.get("fase_nome"), "rodadas": rodadas, "rodadas_antes": rodadas_antes})
+        rodadas_antes += rodadas
     return calendario
 
 
-def fase_do_jogo(num_jogo: int | None, calendario: list[dict]) -> dict | None:
-    """Fase de um jogo pelo número dele na competição (os jogos são numerados em sequência:
-    na Série C 2026, 1 a 190 são da 1ª fase). A última fase fica com todo número acima das
-    anteriores, porque a contagem de partidas da CBF pode ser por grupo."""
-    if not calendario or num_jogo is None:
-        return None
-    for fase in calendario[:-1]:
-        if num_jogo <= fase["ultimo_num_jogo"]:
-            return fase
-    return calendario[-1]
+def fases_pela_sequencia(jogos: list[dict], calendario: list[dict]) -> dict[int, dict] | None:
+    """{id_jogo: fase do calendário} deduzida da sequência dos jogos: em ordem de `num_jogo`, a rodada
+    não diminui dentro de uma fase (os grupos de uma fase jogam a mesma rodada lado a lado) e volta a 1
+    quando começa a fase seguinte. `jogos`: [{'id_jogo', 'num_jogo', 'rodada_fase'}] da temporada.
+    None quando a sequência não fecha com o calendário (mais trocas de fase do que fases, ou rodada
+    acima do número de rodadas da fase): melhor sem fase do que com fase errada."""
+    ordenados = sorted((j for j in jogos if j["num_jogo"] is not None and j["rodada_fase"] is not None),
+                       key=lambda j: j["num_jogo"])
+    saida, indice, anterior = {}, 0, None
+    for jogo in ordenados:
+        if anterior is not None and jogo["rodada_fase"] < anterior:
+            indice += 1
+        if indice >= len(calendario) or jogo["rodada_fase"] > calendario[indice]["rodadas"]:
+            return None
+        saida[jogo["id_jogo"]] = calendario[indice]
+        anterior = jogo["rodada_fase"]
+    return saida
+
+
+def reatribuir_fases(conexao, serie: str, ano: int, calendario: list[dict]) -> bool:
+    """Grava fase e rodada em sequência em todos os jogos da temporada, a partir da rodada de cada fase
+    (`rodada_fase`) e do número do jogo. Devolve False (e registra o motivo) quando a sequência não fecha."""
+    jogos = [dict(l) for l in conexao.execute(
+        "SELECT id_jogo, num_jogo, rodada_fase FROM cbf_partidas WHERE serie = ? AND ano = ?", (serie, ano)
+    )]
+    fases = fases_pela_sequencia(jogos, calendario)
+    if fases is None:
+        logger.warning("%s %s: a sequência de rodadas não fecha com as %d fases da CBF; fase não gravada.",
+                       serie, ano, len(calendario))
+        conexao.execute("UPDATE cbf_partidas SET fase = NULL, rodada = rodada_fase WHERE serie = ? AND ano = ?", (serie, ano))
+        return False
+    for id_jogo, fase in fases.items():
+        conexao.execute(
+            "UPDATE cbf_partidas SET fase = ?, rodada = rodada_fase + ? WHERE id_jogo = ?",
+            (fase["nome"], fase["rodadas_antes"], id_jogo),
+        )
+    return True
 
 
 def parse_pagina_time(html: str) -> dict:
@@ -271,8 +312,9 @@ def gravar_classificacao(
 def gravar_pagina_time(
     conexao, serie: str, ano: int, cod_time: int, dados: dict, coletado_em: str, calendario: list[dict] | None = None,
 ) -> None:
-    """`calendario` (de `calendario_de_fases`) só nas competições com mais de uma fase: cada jogo
-    recebe a fase (pelo número do jogo), o grupo que a CBF informa e a rodada em sequência."""
+    """`calendario` (de `calendario_de_fases`) só nas competições com mais de uma fase: cada jogo guarda a
+    rodada da fase e o grupo que a CBF informa; a fase e a rodada em sequência são gravadas depois, com a
+    temporada inteira, por `reatribuir_fases` (a fase de um jogo depende da sequência dos outros)."""
     est = dados.get("estatisticas")
     if est:
         conexao.execute(
@@ -301,27 +343,26 @@ def gravar_pagina_time(
                     (_inteiro(lado["id"]), lado["nome"]),
                 )
         rodada = _inteiro(jogo.get("rodada"))
-        fase = fase_do_jogo(_inteiro(jogo.get("num_jogo")), calendario or [])
+        com_fases = bool(calendario)
         conexao.execute(
             """
             INSERT INTO cbf_partidas (id_jogo, serie, ano, rodada, data_jogo, hora, local, mandante_id, visitante_id,
                 gols_mandante, gols_visitante, penaltis_mandante, penaltis_visitante, coletado_em, fase, grupo,
-                rodada_fase)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                rodada_fase, num_jogo)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
             ON CONFLICT(id_jogo) DO UPDATE SET
                 rodada=excluded.rodada, data_jogo=excluded.data_jogo, hora=excluded.hora, local=excluded.local,
                 gols_mandante=excluded.gols_mandante, gols_visitante=excluded.gols_visitante,
                 penaltis_mandante=excluded.penaltis_mandante, penaltis_visitante=excluded.penaltis_visitante,
-                coletado_em=excluded.coletado_em, fase=excluded.fase, grupo=excluded.grupo,
-                rodada_fase=excluded.rodada_fase
+                coletado_em=excluded.coletado_em, grupo=excluded.grupo,
+                rodada_fase=excluded.rodada_fase, num_jogo=excluded.num_jogo
             """,
             (
-                _inteiro(jogo.get("id_jogo")), serie, ano,
-                rodada + fase["rodadas_antes"] if fase and rodada is not None else rodada, data_iso(jogo.get("data")),
+                _inteiro(jogo.get("id_jogo")), serie, ano, rodada, data_iso(jogo.get("data")),
                 jogo.get("hora"), jogo.get("local"), _inteiro(mandante.get("id")), _inteiro(visitante.get("id")),
                 _inteiro(mandante.get("gols")), _inteiro(visitante.get("gols")),
                 _inteiro(mandante.get("panaltis")), _inteiro(visitante.get("panaltis")), coletado_em,
-                fase["nome"] if fase else None, jogo.get("grupo") if fase else None, rodada if fase else None,
+                jogo.get("grupo") if com_fases else None, rodada if com_fases else None, _inteiro(jogo.get("num_jogo")),
             ),
         )
 
@@ -346,6 +387,7 @@ def coletar_competicao(conexao, campeonato: str, serie: str, ano: int, forcar: b
     # Fila de times: os da tabela e, numa competição com fases, os adversários que aparecem nas páginas
     # (na 2ª fase da Série C a tabela mostra só 8 dos 20 clubes; os eliminados estão nos jogos da 1ª fase).
     fila = [_inteiro(linha["cod_time"]) for grupo in pagina["grupos"] for linha in grupo["linhas"]]
+    fila += [cod for cod in pagina["times_dos_jogos"] if cod not in fila]  # temporada encerrada: só a final
     vistos, coletados = set(fila), 0
     while fila and coletados < config.CBF_MAX_TIMES_POR_COMPETICAO:
         cod = fila.pop(0)
@@ -367,7 +409,8 @@ def coletar_competicao(conexao, campeonato: str, serie: str, ano: int, forcar: b
                         fila.append(novo)
     if fila:
         logger.warning("%s %s: %d time(s) ficaram de fora pelo teto de páginas", serie, ano, len(fila))
-    return {"serie": serie, "ano": ano, "pulou": False, "times": coletados}
+    fases_ok = reatribuir_fases(conexao, serie, ano, calendario) if calendario else None
+    return {"serie": serie, "ano": ano, "pulou": False, "times": coletados, "fases_conferem": fases_ok}
 
 
 def preencher_nome_do_ano_mais_recente(conexao) -> int:

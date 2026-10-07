@@ -77,6 +77,54 @@ def test_sem_versoes_orienta_e_com_versoes_mostra_como_o_bilhete_foi_montado(con
     assert "Ainda são poucos concursos" in legendas
 
 
+def test_revisao_pos_jogo_aparece_depois_de_conferir_e_guarda_a_anotacao(conexao_pronta):
+    # Itens D2 e D4 do plano v2.
+    at = AppTest.from_file(str(PAGINA), default_timeout=60).run()
+    at.button[0].click().run()  # "Conferir"
+    assert not at.exception, [e.value for e in at.exception]
+    textos = " ".join(m.value for m in at.markdown)
+    assert "Revisão pós-jogo" in textos and "Jogo a jogo, com o que o app mostrava ao salvar" in textos
+    assert "acerto" in textos  # marcou 1, deu 1
+    assert any("Surpresa = −ln" in c.value for c in at.caption)
+    with db.sessao() as c:
+        bilhete_id = c.execute("SELECT id FROM bilhetes").fetchone()["id"]
+    at.text_area(key=f"nota_{bilhete_id}").input("O mandante estava completo.").run()
+    next(b for b in at.button if b.label == "Guardar anotação").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    with db.sessao() as c:
+        assert c.execute("SELECT texto FROM notas_bilhete").fetchone()["texto"] == "O mandante estava completo."
+
+
+def test_painel_por_tipo_de_jogo_espera_amostra(conexao_pronta):
+    # Item D5 do plano v2.
+    at = AppTest.from_file(str(PAGINA), default_timeout=60).run()
+    assert any("Aparece depois do primeiro bilhete conferido." in i.value for i in at.info)
+    at.button[0].click().run()  # "Conferir"
+    at = AppTest.from_file(str(PAGINA), default_timeout=60).run()
+    assert not at.exception, [e.value for e in at.exception]
+    textos = " ".join(m.value for m in at.markdown)
+    assert "| simples | 1 | 1 | aguardando amostra (1 de 30) |" not in textos  # dimensão padrão é a origem
+    assert f"aguardando amostra (1 de {config.ANALISE_AMOSTRA_MINIMA})" in textos
+    at.radio(key="painel_dimensao").set_value("marcacao").run()
+    assert "| simples | 1 | 1 |" in " ".join(m.value for m in at.markdown)
+
+
+def test_marcar_como_apostado_de_verdade(conexao_pronta):
+    # Item D1 do plano v2: separa rascunho de aposta real, sem importar o comprovante.
+    at = AppTest.from_file(str(PAGINA), default_timeout=60).run()
+    assert any("rascunho" in e.label for e in at.expander)
+    assert any("Marcados como apostados de verdade: 0 de 1 bilhetes" in c.value for c in at.caption)
+    with db.sessao() as c:
+        bilhete_id = c.execute("SELECT id FROM bilhetes").fetchone()["id"]
+    at.checkbox(key=f"jogado_{bilhete_id}").check().run()
+    assert not at.exception, [e.value for e in at.exception]
+    with db.sessao() as c:
+        assert c.execute("SELECT jogado_em FROM bilhetes").fetchone()["jogado_em"] is not None
+    at = AppTest.from_file(str(PAGINA), default_timeout=60).run()
+    assert any("apostado" in e.label for e in at.expander)
+    assert any("Marcados como apostados de verdade: 1 de 1 bilhetes (R$ 2,00)" in c.value for c in at.caption)
+
+
 def test_bilhete_sem_retrato_avisa_e_com_retrato_mostra_a_tabela(conexao_pronta):
     # Item A1 do plano v2 (07/10/2026).
     at = AppTest.from_file(str(PAGINA), default_timeout=60).run()

@@ -11,10 +11,11 @@ import db
 from importer import cbf_client
 from importer.cbf_client import (
     calendario_de_fases,
-    fase_do_jogo,
+    fases_pela_sequencia,
     gravar_classificacao,
     gravar_pagina_time,
     parse_tabela_completa,
+    reatribuir_fases,
 )
 from stats.ano_em_curso import frase_do_lado, lado_no_ano
 from stats.cbf import classificacao_do_participante, partidas_do_participante, resumo_curto_cbf
@@ -106,13 +107,34 @@ def test_tabela_sem_dados_levanta_erro_claro():
         parse_tabela_completa(_html("página sem tabela"))
 
 
-def test_calendario_numera_a_rodada_em_sequencia_e_acha_a_fase_pelo_numero_do_jogo():
+def test_calendario_numera_a_rodada_em_sequencia():
     calendario = calendario_de_fases([FASE_1, FASE_2])
-    assert [(f["nome"], f["rodadas_antes"]) for f in calendario] == [("1ª Fase", 0), ("2ª Fase", 19)]
-    assert fase_do_jogo(190, calendario)["nome"] == "1ª Fase"
-    assert fase_do_jogo(191, calendario)["nome"] == "2ª Fase"
-    assert fase_do_jogo(260, calendario)["nome"] == "2ª Fase"  # a última fase fica com o que passar da contagem
-    assert fase_do_jogo(None, calendario) is None and fase_do_jogo(5, []) is None
+    assert [(f["nome"], f["rodadas"], f["rodadas_antes"]) for f in calendario] == [("1ª Fase", 19, 0), ("2ª Fase", 6, 19)]
+
+
+FINAL = {"fase_id": "12", "fase_nome": "3a Fase", "rodadas_qtd": "2", "partidas": "2"}
+
+
+def _j(id_jogo, num_jogo, rodada):
+    return {"id_jogo": id_jogo, "num_jogo": num_jogo, "rodada_fase": rodada}
+
+
+def test_fase_pela_sequencia_nao_se_engana_com_a_contagem_por_grupo():
+    # Série C 2024 (conferido em 07/10/2026): a CBF informa "12" partidas na 2ª fase, mas foram 24 (dois
+    # grupos). Contando partidas, os jogos 203 a 214 cairiam na final; pela sequência de rodadas, não.
+    calendario = calendario_de_fases([FASE_1, FASE_2, FINAL])
+    jogos = ([_j(n, n, (n - 1) // 10 + 1) for n in range(1, 191)]
+             + [_j(n, n, (n - 191) // 4 + 1) for n in range(191, 215)]
+             + [_j(215, 215, 1), _j(216, 216, 2)])
+    fases = fases_pela_sequencia(jogos, calendario)
+    assert fases[190]["nome"] == "1ª Fase" and fases[191]["nome"] == "2ª Fase" and fases[214]["nome"] == "2ª Fase"
+    assert fases[215]["nome"] == "3a Fase" and fases[216]["nome"] == "3a Fase"
+
+
+def test_sequencia_que_nao_fecha_com_o_calendario_nao_grava_fase():
+    calendario = calendario_de_fases([FASE_1, FASE_2])
+    assert fases_pela_sequencia([_j(1, 1, 1), _j(2, 2, 1), _j(3, 3, 7)], [calendario[1]]) is None  # rodada 7 numa fase de 6
+    assert fases_pela_sequencia([_j(1, 1, 2), _j(2, 2, 1), _j(3, 3, 1)], [calendario[1]]) is None  # mais fases que o calendário
 
 
 def test_gravar_classificacao_da_2a_fase_nao_colide_com_a_1a(conexao):
@@ -125,6 +147,7 @@ def test_gravar_classificacao_da_2a_fase_nao_colide_com_a_1a(conexao):
 def test_gravar_jogos_marca_fase_grupo_e_rodada_em_sequencia(conexao):
     calendario = calendario_de_fases([FASE_1, FASE_2])
     gravar_pagina_time(conexao, "serie-c", 2026, 1, PAGINA_TIME_UM, "2026-10-07T10:00:00", calendario)
+    assert reatribuir_fases(conexao, "serie-c", 2026, calendario)
     linhas = conexao.execute("SELECT id_jogo, rodada, rodada_fase, fase, grupo FROM cbf_partidas ORDER BY id_jogo").fetchall()
     assert [tuple(x) for x in linhas] == [
         (901, 1, 1, "1ª Fase", "GRUPO A"), (902, 19, 19, "1ª Fase", "GRUPO A"), (903, 20, 1, "2ª Fase", "GRUPO B"),
@@ -144,6 +167,7 @@ def _serie_c_no_banco(conexao) -> int:
     gravar_classificacao(conexao, "serie-c", 2026, [_linha(1, "PE", "Time Um", 1)], "2026-10-07T10:00:00",
                          calendario[1], "GRUPO B")
     gravar_pagina_time(conexao, "serie-c", 2026, 1, PAGINA_TIME_UM, "2026-10-07T10:00:00", calendario)
+    reatribuir_fases(conexao, "serie-c", 2026, calendario)
     participante = db.obter_ou_criar_participante(conexao, "TIME UM", "clube", "PE")
     conexao.execute("INSERT INTO mapa_cbf_participante (participante_id, cod_time, metodo) VALUES (?, 1, 'uf+nome')",
                     (participante,))
@@ -191,6 +215,30 @@ def test_coleta_da_serie_c_segue_os_adversarios_e_a_da_serie_a_nao(conexao, monk
     assert pedidos[1:] == ["1", "2", "3", "4", "9", "8"]
     assert conexao.execute("SELECT COUNT(*) FROM cbf_classificacao WHERE grupo = 'GRUPO C'").fetchone()[0] == 2
 
+    assert resultado["fases_conferem"] is True
+    assert conexao.execute("SELECT fase FROM cbf_partidas WHERE id_jogo = 903").fetchone()[0] == "2ª Fase"
+
     pedidos.clear()
     resultado = cbf_client.coletar_competicao(conexao, "campeonato-brasileiro", "serie-a", 2026, forcar=True)
-    assert resultado["times"] == 1 and pedidos[1:] == ["100"]
+    assert resultado["times"] == 1 and pedidos[1:] == ["100"] and resultado["fases_conferem"] is None
+
+
+def test_temporada_encerrada_sem_tabela_parte_dos_times_da_final(conexao, monkeypatch):
+    # Página da Série C 2024 (conferido em 07/10/2026): a fase atual é a final, sem tabela, só os jogos.
+    final = [_jogo(950, 215, 1, "GRUPO D", (1, "Time Um"), (2, "Time Dois"))]
+    pagina = _html(
+        f'1a:{{"competitionData":{{"phase":{json.dumps(FINAL)},"phasesList":{json.dumps([FASE_1, FASE_2, "$ref"])}}}}}\n'
+        f'2b:[["$","$L3b",null,{{"data":{json.dumps(final)}}}]]'
+    )
+    assert parse_tabela_completa(pagina)["times_dos_jogos"] == [1, 2]
+    monkeypatch.setattr(config, "CBF_INTERVALO_SEGUNDOS", 0)
+    pedidos = []
+
+    def baixar(url):
+        pedidos.append(url.rsplit("/", 1)[-1])
+        return pagina if "/tabelas/" in url else _html('"estatisticas":[],"jogos":[]')
+
+    monkeypatch.setattr(cbf_client, "_baixar", baixar)
+    resultado = cbf_client.coletar_competicao(conexao, "campeonato-brasileiro", "serie-c", 2024, forcar=True)
+    assert pedidos[1:] == ["1", "2"] and resultado["times"] == 2
+    assert conexao.execute("SELECT COUNT(*) FROM cbf_classificacao").fetchone()[0] == 0  # sem tabela, nada inventado

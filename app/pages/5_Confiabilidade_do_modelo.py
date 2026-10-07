@@ -142,6 +142,21 @@ else:
         "| Modelo | Acerto do favorito | Brier | Perda log | Chance dada ao que aconteceu |\n|---|---|---|---|---|\n"
         + linhas_metricas
     )
+    st.markdown("**Calibração do Elo por faixa** (o que o Elo previu e o que aconteceu, nos mesmos jogos)")
+    st.markdown(
+        "| Faixa prevista | Resultados | Previsto (média) | Observado (de fato) | Leitura |\n|---|---|---|---|---|\n"
+        + "".join(
+            f"| {c['faixa']} | {c['n']} | {c['previsto']:.1f}% | {c['observado']:.1f}% | "
+            f"{'amostra pequena' if c['n'] < 30 else ('excesso de confiança' if c['previsto'] - c['observado'] > 5 else ('falta de confiança' if c['observado'] - c['previsto'] > 5 else '-'))} |\n"
+            .replace(".", ",")
+            for c in s["calibracao_elo"]
+        )
+    )
+    st.caption(
+        "Sem teto de probabilidade: o relatório técnico de 07/10/2026 sugeria um, mas nas faixas altas o Elo não mostrou "
+        "excesso de confiança. Com menos de 30 resultados na faixa, a leitura fica em aberto (amostra pequena). A tabela é "
+        "refeita a cada concurso apurado."
+    )
     st.caption(
         f"Qualidade da conferência: dos {s['jogos_da_loteca']} jogos de seleções da Loteca, {s['casados_com_a_base']} "
         f"foram casados com a base aberta (mesmos times, data com até {config.SELECOES_TOLERANCIA_DIAS} dias de diferença). "

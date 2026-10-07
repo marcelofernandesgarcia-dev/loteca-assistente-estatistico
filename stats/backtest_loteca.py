@@ -84,9 +84,11 @@ def pesos_por_ano(amostra_cbf: list[dict]) -> dict[int, np.ndarray]:
     return pesos
 
 
-def montar_jogos(conexao, previsoes_atual: dict[int, dict], pesos: dict[int, np.ndarray]) -> tuple[list[dict], dict]:
+def montar_jogos(conexao, previsoes_atual: dict[int, dict], pesos: dict[int, np.ndarray],
+                 series: tuple[str, ...] | None = None) -> tuple[list[dict], dict]:
     """(jogos com a previsão dos quatro modelos, funil de cobertura). Só lê o banco.
-    `previsoes_atual` = saída de `backtest.prever_walk_forward`; `pesos` = `pesos_por_ano`."""
+    `previsoes_atual` = saída de `backtest.prever_walk_forward`; `pesos` = `pesos_por_ano`. Sem `series`, só as de
+    pontos corridos; com `series`, só as indicadas (estudo da Série C, item B3 do plano v2)."""
     minimo = config.B2_JOGOS_ANTERIORES_MINIMOS
     funil = {chave: 0 for chave, _ in ETAPAS_DO_FUNIL}
     pareamento = {
@@ -95,8 +97,9 @@ def montar_jogos(conexao, previsoes_atual: dict[int, dict], pesos: dict[int, np.
     }
     serie_do_time: dict[tuple[int, int], str] = {}
     temporadas: dict[tuple[str, int], TemporadaPorData] = {}
-    # Só pontos corridos: a Série C entra depois que o estudo B2 for repetido com ela (plano de 07/10/2026).
-    for t in conexao.execute(f"SELECT DISTINCT serie, ano FROM cbf_partidas WHERE {competicao.so_pontos_corridos()}"):
+    # Só pontos corridos, a menos que `series` diga outra coisa: a Série C tem estudo à parte (item B3 do plano v2).
+    filtro = competicao.so_pontos_corridos() if series is None else f"serie IN ({', '.join(repr(s) for s in series)})"
+    for t in conexao.execute(f"SELECT DISTINCT serie, ano FROM cbf_partidas WHERE {filtro}"):
         partidas = competicao.carregar_partidas(conexao, t["serie"], t["ano"])
         temporadas[(t["serie"], t["ano"])] = TemporadaPorData(partidas)
         for p in partidas:

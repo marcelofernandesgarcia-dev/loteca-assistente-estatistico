@@ -45,6 +45,35 @@ def validar_volante(marcacoes: list[list[str]]) -> dict:
     }
 
 
+def justificativa_da_sugestao(jogos: list[dict], proposta: dict, nomes: list[str], coberturas: list[dict] | None = None) -> dict:
+    """Por que o app pôs o duplo ou o triplo onde pôs (plano v2, item D3), montado só com fatos guardados:
+    motivo principal (o favorito mais fraco do concurso), apoio (cobertura e equilíbrio do jogo), risco e a
+    alternativa descartada (o segundo jogo mais incerto). `jogos`: percentuais na ordem; `nomes`: "Casa x Fora";
+    `coberturas`: de stats.cobertura, na mesma ordem (opcional)."""
+    escolhido = proposta["jogo_multiplo"]
+    favoritos = [max(j.values()) for j in jogos]
+    ordem = sorted(range(len(jogos)), key=lambda i: favoritos[i])
+    pct = jogos[escolhido]
+    colunas = sorted(pct, key=pct.get, reverse=True)
+    tipo = "triplo" if proposta["triplos"] else "duplo"
+    apoio = []
+    if coberturas and coberturas[escolhido]["alta_incerteza"]:
+        apoio.append(f"cobertura de dados {coberturas[escolhido]['nome_nivel'].lower()} (alta incerteza)")
+    if tipo == "duplo":
+        apoio.append(f"o duplo {''.join(sorted(colunas[:2]))} cobre {pct[colunas[0]] + pct[colunas[1]]:.0f}% dos resultados")
+    risco = (f"fica de fora o {colunas[2]} ({pct[colunas[2]]:.0f}%)" if tipo == "duplo"
+             else f"o triplo custa {proposta['custo'] / PRECO_APOSTA:.0f} apostas e só garante este jogo")
+    alternativa = None
+    if len(ordem) > 1:
+        segundo = ordem[1] if ordem[0] == escolhido else ordem[0]
+        alternativa = f"jogo {segundo + 1} ({nomes[segundo]}), favorito com {favoritos[segundo]:.0f}%"
+    return {
+        "jogo": escolhido + 1, "tipo": tipo,
+        "motivo": f"o favorito mais fraco do concurso: {colunas[0]} com {pct[colunas[0]]:.0f}%",
+        "apoio": apoio, "risco": risco, "alternativa": alternativa,
+    }
+
+
 def montar_bilhete(jogos: list[dict]) -> dict:
     """`jogos`: lista de {'1': %, 'X': %, '2': %}, na ordem dos jogos."""
     ordenados = [sorted(j, key=j.get, reverse=True) for j in jogos]
