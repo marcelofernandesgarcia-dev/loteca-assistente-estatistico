@@ -26,6 +26,33 @@ def _compativeis(loteca: frozenset[str], cbf: frozenset[str]) -> bool:
     return bool(loteca) and bool(cbf) and loteca <= cbf
 
 
+_UF_NO_LOCAL = re.compile(r"-\s*([A-Z]{2})\s*$")
+
+
+def inferir_uf_pelo_estadio(conexao) -> list[dict]:
+    """Preenche a UF dos times da CBF que vieram só das páginas de jogos (sem tabela de classificação, como os
+    eliminados na 1ª fase da Série C), pelo estádio dos jogos em casa ("Centenário - Caxias do Sul - RS").
+    Só com config.CBF_UF_ESTADIO_MINIMO_JOGOS jogos em casa ou mais e todos no mesmo estado; sem unanimidade,
+    a UF fica vazia (melhor sem par do que com o time errado). Marca uf_origem = 'estadio'. Devolve o que
+    preencheu."""
+    preenchidos = []
+    for time in conexao.execute("SELECT cod_time, nome FROM cbf_times WHERE uf IS NULL").fetchall():
+        ufs = set()
+        jogos = 0
+        for (local,) in conexao.execute(
+            "SELECT local FROM cbf_partidas WHERE mandante_id = ? AND local IS NOT NULL", (time["cod_time"],)
+        ):
+            achado = _UF_NO_LOCAL.search(local.strip())
+            if achado:
+                ufs.add(achado.group(1))
+                jogos += 1
+        if jogos >= config.CBF_UF_ESTADIO_MINIMO_JOGOS and len(ufs) == 1:
+            uf = ufs.pop()
+            conexao.execute("UPDATE cbf_times SET uf = ?, uf_origem = 'estadio' WHERE cod_time = ?", (uf, time["cod_time"]))
+            preenchidos.append({"cod_time": time["cod_time"], "nome": time["nome"], "uf": uf, "jogos": jogos})
+    return preenchidos
+
+
 def parear(conexao, equivalentes: dict[int, list[int]] | None = None) -> dict:
     """Recalcula `mapa_cbf_participante`. Retorna contagem de pareados e a
     lista de clubes brasileiros sem par único (para revisão manual). Um par
@@ -40,6 +67,7 @@ def parear(conexao, equivalentes: dict[int, list[int]] | None = None) -> dict:
         from stats.cbf import codigos_equivalentes
 
         equivalentes = codigos_equivalentes()
+    ufs_deduzidas = inferir_uf_pelo_estadio(conexao)
     atual_de = {anterior: atual for atual, anteriores in equivalentes.items() for anterior in anteriores}
     times_cbf = conexao.execute("SELECT cod_time, nome, uf FROM cbf_times WHERE uf IS NOT NULL").fetchall()
     clubes = conexao.execute(
@@ -73,4 +101,4 @@ def parear(conexao, equivalentes: dict[int, list[int]] | None = None) -> dict:
             pareados += 1
         elif len(candidatos) > 1:
             pendentes.append(f"{clube['nome']}/{clube['pais_ou_uf']}: {len(candidatos)} candidatos")
-    return {"pareados": pareados, "ambiguos": pendentes, "removidos": removidos}
+    return {"pareados": pareados, "ambiguos": pendentes, "removidos": removidos, "ufs_deduzidas": ufs_deduzidas}

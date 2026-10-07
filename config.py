@@ -82,6 +82,9 @@ LOTECA_PREFIXOS_OUTRA_CATEGORIA = ("F ",)
 # Participantes (nome, UF) que nunca pareiam, por decisão do usuário. "RECIFE/PE" (4 jogos até o concurso 106)
 # pareava com o Sport Recife sem confirmação; retirado em 07/10/2026.
 CBF_PAREAMENTO_EXCLUIDO = {("RECIFE", "PE")}
+# UF deduzida do estádio dos jogos em casa (decisão do usuário em 07/10/2026), só quando a CBF não informa a UF:
+# exige este mínimo de jogos em casa com local conhecido, e TODOS no mesmo estado.
+CBF_UF_ESTADIO_MINIMO_JOGOS = 3
 
 # Regras de apuração (ver docs/manual-produtos-caixa-v21.md, item 10)
 # Concurso mais antigo confirmado na API é o nº 1 (18/02/2002).

@@ -266,7 +266,7 @@ def gravar_classificacao(
         if atualiza_nome_atual:
             conexao.execute(
                 "INSERT INTO cbf_times (cod_time, nome, uf) VALUES (?, ?, ?) "
-                "ON CONFLICT(cod_time) DO UPDATE SET nome=excluded.nome, uf=excluded.uf",
+                "ON CONFLICT(cod_time) DO UPDATE SET nome=excluded.nome, uf=excluded.uf, uf_origem=NULL",
                 (cod, linha["time"], linha.get("uf_time")),
             )
         else:

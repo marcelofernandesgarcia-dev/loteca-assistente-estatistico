@@ -415,6 +415,42 @@ def test_participante_excluido_pelo_usuario_nao_pareia_e_par_antigo_sai(conexao)
     assert resultado["pareados"] == 0 and resultado["removidos"] == ["RECIFE/PE"]
 
 
+def _jogo_em_casa(conexao, id_jogo, cod, local):
+    conexao.execute(
+        "INSERT INTO cbf_partidas (id_jogo, serie, ano, rodada, mandante_id, visitante_id, local, coletado_em)"
+        " VALUES (?, 'serie-c', 2026, 1, ?, 999, ?, 'x')", (id_jogo, cod, local))
+
+
+def test_uf_deduzida_do_estadio_permite_parear_o_eliminado_da_serie_c(conexao):
+    # Caxias 2026 (conferido em 07/10/2026): só aparece nos jogos, sem UF; 31 de 31 jogos em casa no RS.
+    conexao.execute("INSERT INTO cbf_times (cod_time, nome, uf) VALUES (20062, 'Caxias', NULL)")
+    for i in range(3):
+        _jogo_em_casa(conexao, i + 1, 20062, "Centenário - Caxias do Sul - RS")
+    caxias = db.obter_ou_criar_participante(conexao, "CAXIAS", "clube", "RS")
+    resultado = parear(conexao, equivalentes={})
+    assert resultado["ufs_deduzidas"] == [{"cod_time": 20062, "nome": "Caxias", "uf": "RS", "jogos": 3}]
+    assert conexao.execute("SELECT uf_origem FROM cbf_times WHERE cod_time = 20062").fetchone()[0] == "estadio"
+    assert conexao.execute("SELECT cod_time FROM mapa_cbf_participante WHERE participante_id = ?", (caxias,)).fetchone()[0] == 20062
+
+
+@pytest.mark.parametrize("locais", [
+    ["Estádio A - Cidade - RS", "Estádio A - Cidade - RS"],                       # poucos jogos
+    ["Estádio A - Cidade - RS", "Estádio B - Outra - SC", "Estádio A - Cidade - RS"],  # sem unanimidade
+])
+def test_sem_jogos_suficientes_ou_sem_unanimidade_a_uf_fica_vazia(conexao, locais):
+    conexao.execute("INSERT INTO cbf_times (cod_time, nome, uf) VALUES (7, 'Time Sete', NULL)")
+    for i, local in enumerate(locais):
+        _jogo_em_casa(conexao, i + 1, 7, local)
+    assert parear(conexao, equivalentes={})["ufs_deduzidas"] == []
+    assert conexao.execute("SELECT uf FROM cbf_times WHERE cod_time = 7").fetchone()[0] is None
+
+
+def test_uf_da_tabela_substitui_a_deduzida(conexao):
+    conexao.execute("INSERT INTO cbf_times (cod_time, nome, uf, uf_origem) VALUES (100, 'Time Alfa SAF', 'RS', 'estadio')")
+    gravar_classificacao(conexao, "serie-a", 2026, CLASSIFICACAO[:1], "2026-10-07T10:00:00")
+    assert tuple(conexao.execute("SELECT uf, uf_origem FROM cbf_times WHERE cod_time = 100").fetchone()) == ("SP", None)
+
+
 def test_estrangeiro_e_selecao_nao_pareiam(conexao):
     _cbf(conexao, 1, "Barcelona", "SP")
     db.obter_ou_criar_participante(conexao, "BARCELONA", "clube", "ESP")

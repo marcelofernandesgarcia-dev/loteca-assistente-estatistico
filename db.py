@@ -125,7 +125,8 @@ CREATE TABLE IF NOT EXISTS notas_bilhete (
 CREATE TABLE IF NOT EXISTS cbf_times (
     cod_time INTEGER PRIMARY KEY,
     nome TEXT NOT NULL,
-    uf TEXT
+    uf TEXT,
+    uf_origem TEXT
 );
 
 CREATE TABLE IF NOT EXISTS cbf_classificacao (
@@ -332,6 +333,9 @@ def _garantir_colunas(conexao: sqlite3.Connection) -> None:
         ],
         "cbf_partidas": [("fase", "TEXT"), ("grupo", "TEXT"), ("rodada_fase", "INTEGER"), ("num_jogo", "INTEGER")],
         "fatores_externos": [("evidencias", "TEXT")],
+        # uf_origem (07/10/2026): vazio = UF da tabela de classificação da CBF; "estadio" = deduzida do estádio
+        # dos jogos em casa (clube que só aparece nos jogos, como os eliminados na 1ª fase da Série C).
+        "cbf_times": [("uf_origem", "TEXT")],
         # Análise do palpite (item 20): guardada com o bilhete para aprendizado.
         # jogado_em (plano v2, item D1, 07/10/2026): quando o usuário marcou o bilhete como apostado de verdade.
         # Vazio = rascunho. O comprovante da CAIXA nunca é importado (tem dado pessoal).
