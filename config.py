@@ -76,8 +76,8 @@ AJUSTE_EXTERNO_PESOS = {
     "lesao_titular": -3.0,
     "suspensao_titular": -3.0,
     "desfalque_multiplo": -4.0,
-    "tendencia_positiva_imprensa": 2.0,
-    "tendencia_negativa_imprensa": -2.0,
+    # tendencia_positiva_imprensa (+2) e tendencia_negativa_imprensa (-2) passaram a informativos em 07/10/2026
+    # (decisão do usuário na análise do concurso 1273): ver AJUSTE_EXTERNO_SINAIS_INFORMATIVOS.
     "sequencia_invicta_destacada": 1.5,
     "sequencia_negativa_destacada": -1.5,
 }
@@ -174,7 +174,34 @@ AJUSTE_EXTERNO_SINAIS_INFORMATIVOS = {
     "saida_de_jogador": "Saída de jogador",
     "troca_de_tecnico": "Troca de técnico",
     "atraso_salarial": "Atraso de salário ou crise financeira",
+    # Decisão do usuário (07/10/2026, análise do concurso 1273): crise ou pressão relatada pela imprensa não é
+    # desfalque confirmado; no 1273, Portugal perdeu 5 pontos por crise e venceu. Fica só como contexto até a
+    # associação ser medida.
+    "tendencia_negativa_imprensa": "Crise ou pressão relatada pela imprensa",
+    "tendencia_positiva_imprensa": "Elogio da imprensa",
+    # Manchete especulativa ("pode ser suspenso", "pode ter desfalques"): o fato ainda não aconteceu.
+    "lesao_possivel": "Possível lesão (não confirmada)",
+    "suspensao_possivel": "Possível suspensão (não confirmada)",
+    "desfalque_possivel": "Possíveis desfalques (não confirmados)",
 }
+# Sinal de fato confirmado -> sinal informativo correspondente quando a manchete é só especulação.
+VARREDURA_SINAL_ESPECULATIVO = {
+    "lesao_titular": "lesao_possivel",
+    "suspensao_titular": "suspensao_possivel",
+    "desfalque_multiplo": "desfalque_possivel",
+}
+VARREDURA_PALAVRAS_ESPECULATIVAS = (
+    "pode ser", "pode ter", "pode perder", "pode desfalcar", "pode ficar fora", "pode nao", "pode não",
+    "deve desfalcar", "risco de", "ameaca", "ameaça", "ameacado", "ameaçado", "duvida", "dúvida",
+)
+# Sinais que dependem de qual partida é: manchete que cita outro jogo não vale para este concurso.
+VARREDURA_SINAIS_DO_JOGO = ("lesao_titular", "suspensao_titular", "desfalque_multiplo",
+                            "lesao_possivel", "suspensao_possivel", "desfalque_possivel")
+# Sinais sem dono claro quando a manchete cita os dois times da mesma partida.
+VARREDURA_SINAIS_AMBIGUOS_ENTRE_RIVAIS = ("sequencia_invicta_destacada", "sequencia_negativa_destacada",
+                                         "tendencia_negativa_imprensa", "tendencia_positiva_imprensa")
+# Seleção não contrata, não vende nem atrasa salário: esses sinais são ignorados para seleção.
+VARREDURA_SINAIS_SO_DE_CLUBE = ("contratacao", "saida_de_jogador", "atraso_salarial")
 
 # Se qualquer uma dessas expressões aparece no título, a notícia inteira é
 # descartada como sinal -- ela nega ou reverte o problema, em vez de

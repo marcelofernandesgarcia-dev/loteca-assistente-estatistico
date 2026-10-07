@@ -49,15 +49,25 @@ def concurso_alvo_da_semana(conexao) -> dict | None:
 
 
 def participantes_do_concurso(conexao, numero_concurso: int) -> list[dict]:
+    """Cada participante do concurso com o tipo e o adversário da partida -- o contexto que o filtro de
+    notícias usa para não pôr sinal no time errado (análise do concurso 1273, 07/10/2026)."""
     linhas = conexao.execute(
         """
-        SELECT DISTINCT p.id, p.nome FROM participantes p
-        JOIN jogos j ON j.casa_id = p.id OR j.fora_id = p.id
-        WHERE j.concurso_numero = ?
+        SELECT j.num_jogo, pc.id AS casa_id, pc.nome AS casa, pc.tipo AS casa_tipo,
+               pf.id AS fora_id, pf.nome AS fora, pf.tipo AS fora_tipo
+        FROM jogos j JOIN participantes pc ON pc.id = j.casa_id JOIN participantes pf ON pf.id = j.fora_id
+        WHERE j.concurso_numero = ? ORDER BY j.num_jogo
         """,
         (numero_concurso,),
     ).fetchall()
-    return [{"id": linha["id"], "nome": linha["nome"]} for linha in linhas]
+    vistos, saida = set(), []
+    for linha in linhas:
+        for eu, adv in (("casa", "fora"), ("fora", "casa")):
+            if linha[f"{eu}_id"] in vistos:
+                continue
+            vistos.add(linha[f"{eu}_id"])
+            saida.append({"id": linha[f"{eu}_id"], "nome": linha[eu], "tipo": linha[f"{eu}_tipo"], "adversario": linha[adv]})
+    return saida
 
 
 def executar_para_concurso(conexao, numero_concurso: int) -> list[dict]:
@@ -67,9 +77,14 @@ def executar_para_concurso(conexao, numero_concurso: int) -> list[dict]:
     agora = dt.datetime.now().isoformat(timespec="seconds")
     resultados = []
 
-    for participante in participantes_do_concurso(conexao, numero_concurso):
+    participantes = participantes_do_concurso(conexao, numero_concurso)
+    nomes_do_concurso = [p["nome"] for p in participantes]
+    for participante in participantes:
         noticias = buscar_noticias(participante["nome"])
-        sinais = extrair_sinais(noticias, participante_nome=participante["nome"])
+        sinais = extrair_sinais(
+            noticias, participante_nome=participante["nome"], adversario_nome=participante["adversario"],
+            tipo_participante=participante["tipo"], nomes_do_concurso=nomes_do_concurso,
+        )
         ajuste = calcular_ajuste(sinais)
 
         conexao.execute(

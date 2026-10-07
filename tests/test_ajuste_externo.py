@@ -61,12 +61,19 @@ def test_ajuste_respeita_o_teto():
         {"sinal": "lesao_titular", "evidencia": "", "fonte": ""},
         {"sinal": "suspensao_titular", "evidencia": "", "fonte": ""},
         {"sinal": "desfalque_multiplo", "evidencia": "", "fonte": ""},
-        {"sinal": "tendencia_negativa_imprensa", "evidencia": "", "fonte": ""},
+        # tendência da imprensa virou informativa em 07/10/2026; a sequência negativa segue com peso.
+        {"sinal": "sequencia_negativa_destacada", "evidencia": "", "fonte": ""},
     ]
     resultado = calcular_ajuste(sinais)
     soma_bruta = sum(config.AJUSTE_EXTERNO_PESOS[s["sinal"]] for s in sinais)
     assert soma_bruta < -config.AJUSTE_EXTERNO_TETO_PONTOS
     assert resultado["ajuste_aplicado"] == -config.AJUSTE_EXTERNO_TETO_PONTOS
+
+
+def test_crise_relatada_pela_imprensa_e_so_informativa():
+    """Decisão de 07/10/2026: crise não é desfalque confirmado (Portugal perdeu 5 pontos por crise e venceu)."""
+    resultado = calcular_ajuste([{"sinal": "tendencia_negativa_imprensa", "evidencia": "crise", "fonte": "A"}])
+    assert resultado["ajuste_aplicado"] == 0.0 and "(informativo)" in resultado["resumo"]
 
 
 def test_mesmo_sinal_repetido_em_varias_noticias_conta_uma_vez():
