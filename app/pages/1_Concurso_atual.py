@@ -11,6 +11,7 @@ from ano_em_curso_ui import mostrar_ano_em_curso, resumo_do_ano
 from calibracao_ui import mostrar_calibracao
 from chances_ui import mostrar_chances_do_bilhete
 from estilo_caixa import renderizar_cartao, renderizar_tabela, renderizar_titulo_cartao
+from noticias_ui import mostrar_manchetes_lidas
 from premiacao_ui import mostrar_premiacao
 from sugestoes_ui import (
     complexidade_da_tela,
@@ -348,6 +349,11 @@ else:
     mostrar_calibracao(jogos_vigente, calculos)
     mostrar_motivos_do_ajuste(jogos_vigente, calculos)
     mostrar_noticias_de_contexto(jogos_vigente, ajustes)
+    mostrar_manchetes_lidas(
+        conexao, numero_vigente,
+        list({p["id"]: p for j in jogos_vigente
+              for p in ({"id": j["casa_id"], "nome": j["casa"]}, {"id": j["fora_id"], "nome": j["fora"]})}.values()),
+    )
 
     # Ano em curso sempre visível, logo antes do volante (pedido do usuário,
     # 30/09/2026): quem marca vê primeiro como cada time está indo no ano.

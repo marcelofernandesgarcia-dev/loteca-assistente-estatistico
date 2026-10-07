@@ -270,3 +270,26 @@ def test_salvar_guarda_a_analise_e_o_motivo(banco):
         linha = c.execute("SELECT categoria, motivos, sem_base_propria FROM bilhete_jogos").fetchone()
         assert linha["categoria"] is not None and linha["motivos"] == '["Intuição"]' and linha["sem_base_propria"] == 1
         assert c.execute("SELECT acertos_esperados FROM bilhetes").fetchone()[0] is not None
+
+
+def test_manchetes_lidas_mostram_decisao_motivo_e_quem_ficou_sem_leitura(banco):
+    # Item A3 do plano v2 (07/10/2026).
+    with db.sessao() as c:
+        alfa = c.execute("SELECT id FROM participantes WHERE nome = 'ALFA'").fetchone()[0]
+        for titulo, situacao, descartes in (
+            ("Alfa tem lesão de atacante", "aplicada", []),
+            ("Beta tem lesão e Alfa observa", "descartada", [{"sinal": "lesao_titular", "motivo": "sujeito_outro_time"}]),
+            ("Alfa divulga programação", "sem_sinal", []),
+        ):
+            c.execute(
+                "INSERT INTO noticias_lidas (concurso_numero, participante_id, coletado_em, titulo, fonte, url, situacao,"
+                " aceitos, descartes, versao_regras) VALUES (9002, ?, '2026-09-24T10:00:00', ?, 'Veículo', '', ?, ?, ?, 'v')",
+                (alfa, titulo, situacao, json.dumps(["lesao_titular"] if situacao == "aplicada" else []),
+                 json.dumps(descartes)),
+            )
+    at = _abrir()
+    assert any(e.label == "Manchetes lidas e decisão do filtro (3 manchetes)" for e in at.expander)
+    textos = " ".join(m.value for m in at.markdown)
+    assert "Beta tem lesão e Alfa observa" in textos and "outro time do concurso é o assunto" in textos
+    assert "Alfa divulga programação" not in textos  # sem sinal entra só na contagem
+    assert any("Sem leitura de notícias neste concurso: BETA." in w.value for w in at.warning)

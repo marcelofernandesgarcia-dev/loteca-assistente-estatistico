@@ -1,4 +1,4 @@
-# VALIDADO pelo usuário em 30/09/2026 ("todas corretas"). Lido por stats/cbf.py (codigos_equivalentes).
+# VALIDADO pelo usuário em 30/09/2026 ("todas corretas"); Brusque validado em 07/10/2026. Lido por stats/cbf.py (codigos_equivalentes).
 # Clubes que aparecem na CBF com dois códigos diferentes, em períodos que não se sobrepõem, com o mesmo nome (ou o mesmo nome
 # acrescido de "Saf") e a mesma UF. Achado na coleta das temporadas 2019 a 2025 (docs/p2-temporadas-cbf-30-09-2026.md).
 # Serve para juntar a história de um clube que trocou de código sem perder as temporadas anteriores.
@@ -18,4 +18,4 @@ cod_atual;cod_anterior;clube;uf;anos_anterior;anos_atual;nome_anterior;nome_atua
 63238;20048;Fortaleza;CE;2019-2024;2025-2026;Fortaleza;Fortaleza Ec Saf / Fortaleza SAF;validado
 62726;20069;Londrina;PR;2019-2023;2026;Londrina;Londrina SAF;validado
 60646;20012;Vasco da Gama;RJ;2019-2021;2022-2026;Vasco da Gama;Vasco da Gama S.a.f. / Vasco da Gama Saf;validado
-63843;20233;Brusque;SC;2021-2024;2026;Brusque;Brusque;proposto
+63843;20233;Brusque;SC;2021-2024;2026;Brusque;Brusque;validado

@@ -13,7 +13,7 @@ import logging
 
 import config
 from externo.ajuste import calcular_ajuste, montar_evidencias
-from externo.analise import extrair_sinais
+from externo.analise import classificar_noticias, sinais_da_classificacao
 from externo.coleta import buscar_noticias
 from externo.percentual_final import ajustes_do_concurso, percentuais_do_jogo
 
@@ -90,11 +90,13 @@ def executar_para_concurso(conexao, numero_concurso: int) -> list[dict]:
     nomes_do_concurso = [p["nome"] for p in participantes]
     for participante in participantes:
         noticias = buscar_noticias(participante["nome"])
-        sinais = extrair_sinais(
+        classificacao = classificar_noticias(
             noticias, participante_nome=participante["nome"], adversario_nome=participante["adversario"],
             tipo_participante=participante["tipo"], nomes_do_concurso=nomes_do_concurso,
         )
+        sinais = sinais_da_classificacao(classificacao)
         ajuste = calcular_ajuste(sinais)
+        gravar_noticias_lidas(conexao, numero_concurso, participante["id"], agora, classificacao)
 
         conexao.execute(
             """
@@ -116,6 +118,49 @@ def executar_para_concurso(conexao, numero_concurso: int) -> list[dict]:
 
     _recalcular_percentuais_do_concurso(conexao, numero_concurso, agora)
     return resultados
+
+
+def gravar_noticias_lidas(conexao, numero_concurso: int, participante_id: int, coletado_em: str,
+                          classificacao: list[dict]) -> int:
+    """Grava cada manchete lida com a decisão do filtro (item A3 do plano v2). Devolve quantas."""
+    for item in classificacao:
+        noticia = item["noticia"]
+        conexao.execute(
+            """
+            INSERT INTO noticias_lidas (concurso_numero, participante_id, coletado_em, titulo, fonte, url, publicado_em,
+                situacao, aceitos, descartes, versao_regras)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                numero_concurso, participante_id, coletado_em, noticia["titulo"], noticia.get("fonte"),
+                noticia.get("url"), noticia.get("publicado_em"), item["situacao"],
+                json.dumps(item["aceitos"], ensure_ascii=False), json.dumps(item["descartes"], ensure_ascii=False),
+                config.VARREDURA_VERSAO_REGRAS,
+            ),
+        )
+    return len(classificacao)
+
+
+def noticias_lidas_do_concurso(conexao, numero_concurso: int, so_ultima_leitura: bool = True) -> list[dict]:
+    """Manchetes lidas no concurso, com nome do participante e a decisão do filtro. Por padrão, só a
+    leitura mais recente de cada participante (a que vale para o percentual)."""
+    filtro = (
+        "AND n.coletado_em = (SELECT MAX(coletado_em) FROM noticias_lidas x "
+        "WHERE x.concurso_numero = n.concurso_numero AND x.participante_id = n.participante_id)"
+        if so_ultima_leitura else ""
+    )
+    linhas = conexao.execute(
+        f"""
+        SELECT n.*, p.nome AS participante FROM noticias_lidas n JOIN participantes p ON p.id = n.participante_id
+        WHERE n.concurso_numero = ? {filtro}
+        ORDER BY p.nome, n.id
+        """,
+        (numero_concurso,),
+    ).fetchall()
+    return [
+        {**dict(linha), "aceitos": json.loads(linha["aceitos"] or "[]"), "descartes": json.loads(linha["descartes"] or "[]")}
+        for linha in linhas
+    ]
 
 
 def recalcular_percentuais_gravados(conexao) -> int:

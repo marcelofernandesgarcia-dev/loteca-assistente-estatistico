@@ -133,54 +133,17 @@ def extrair_sinais(noticias: list[dict], participante_nome: str | None = None, a
     recomendado -- só fica opcional para não quebrar chamada antiga sem esse dado.
     `adversario_nome`, `tipo_participante` ('clube' ou 'selecao') e `nomes_do_concurso`
     (todos os participantes do concurso) ligam as barreiras 4 a 8 (ver o topo do módulo)."""
-    participante_normalizado = _normalizar(participante_nome) if participante_nome else None
-    adversario_normalizado = _normalizar(adversario_nome) if adversario_nome else None
-    outros = [_normalizar(n) for n in nomes_do_concurso if participante_nome and _normalizar(n) != participante_normalizado]
-    negacoes_normalizadas = [_normalizar(frase) for frase in config.VARREDURA_PALAVRAS_DE_NEGACAO]
-    outra_equipe_normalizadas = [_normalizar(frase) for frase in config.VARREDURA_PALAVRAS_DE_OUTRA_EQUIPE]
-    especulativas = [_normalizar(frase) for frase in config.VARREDURA_PALAVRAS_ESPECULATIVAS]
+    return sinais_da_classificacao(
+        classificar_noticias(noticias, participante_nome, adversario_nome, tipo_participante, nomes_do_concurso)
+    )
 
+
+def sinais_da_classificacao(classificacao: list[dict]) -> list[dict]:
+    """Os sinais aceitos de `classificar_noticias`, no formato de `extrair_sinais`."""
     sinais = []
-    for noticia in noticias:
-        titulo_normalizado = _normalizar(noticia["titulo"])
-        if participante_normalizado and not _menciona_participante(titulo_normalizado, participante_normalizado):
-            continue
-        if any(negacao in titulo_normalizado for negacao in negacoes_normalizadas):
-            continue
-        if any(outra in titulo_normalizado for outra in outra_equipe_normalizadas):
-            continue  # feminino, base, futsal: não é o time da Loteca (barreira 3)
-        titulo_sem_ex = _EX_CLUBE.sub(" ", titulo_normalizado)
-        if participante_normalizado and outros and _sujeito_e_outro_time(titulo_sem_ex, participante_normalizado, outros):
-            continue  # barreira 4: a manchete é de outro time do concurso
-        outro_jogo = bool(outros) and _fala_de_outro_jogo(titulo_sem_ex, adversario_normalizado, outros)
-        rivais_juntos = (bool(adversario_normalizado)
-                         and _primeira_posicao(titulo_sem_ex, adversario_normalizado, exigir_todos=True) is not None)
-        especulativa = any(frase in titulo_normalizado for frase in especulativas)
-
-        tipos = []
-        for palavra, tipo_sinal in config.VARREDURA_PALAVRAS_CHAVE_PARA_SINAL.items():
-            palavra_normalizada = _normalizar(palavra)
-            if palavra_normalizada not in titulo_normalizado or tipo_sinal in tipos:
-                continue
-            if palavra_normalizada == "acerta com" and participante_normalizado:
-                # "Cuiabá rescinde com goleiro, que acerta com o Itaquá": quando a manchete é de SAÍDA do
-                # jogador, o "acerta com" é o clube novo dele. Em "Flamengo acerta com atacante" (sem saída)
-                # a contratação continua sendo do clube citado antes.
-                saida = any(_normalizar(p) in titulo_normalizado
-                            for p, t in config.VARREDURA_PALAVRAS_CHAVE_PARA_SINAL.items() if t == "saida_de_jogador")
-                depois = titulo_normalizado.split(palavra_normalizada, 1)[1]
-                if saida and _primeira_posicao(depois, participante_normalizado) is None:
-                    continue
-            tipos.append(tipo_sinal)
-        for tipo_sinal in tipos:
-            if especulativa:
-                tipo_sinal = config.VARREDURA_SINAL_ESPECULATIVO.get(tipo_sinal, tipo_sinal)  # barreira 8
-            if outro_jogo and tipo_sinal in config.VARREDURA_SINAIS_DO_JOGO:
-                continue  # barreira 5
-            if rivais_juntos and tipo_sinal in config.VARREDURA_SINAIS_AMBIGUOS_ENTRE_RIVAIS:
-                continue  # barreira 6
-            if tipo_participante == "selecao" and tipo_sinal in config.VARREDURA_SINAIS_SO_DE_CLUBE:
-                continue  # barreira 7
+    for item in classificacao:
+        noticia = item["noticia"]
+        for tipo_sinal in item["aceitos"]:
             sinais.append(
                 {
                     "sinal": tipo_sinal,
@@ -191,3 +154,98 @@ def extrair_sinais(noticias: list[dict], participante_nome: str | None = None, a
                 }
             )
     return sinais
+
+
+# Motivo de cada descarte, na ordem das barreiras do topo do módulo. Ficam gravados com a manchete
+# (tabela `noticias_lidas`) para conferir depois por que um sinal não contou (item A3, plano v2).
+MOTIVOS_DE_DESCARTE = {
+    "nao_menciona": "a manchete não cita o time como assunto (barreira 1)",
+    "negacao": "fala de recuperação ou ausência do problema (barreira 2)",
+    "outra_equipe": "é de outra equipe do clube: feminino, base ou futsal (barreira 3)",
+    "sujeito_outro_time": "outro time do concurso é o assunto da manchete (barreira 4)",
+    "outro_jogo": "fala de outro jogo, contra um time que não é o adversário (barreira 5)",
+    "rivais_juntos": "os dois rivais na mesma manchete, sem dono claro do sinal (barreira 6)",
+    "selecao_nao_contrata": "sinal que não se aplica a seleção (barreira 7)",
+    "acerta_com_de_saida": "o \"acerta com\" é do clube novo do jogador que saiu",
+}
+
+
+def _tipos_candidatos(titulo_normalizado: str, participante_normalizado: str | None) -> tuple[list[str], list[dict]]:
+    """Sinais que as palavras-chave da manchete apontam, e os descartados pela regra do "acerta com"."""
+    tipos, descartes = [], []
+    for palavra, tipo_sinal in config.VARREDURA_PALAVRAS_CHAVE_PARA_SINAL.items():
+        palavra_normalizada = _normalizar(palavra)
+        if palavra_normalizada not in titulo_normalizado or tipo_sinal in tipos:
+            continue
+        if palavra_normalizada == "acerta com" and participante_normalizado:
+            # "Cuiabá rescinde com goleiro, que acerta com o Itaquá": quando a manchete é de SAÍDA do
+            # jogador, o "acerta com" é o clube novo dele. Em "Flamengo acerta com atacante" (sem saída)
+            # a contratação continua sendo do clube citado antes.
+            saida = any(_normalizar(p) in titulo_normalizado
+                        for p, t in config.VARREDURA_PALAVRAS_CHAVE_PARA_SINAL.items() if t == "saida_de_jogador")
+            depois = titulo_normalizado.split(palavra_normalizada, 1)[1]
+            if saida and _primeira_posicao(depois, participante_normalizado) is None:
+                descartes.append({"sinal": tipo_sinal, "motivo": "acerta_com_de_saida"})
+                continue
+        tipos.append(tipo_sinal)
+    return tipos, descartes
+
+
+def _situacao(aceitos: list[str], descartes: list[dict]) -> str:
+    """'aplicada' (algum sinal com peso), 'informativa' (só sinais sem peso), 'descartada' (havia sinal e
+    todos caíram nas barreiras) ou 'sem_sinal' (nenhuma palavra-chave)."""
+    if any(tipo not in config.AJUSTE_EXTERNO_SINAIS_INFORMATIVOS for tipo in aceitos):
+        return "aplicada"
+    if aceitos:
+        return "informativa"
+    return "descartada" if descartes else "sem_sinal"
+
+
+def classificar_noticias(noticias: list[dict], participante_nome: str | None = None, adversario_nome: str | None = None,
+                         tipo_participante: str | None = None, nomes_do_concurso: list[str] | tuple = ()) -> list[dict]:
+    """Decisão sobre CADA manchete: {'noticia', 'aceitos': [sinal], 'descartes': [{'sinal', 'motivo'}],
+    'situacao'}. `extrair_sinais` usa só os aceitos; a varredura grava tudo, para auditoria."""
+    participante_normalizado = _normalizar(participante_nome) if participante_nome else None
+    adversario_normalizado = _normalizar(adversario_nome) if adversario_nome else None
+    outros = [_normalizar(n) for n in nomes_do_concurso if participante_nome and _normalizar(n) != participante_normalizado]
+    negacoes_normalizadas = [_normalizar(frase) for frase in config.VARREDURA_PALAVRAS_DE_NEGACAO]
+    outra_equipe_normalizadas = [_normalizar(frase) for frase in config.VARREDURA_PALAVRAS_DE_OUTRA_EQUIPE]
+    especulativas = [_normalizar(frase) for frase in config.VARREDURA_PALAVRAS_ESPECULATIVAS]
+
+    resultado = []
+    for noticia in noticias:
+        titulo_normalizado = _normalizar(noticia["titulo"])
+        tipos, descartes = _tipos_candidatos(titulo_normalizado, participante_normalizado)
+        titulo_sem_ex = _EX_CLUBE.sub(" ", titulo_normalizado)
+        barreira = None
+        if participante_normalizado and not _menciona_participante(titulo_normalizado, participante_normalizado):
+            barreira = "nao_menciona"
+        elif any(negacao in titulo_normalizado for negacao in negacoes_normalizadas):
+            barreira = "negacao"
+        elif any(outra in titulo_normalizado for outra in outra_equipe_normalizadas):
+            barreira = "outra_equipe"  # feminino, base, futsal: não é o time da Loteca (barreira 3)
+        elif participante_normalizado and outros and _sujeito_e_outro_time(titulo_sem_ex, participante_normalizado, outros):
+            barreira = "sujeito_outro_time"  # barreira 4: a manchete é de outro time do concurso
+
+        aceitos = []
+        if barreira:
+            descartes += [{"sinal": tipo, "motivo": barreira} for tipo in tipos]
+        else:
+            outro_jogo = bool(outros) and _fala_de_outro_jogo(titulo_sem_ex, adversario_normalizado, outros)
+            rivais_juntos = (bool(adversario_normalizado)
+                             and _primeira_posicao(titulo_sem_ex, adversario_normalizado, exigir_todos=True) is not None)
+            especulativa = any(frase in titulo_normalizado for frase in especulativas)
+            for tipo_sinal in tipos:
+                if especulativa:
+                    tipo_sinal = config.VARREDURA_SINAL_ESPECULATIVO.get(tipo_sinal, tipo_sinal)  # barreira 8
+                if outro_jogo and tipo_sinal in config.VARREDURA_SINAIS_DO_JOGO:
+                    descartes.append({"sinal": tipo_sinal, "motivo": "outro_jogo"})  # barreira 5
+                elif rivais_juntos and tipo_sinal in config.VARREDURA_SINAIS_AMBIGUOS_ENTRE_RIVAIS:
+                    descartes.append({"sinal": tipo_sinal, "motivo": "rivais_juntos"})  # barreira 6
+                elif tipo_participante == "selecao" and tipo_sinal in config.VARREDURA_SINAIS_SO_DE_CLUBE:
+                    descartes.append({"sinal": tipo_sinal, "motivo": "selecao_nao_contrata"})  # barreira 7
+                else:
+                    aceitos.append(tipo_sinal)
+        resultado.append({"noticia": noticia, "aceitos": aceitos, "descartes": descartes,
+                          "situacao": _situacao(aceitos, descartes)})
+    return resultado

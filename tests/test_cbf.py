@@ -209,9 +209,10 @@ def test_codigos_equivalentes_le_so_as_linhas_validadas(tmp_path):
 
 def test_tabela_real_de_codigos_esta_validada_e_os_codigos_existem_no_banco_sintetico_de_nomes():
     equivalentes = codigos_equivalentes()
-    assert len(equivalentes) == 11 and equivalentes[60646] == [20012] and equivalentes[62261] == [20093]
+    # 11 validados em 30/09/2026 + Brusque em 07/10/2026
+    assert len(equivalentes) == 12 and equivalentes[60646] == [20012] and equivalentes[63843] == [20233]
     todos = {c for cods in equivalentes.values() for c in cods} | set(equivalentes)
-    assert len(todos) == 22  # 11 pares, nenhum código repetido
+    assert len(todos) == 24  # 12 pares, nenhum código repetido
 
 
 def test_instrucao_do_bid_usa_o_codigo_da_cbf_e_a_uf():

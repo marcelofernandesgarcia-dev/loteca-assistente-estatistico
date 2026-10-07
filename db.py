@@ -79,6 +79,24 @@ CREATE TABLE IF NOT EXISTS fatores_externos (
     evidencias TEXT
 );
 
+-- Cada manchete lida pela varredura, com a decisão do filtro (item A3 do plano v2, 07/10/2026):
+-- aplicada, informativa, descartada (com o motivo) ou sem sinal. Só manchete, veículo e link.
+CREATE TABLE IF NOT EXISTS noticias_lidas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    concurso_numero INTEGER NOT NULL REFERENCES concursos(numero),
+    participante_id INTEGER NOT NULL REFERENCES participantes(id),
+    coletado_em TEXT NOT NULL,
+    titulo TEXT NOT NULL,
+    fonte TEXT,
+    url TEXT,
+    publicado_em TEXT,
+    situacao TEXT NOT NULL,
+    aceitos TEXT,
+    descartes TEXT,
+    versao_regras TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_noticias_lidas_concurso ON noticias_lidas (concurso_numero, participante_id);
+
 -- Dados lidos das páginas públicas da CBF (ver docs/cbf-fonte-de-dados.md).
 -- Ficam só neste banco local (loteca.db não vai para o GitHub).
 CREATE TABLE IF NOT EXISTS cbf_times (
