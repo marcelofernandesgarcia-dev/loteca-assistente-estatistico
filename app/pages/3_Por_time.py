@@ -88,7 +88,7 @@ def renderizar_classificacao_oficial(conexao, participante_id, classif):
                 "isso: a CBF nem sempre atualiza o nome. É só uma informação, não muda o percentual. Ainda não foi "
                 "medido se ser SAF faz diferença no desempenho (isso é a Fase Q4)."
             )
-        selo = selo_da_posicao(classif["serie"], classif["ano"], classif["posicao"])
+        selo = selo_da_posicao(classif["serie"], classif["ano"], classif["posicao"], fase)
         if selo:
             st.info(
                 f"**Zona atual: {selo}.** Segundo o Regulamento Específico da Competição "

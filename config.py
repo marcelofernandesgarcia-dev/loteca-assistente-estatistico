@@ -323,6 +323,21 @@ ZONAS_CBF = {
         "rebaixamento": range(17, 21),     # 4 últimos -- Art. 5
     },
 }
+# Competições com fases: zona pela posição DENTRO da fase (e do grupo). Lido no REC Série C 2026
+# (docs/fontes-oficiais/REC_Brasileiro_Serie_C_2026.pdf, baixado do site da CBF em 07/10/2026 com autorização
+# do usuário). Chave: (serie, ano, nome da fase como a CBF publica).
+ZONAS_CBF_POR_FASE = {
+    ("serie-c", 2026, "1ª Fase"): {
+        "classificacao_2a_fase": range(1, 9),   # 8 primeiros vão à 2ª fase -- Art. 15
+        "rebaixamento_serie_d": range(19, 21),  # 2 últimos descem para a Série D -- Art. 42
+        "_demais": "fora_da_classificacao",     # 9º a 18º: terminam a competição na 1ª fase -- Art. 15
+    },
+    ("serie-c", 2026, "2ª Fase"): {
+        "acesso_e_final": range(1, 2),  # 1º do grupo: acesso à Série B (Art. 5) e vaga na final (Art. 19)
+        "acesso_serie_b": range(2, 3),  # 2º do grupo: acesso à Série B (Art. 5)
+        "_demais": "fora_do_acesso",    # 3º e 4º do grupo
+    },
+}
 
 # Jogos de cada time na temporada, por (série, ano), lido no regulamento --
 # nunca suposto. Sem cadastro, o painel não projeta o fim da temporada.

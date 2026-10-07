@@ -64,3 +64,21 @@ def test_mesma_zona_entre_vizinhos_nao_gera_distancia():
 
 def test_contexto_sem_zonas_cadastradas_devolve_none():
     assert contexto_da_classificacao("serie-c", 2026, _classificacao_serie_a()) is None
+
+
+@pytest.mark.parametrize("fase, posicao, selo", [
+    ("1ª Fase", 1, "Classificação para a 2ª fase"),      # REC Série C 2026, Art. 15
+    ("1ª Fase", 8, "Classificação para a 2ª fase"),
+    ("1ª Fase", 12, "Fora da classificação para a 2ª fase"),
+    ("1ª Fase", 19, "Rebaixamento para a Série D"),       # Art. 42
+    ("2ª Fase", 1, "Acesso à Série B e vaga na final"),   # Arts. 5 e 19
+    ("2ª Fase", 2, "Acesso à Série B"),                   # Art. 5
+    ("2ª Fase", 3, "Fora da zona de acesso"),
+])
+def test_zonas_da_serie_c_2026_por_fase_conforme_o_rec(fase, posicao, selo):
+    assert selo_da_posicao("serie-c", 2026, posicao, fase) == selo
+
+
+def test_fase_sem_cadastro_nao_inventa_zona():
+    assert selo_da_posicao("serie-c", 2026, 1, "3ª Fase") is None
+    assert selo_da_posicao("serie-c", 2025, 1, "2ª Fase") is None

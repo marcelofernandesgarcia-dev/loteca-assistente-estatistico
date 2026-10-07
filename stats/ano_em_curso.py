@@ -89,7 +89,7 @@ def lado_no_ano(conexao, participante: dict, ano: int, jogos_base=None, nomes_se
             fonte="cbf", jogos=classif["jogos"], vitorias=classif["vitorias"] or 0, empates=classif["empates"] or 0,
             derrotas=classif["derrotas"] or 0, gols_pro=classif["gols_pro"] or 0, gols_contra=classif["gols_contra"] or 0,
             posicao=classif["posicao"], rotulo_posicao=rotulo_da_posicao(classif), serie=classif["serie"],
-            ultimos=ultimos[-config.ANO_CURSO_ULTIMOS:], zona=selo_da_posicao(classif["serie"], ano, classif["posicao"]),
+            ultimos=ultimos[-config.ANO_CURSO_ULTIMOS:], zona=selo_da_posicao(classif["serie"], ano, classif["posicao"], classif.get("fase")),
         )
         lado["texto_fonte"] = f"{TEXTO_FONTE['cbf']} ({NOME_SERIE.get(classif['serie'], classif['serie'])})"
         if classif.get("fase"):

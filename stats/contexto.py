@@ -4,8 +4,9 @@ por suposição. Fontes lidas em 29/09/2026:
 docs/fontes-oficiais/REC_Brasileiro_Serie_A_2026.pdf (Capítulo 2, Art. 6-8) e
 REC_Brasileiro_Serie_B_2026.pdf (Capítulo 2, Art. 5, e Capítulo 4, Art. 13).
 
-Cadastro em config.ZONAS_CBF, por (serie, ano). Série/ano sem cadastro não
-recebe selo -- este módulo nunca inventa zona.
+Cadastro em config.ZONAS_CBF, por (serie, ano), e em config.ZONAS_CBF_POR_FASE para
+competição com fases (REC_Brasileiro_Serie_C_2026.pdf, lido em 07/10/2026). Série/ano/fase
+sem cadastro não recebe selo -- este módulo nunca inventa zona.
 """
 import config
 
@@ -17,25 +18,34 @@ NOMES_ZONA = {
     "playoff_acesso": "Playoff de acesso à Série A",
     "rebaixamento": "Rebaixamento",
     "meio_de_tabela": "Meio de tabela",
+    # Série C 2026 (REC, Arts. 5, 15, 19 e 42), por fase.
+    "classificacao_2a_fase": "Classificação para a 2ª fase",
+    "rebaixamento_serie_d": "Rebaixamento para a Série D",
+    "acesso_e_final": "Acesso à Série B e vaga na final",
+    "acesso_serie_b": "Acesso à Série B",
+    "fora_da_classificacao": "Fora da classificação para a 2ª fase",
+    "fora_do_acesso": "Fora da zona de acesso",
 }
 
 
-def zona_da_posicao(serie: str, ano: int, posicao: int | None) -> str | None:
+def zona_da_posicao(serie: str, ano: int, posicao: int | None, fase: str | None = None) -> str | None:
     """Nome da zona (chave de NOMES_ZONA) para a posição, ou None se a série/ano
     não tem zonas cadastradas ou a posição não é conhecida. 'meio_de_tabela' é
-    devolvido quando há cadastro mas a posição não cai em nenhuma zona listada."""
-    zonas = config.ZONAS_CBF.get((serie, ano))
+    devolvido quando há cadastro mas a posição não cai em nenhuma zona listada.
+    Com `fase` (competição com fases, como a Série C), a posição é dentro do grupo da fase
+    e as zonas vêm de config.ZONAS_CBF_POR_FASE."""
+    zonas = config.ZONAS_CBF_POR_FASE.get((serie, ano, fase)) if fase else config.ZONAS_CBF.get((serie, ano))
     if not zonas or posicao is None:
         return None
     for nome, intervalo in zonas.items():
-        if posicao in intervalo:
+        if nome != "_demais" and posicao in intervalo:
             return nome
-    return "meio_de_tabela"
+    return zonas.get("_demais", "meio_de_tabela")
 
 
-def selo_da_posicao(serie: str, ano: int, posicao: int | None) -> str | None:
+def selo_da_posicao(serie: str, ano: int, posicao: int | None, fase: str | None = None) -> str | None:
     """Texto curto pronto para exibir (ex.: 'Libertadores (fase de grupos)')."""
-    zona = zona_da_posicao(serie, ano, posicao)
+    zona = zona_da_posicao(serie, ano, posicao, fase)
     return NOMES_ZONA.get(zona) if zona else None
 
 

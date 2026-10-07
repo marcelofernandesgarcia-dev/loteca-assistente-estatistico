@@ -631,8 +631,10 @@ else:
             forma_fora = resumo_curto(desempenho_no_ano(conexao, j["fora_id"], ano_atual))
             cbf_casa = classificacao_do_participante(conexao, j["casa_id"])
             cbf_fora = classificacao_do_participante(conexao, j["fora_id"])
-            selo_casa = selo_da_posicao(cbf_casa["serie"], cbf_casa["ano"], cbf_casa["posicao"]) if cbf_casa else None
-            selo_fora = selo_da_posicao(cbf_fora["serie"], cbf_fora["ano"], cbf_fora["posicao"]) if cbf_fora else None
+            selo_casa = (selo_da_posicao(cbf_casa["serie"], cbf_casa["ano"], cbf_casa["posicao"], cbf_casa.get("fase"))
+                         if cbf_casa else None)
+            selo_fora = (selo_da_posicao(cbf_fora["serie"], cbf_fora["ano"], cbf_fora["posicao"], cbf_fora.get("fase"))
+                         if cbf_fora else None)
             extra_casa = (f" · {resumo_curto_cbf(cbf_casa)}" if cbf_casa else "") + (f" · zona: {selo_casa}" if selo_casa else "")
             extra_fora = (f" · {resumo_curto_cbf(cbf_fora)}" if cbf_fora else "") + (f" · zona: {selo_fora}" if selo_fora else "")
             st.markdown(
