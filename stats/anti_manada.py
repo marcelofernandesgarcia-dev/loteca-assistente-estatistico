@@ -18,6 +18,8 @@ fica fora: o resultado não saiu do jogo), com arrecadação informada e ganhado
 
 Isto descreve o passado; não diz o que vai acontecer num concurso futuro nem recomenda marcar zebra.
 """
+import math
+
 import numpy as np
 
 import config
@@ -158,6 +160,33 @@ def correlacao_simples(x: list[float], y: list[float]) -> float | None:
     if rx.std() == 0 or ry.std() == 0:
         return None
     return float(np.corrcoef(rx, ry)[0, 1])
+
+
+def dificuldade_prevista(registros: list[dict]) -> dict[int, float]:
+    """Item C5 do plano v2 (07/10/2026): quão difícil o app achava o concurso ANTES do prazo. Soma, nos 14 jogos,
+    de −ln(chance do favorito) com a previsão do app sem olhar o futuro (`stats.calibracao.carregar_registros`).
+    Maior = mais jogos sem favorito claro. Só concursos com os 14 jogos previstos."""
+    por_concurso: dict[int, list[float]] = {}
+    for r in registros:
+        por_concurso.setdefault(r["concurso"], []).append(-math.log(max(max(r["p"].values()), 1e-9) / 100.0))
+    return {numero: sum(valores) for numero, valores in por_concurso.items() if len(valores) == 14}
+
+
+def testar_dificuldade_prevista(concursos: list[dict], dificuldade: dict[int, float]) -> dict:
+    """A dificuldade prevista antes do prazo acompanha os ganhadores de 14 por milhão? Mesma correlação
+    estratificada por ano do Q7. Esperado, se for previsível: correlação negativa (mais difícil, menos ganhadores)."""
+    usados = [c for c in concursos if c["numero"] in dificuldade]
+    r = correlacao_estratificada(
+        [dificuldade[c["numero"]] for c in usados], [c["ganhadores_por_milhao"] for c in usados], [c["ano"] for c in usados],
+        config.Q7_PERMUTACOES, config.Q7_REPETICOES_BOOTSTRAP, config.Q7_SEMENTE + 50, config.Q7_CONCURSOS_MINIMOS_POR_ANO,
+    )
+    if r["p"] is None:
+        conclusao = "amostra insuficiente"
+    elif r["p"] < config.ASSOCIACAO_NIVEL_SIGNIFICANCIA:
+        conclusao = "associação detectada (" + ("positiva" if r["rho"] > 0 else "negativa") + ")"
+    else:
+        conclusao = "sem diferença perceptível"
+    return {**r, "conclusao": conclusao}
 
 
 def estudar(concursos: list[dict]) -> list[dict]:

@@ -76,6 +76,22 @@ def test_sem_nenhum_concurso_nao_quebra(conexao):
     assert [r["conclusao"] for r in resultados] == ["amostra insuficiente"] * 3
 
 
+def test_dificuldade_prevista_soma_a_surpresa_do_favorito_so_em_concurso_completo():
+    # Item C5 do plano v2: dificuldade que o app enxergava antes do prazo.
+    registros = [{"concurso": 1, "p": {"1": 50.0, "X": 30.0, "2": 20.0}} for _ in range(14)]
+    registros += [{"concurso": 2, "p": {"1": 90.0, "X": 5.0, "2": 5.0}} for _ in range(13)]  # incompleto
+    dificuldade = anti_manada.dificuldade_prevista(registros)
+    assert list(dificuldade) == [1] and dificuldade[1] == pytest.approx(-14 * np.log(0.5))
+
+
+def test_dificuldade_prevista_que_acompanha_os_ganhadores_e_detectada(monkeypatch):
+    monkeypatch.setattr(config, "Q7_PERMUTACOES", 500)
+    monkeypatch.setattr(config, "Q7_REPETICOES_BOOTSTRAP", 200)
+    concursos = [{"numero": n, "ano": 2020 + n % 3, "ganhadores_por_milhao": 100.0 / n} for n in range(1, 61)]
+    r = anti_manada.testar_dificuldade_prevista(concursos, {n: float(n) for n in range(1, 61)})
+    assert r["rho"] < -0.9 and r["conclusao"] == "associação detectada (negativa)"
+
+
 def test_postos_medios_com_empates():
     assert list(anti_manada.postos_medios(np.array([10.0, 20.0, 20.0, 30.0]))) == [1.0, 2.5, 2.5, 4.0]
 
