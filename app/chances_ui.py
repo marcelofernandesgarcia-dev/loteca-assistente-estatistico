@@ -231,10 +231,10 @@ def percentuais_atuais_do_concurso(conexao, numero_concurso: int) -> tuple[list[
     """(jogos do concurso na ordem, percentual final de cada um) com os números de hoje: calibrados e com o ajuste das notícias."""
     jogos = [
         dict(linha) for linha in conexao.execute(
-            "SELECT j.id, j.num_jogo, j.casa_id, j.fora_id, pc.nome AS casa, pf.nome AS fora "
+            "SELECT j.id, j.num_jogo, j.casa_id, j.fora_id, j.data_jogo, pc.nome AS casa, pf.nome AS fora "
             "FROM jogos j JOIN participantes pc ON pc.id = j.casa_id JOIN participantes pf ON pf.id = j.fora_id "
             "WHERE j.concurso_numero = ? ORDER BY j.num_jogo", (numero_concurso,),
         )
     ]
     ajustes = ajustes_do_concurso(conexao, numero_concurso)
-    return jogos, [percentuais_do_jogo(conexao, j["casa_id"], j["fora_id"], ajustes)["final"] for j in jogos]
+    return jogos, [percentuais_do_jogo(conexao, j["casa_id"], j["fora_id"], ajustes, j["data_jogo"])["final"] for j in jogos]

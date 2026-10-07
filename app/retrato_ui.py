@@ -9,6 +9,7 @@ NOME_ORIGEM = {
     "poisson": "histórico da Loteca (Poisson)",
     "elo_selecoes": "Elo das seleções",
     "frequencia_global": "frequência geral (sem base própria)",
+    "retrospecto_cbf": "temporada da CBF",
 }
 
 

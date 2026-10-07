@@ -42,7 +42,8 @@ def montar_relatorio(resumo: dict | None, funil: dict) -> str:
     linhas = [
         f"# B2 nos jogos da Loteca ({dt.date.today():%d/%m/%Y})",
         "",
-        "> Este teste só mede. Nenhum percentual exibido no app foi alterado, e trocar o modelo exige decisão do usuário.",
+        "> Este teste só mede. Desde 07/10/2026 o app usa o retrospecto da CBF nos jogos entre clubes da mesma série A ou B "
+        "(decisão do usuário, com este teste como base); `LOTECA_MODELO_CLUBES=historico` volta ao modelo anterior.",
         "",
         "## Pergunta",
         "O teste B2 anterior usou os jogos da CBF. Aqui o mesmo método é aplicado aos jogos que de fato entram nos concursos da Loteca: "

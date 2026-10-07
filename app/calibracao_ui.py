@@ -23,6 +23,8 @@ def frase_da_correcao(calibracao: dict) -> str:
     if calibracao["aplicada"]:
         return f"corrigido (expoente {_virgula(calibracao['expoente'])}, mistura {_virgula(calibracao['mistura'])})"
     motivo = calibracao["motivo"]
+    if motivo == "origem não corrigida" and calibracao.get("origem") == "retrospecto_cbf":
+        return "sem correção (o modelo da temporada já sai calibrado; a correção piorou o teste)"
     if motivo == "origem não corrigida":
         return "sem correção (o Elo das seleções já está calibrado)"
     if motivo == "interruptor desligado":
@@ -45,11 +47,13 @@ def linhas_calibracao(jogos: list[dict], calculos: dict[int, dict]) -> list[list
             _tres(c["historico"]),
             _tres(c["final"]),
             html.escape(frase_da_correcao(cal)),
+            _tres(c["anterior"]) if c.get("anterior") else "-",
         ])
     return linhas
 
 
-CABECALHOS = ["Jogo", "Origem do percentual", "Do modelo (1 / X / 2)", "Base do app (corrigida)", "Final (com notícias)", "Correção"]
+CABECALHOS = ["Jogo", "Origem do percentual", "Do modelo (1 / X / 2)", "Base do app (corrigida)", "Final (com notícias)",
+              "Correção", "Modelo anterior, para comparar"]
 
 
 def resumo_do_concurso(calculos: dict[int, dict]) -> str:
@@ -80,4 +84,10 @@ def mostrar_calibracao(jogos: list[dict], calculos: dict[int, dict]) -> None:
         st.caption(
             "A correção achata os percentuais exagerados e mistura uma parte da frequência histórica geral de 1/X/2. Os parâmetros "
             "são refeitos a cada concurso apurado, só com o passado. O ajuste de notícias entra depois, sobre a base corrigida."
+        )
+        st.caption(
+            "Jogos entre clubes da mesma série A ou B usam o modelo da temporada da CBF (pontos por jogo dos dois times "
+            "até o dia), adotado em 07/10/2026: em 1.676 jogos da Loteca testados sem olhar o futuro, errou menos que o "
+            "modelo anterior (perda logarítmica 1,0323 contra 1,0593). A última coluna mostra o que o modelo anterior daria, "
+            "para comparar. Para voltar ao anterior: variável de ambiente LOTECA_MODELO_CLUBES=historico."
         )

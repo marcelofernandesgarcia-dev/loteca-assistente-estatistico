@@ -5,8 +5,11 @@ olhar o futuro (walk-forward), e compara com referências simples.
 Sem `pandas` de propósito -- só HTML/markdown -- para a página funcionar
 mesmo se o `pandas` estiver bloqueado (ver docs/resposta-ao-parecer-29-09-2026.md,
 seção 4: Smart App Control do Windows bloqueando a DLL nativa do pandas)."""
+import logging
 import sys
 from pathlib import Path
+
+import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
@@ -17,6 +20,8 @@ import config
 from stats.backtest import executar_backtest
 from stats.premiacao import reais
 from stats.selecoes import backtest_selecoes
+
+logger = logging.getLogger(__name__)
 
 st.title("Confiabilidade do modelo")
 mostrar_aviso_responsabilidade()
@@ -146,15 +151,63 @@ else:
         "de jogos em campo não-neutro dos últimos anos. Os pesos do Elo são valores de convenção, não ajustados aos jogos da Loteca."
     )
 
+st.subheader("Modelo da temporada da CBF (clubes das Séries A e B)")
+st.caption(
+    "Desde 07/10/2026, os jogos entre clubes da mesma série A ou B usam o modelo da temporada da CBF (pontos por jogo "
+    "dos dois times até o dia). A medição abaixo refaz, com o banco de hoje, o teste que justificou a troca: os mesmos "
+    "jogos da Loteca, sem olhar o futuro, nos quatro modelos. Leva cerca de 1 minuto."
+)
+if st.button("Medir agora"):
+    from stats import backtest_loteca
+
+    conexao_medicao = obter_conexao()
+    try:
+        with st.spinner("Medindo..."):
+            st.session_state["medicao_modelo_cbf"] = backtest_loteca.medir_no_banco(conexao_medicao)
+    except (ValueError, ArithmeticError, np.linalg.LinAlgError):
+        logger.exception("Medição do modelo da temporada falhou")
+        st.error("A medição não pôde ser concluída com os dados atuais. Tente de novo depois da próxima atualização.")
+    finally:
+        conexao_medicao.close()
+medicao = st.session_state.get("medicao_modelo_cbf")
+if medicao:
+    resumo_cbf, funil_cbf, por_serie = medicao
+    if resumo_cbf is None:
+        st.info("Ainda não há jogos da Loteca entre clubes da mesma série com temporada suficiente para medir.")
+    else:
+        from stats.backtest_loteca import DESCRICAO, MODELOS
+
+        st.markdown(
+            "| Modelo | Perda log (menor é melhor) | Acerto do favorito |\n|---|---|---|\n"
+            + "".join(
+                f"| {DESCRICAO[m]} | {resumo_cbf['metricas'][m]['perda_log']:.4f} | {resumo_cbf['metricas'][m]['acuracia']:.1f}% |\n"
+                .replace(".", ",") for m in MODELOS
+            )
+        )
+        nomes_serie = config.CBF_NOMES_SERIE
+        st.markdown(
+            "| Série | Jogos | Frequência simples | Modelo anterior | Temporada da CBF (em uso) |\n|---|---|---|---|---|\n"
+            + "".join(
+                f"| {nomes_serie.get(s, s)} | {v['n']} | {v['referencia']:.4f} | {v['atual']:.4f} | {v['retrospecto']:.4f} |\n"
+                .replace(".", ",") for s, v in por_serie.items()
+            )
+        )
+        comparacao = next(c for c in resumo_cbf["comparacoes"] if c["modelo"] == "retrospecto" and c["contra"] == "atual")
+        valor_q = f"{comparacao['q']:.3f}".replace(".", ",")
+        st.caption(
+            f"{resumo_cbf['n']} jogos medidos. Temporada da CBF contra o modelo anterior: {comparacao['conclusao']} "
+            f"(valor q {valor_q})."
+        )
+
 st.subheader("O que isso quer dizer")
 if veredito == "pior que a referência":
     st.warning(
         "Nos jogos que envolvem clubes, o percentual calculado (Poisson sobre o histórico) **não supera** simplesmente usar a frequência "
         "histórica de 1/X/2 (47%/26%/27%) -- e é mais confiante do que deveria nas faixas altas (veja a calibração "
         "acima). Isso não muda o objetivo do app (organizar a análise), mas significa que os percentuais de hoje "
-        "devem ser lidos como **estimativa exploratória**, não como vantagem estatística comprovada. Antes de "
-        "adotar o modelo por competição (que usa os jogos completos da CBF) como padrão, ele precisa passar por "
-        "esta mesma medição e superar esta referência."
+        "devem ser lidos como **estimativa exploratória**, não como vantagem estatística comprovada. Nos jogos "
+        "entre clubes da mesma série A ou B, o app já usa o modelo da temporada da CBF, que passou nessa medição "
+        "(seção acima); os demais jogos de clubes seguem com este modelo."
     )
 else:
     st.success("O percentual calculado supera a frequência histórica simples nesta medição.")

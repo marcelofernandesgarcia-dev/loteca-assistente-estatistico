@@ -65,7 +65,8 @@ def retrato_do_jogo(jogo: dict, calculo: dict, ajustes: dict[int, dict], cobertu
     return {
         "num_jogo": jogo["num_jogo"], "casa": jogo["casa"], "fora": jogo["fora"],
         "origem": calibracao["origem"],
-        "percentual": {"modelo": calculo["original"], "base": calculo["historico"], "final": calculo["final"]},
+        "percentual": {"modelo": calculo["original"], "base": calculo["historico"], "final": calculo["final"],
+                       "anterior": calculo.get("anterior")},
         "calibracao": {k: calibracao[k] for k in ("aplicada", "expoente", "mistura", "motivo")},
         "noticias": {"casa": _noticia_do_lado(ajustes.get(jogo["casa_id"])),
                      "fora": _noticia_do_lado(ajustes.get(jogo["fora_id"])),

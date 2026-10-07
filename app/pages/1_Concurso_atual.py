@@ -35,7 +35,6 @@ from stats.ano_em_curso import frase_do_lado
 from stats.cobertura import cobertura_do_concurso
 from stats.retrato import gravar_retrato, retrato_do_jogo, retrato_geral
 from stats.painel import participantes_do_concurso
-from stats.percentual import origem_do_percentual
 from stats.prazo import formatar_restante, situacao_do_prazo
 from stats.premiacao import reais
 from stats.temporada import desempenho_no_ano, resumo_curto
@@ -305,8 +304,9 @@ else:
 
     st.info(
         "**2. Percentual** -- para cada jogo do concurso a jogar, a chance de vitória do mandante, empate ou "
-        "vitória do visitante, calculada a partir do histórico de gols dos dois times já importado (método "
-        "Poisson, sem odds de mercado -- ver `stats/percentual.py`). Quando a varredura semanal de notícias já "
+        "vitória do visitante, sem odds de mercado. Clubes da mesma série A ou B: modelo da temporada da CBF "
+        "(pontos por jogo até o dia). Duas seleções: Elo. Demais jogos: histórico de gols na Loteca (Poisson). "
+        "A origem de cada jogo está em 'Ver como cada percentual foi corrigido'. Quando a varredura semanal de notícias já "
         "rodou para este concurso, o ajuste (limitado a "
         f"{config.AJUSTE_EXTERNO_TETO_PONTOS:.0f} pontos) já está aplicado: o número é o percentual final e o valor entre "
         "parênteses mostra quantos pontos vieram das notícias. Sem varredura, é só o histórico."
@@ -317,7 +317,7 @@ else:
     ajustes = ajustes_do_concurso(conexao, numero_vigente)
     calculos = {}
     for j in jogos_vigente:
-        calculo = percentuais_do_jogo(conexao, j["casa_id"], j["fora_id"], ajustes)
+        calculo = percentuais_do_jogo(conexao, j["casa_id"], j["fora_id"], ajustes, j["data_jogo"])
         calculos[j["id"]] = calculo
         pct, historico = calculo["final"], calculo["historico"]
         maior = max(pct, key=pct.get)
@@ -365,10 +365,7 @@ else:
     resumo_ano_concurso = resumo_do_ano(conexao, jogos_do_concurso_ano, ano_atual)
     # Complexidade de cada jogo (estudo E1-E4, aprovado em 30/09/2026): no teste com 16.973 jogos o favorito
     # acertou 49,7% nos de complexidade baixa, 44,0% nos de média e 37,2% nos de alta.
-    sem_base_por_jogo = {
-        j["id"]: origem_do_percentual(conexao, j["casa_id"], j["fora_id"])["metodo"] == "frequencia_global"
-        for j in jogos_vigente
-    }
+    sem_base_por_jogo = {j["id"]: calculos[j["id"]]["origem"] == "frequencia_global" for j in jogos_vigente}
     complexidade_por_jogo = complexidade_da_tela(
         [{"num_jogo": j["num_jogo"], "pct": dados_por_jogo[j["id"]]["pct"], "sem_base_propria": sem_base_por_jogo[j["id"]]}
          for j in jogos_vigente],

@@ -150,6 +150,25 @@ def montar_jogos(conexao, previsoes_atual: dict[int, dict], pesos: dict[int, np.
     return jogos, funil
 
 
+def perda_por_serie(jogos: list[dict]) -> dict[str, dict]:
+    """{serie: {'n', modelo: perda logarítmica}} -- o desempenho separado por competição (item B2 do plano v2)."""
+    saida = {}
+    for serie in sorted({o["serie"] for o in jogos}):
+        da_serie = [o for o in jogos if o["serie"] == serie]
+        saida[serie] = {"n": len(da_serie), **{
+            m: backtest.metricas([(o["previsoes"][m], o["resultado"]) for o in da_serie])["perda_log"] for m in MODELOS
+        }}
+    return saida
+
+
+def medir_no_banco(conexao) -> tuple[dict | None, dict, dict]:
+    """(resumo, funil, perda por série) do estudo nos jogos da Loteca, com o banco de agora. Só leitura; cerca
+    de 1 minuto no banco real."""
+    jogos, funil = montar_jogos(conexao, backtest.prever_walk_forward(backtest.carregar_jogos(conexao)),
+                                pesos_por_ano(b2.carregar_amostra(conexao)))
+    return resumir(jogos), funil, perda_por_serie(jogos)
+
+
 def resumir(jogos: list[dict]) -> dict:
     """Métricas por modelo, comparações pareadas (ganho positivo = o primeiro modelo é melhor) com valor q
     entre as seis comparações, e a perda logarítmica de cada modelo por ano (só descritivo). None sem jogos."""

@@ -178,10 +178,10 @@ def _recalcular_percentuais_do_concurso(conexao, numero_concurso: int, agora: st
     participante e percentual final já normalizado para somar 100%."""
     ajustes = ajustes_do_concurso(conexao, numero_concurso)
     jogos = conexao.execute(
-        "SELECT id, casa_id, fora_id FROM jogos WHERE concurso_numero = ?", (numero_concurso,)
+        "SELECT id, casa_id, fora_id, data_jogo FROM jogos WHERE concurso_numero = ?", (numero_concurso,)
     ).fetchall()
     for jogo in jogos:
-        calculado = percentuais_do_jogo(conexao, jogo["casa_id"], jogo["fora_id"], ajustes)
+        calculado = percentuais_do_jogo(conexao, jogo["casa_id"], jogo["fora_id"], ajustes, jogo["data_jogo"])
         for participante_id, chave in ((jogo["casa_id"], "1"), (jogo["fora_id"], "2")):
             ajuste = ajustes.get(participante_id, {}).get("ajuste", 0.0)
             hist = calculado["historico"][chave]

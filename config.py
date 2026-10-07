@@ -389,6 +389,9 @@ SELECOES_TOLERANCIA_DIAS = 3  # dias de diferença aceitos ao casar um jogo da L
 # anterior, só com os jogos da Loteca). Mudar o padrão exige o teste mostrar ganho; para voltar
 # ao anterior: variável de ambiente LOTECA_MODELO_SELECOES=historico.
 MODELO_SELECOES = os.environ.get("LOTECA_MODELO_SELECOES", "elo")
+# Clubes das Séries A e B na mesma série: modelo da temporada da CBF (stats/modelo_cbf.py), adotado pelo
+# usuário em 07/10/2026 depois do estudo B2. "historico" volta ao modelo anterior (Poisson da Loteca).
+MODELO_CLUBES = os.environ.get("LOTECA_MODELO_CLUBES", "retrospecto_cbf")
 
 # Ficha do time: abaixo disso, a amostra é sinalizada como pequena (baixa confiança)
 FICHA_AMOSTRA_PEQUENA = 10

@@ -347,6 +347,7 @@ ORIGEM_TEXTO = {
     "poisson": "Histórico dos clubes",
     "frequencia_global": "Frequência simples (poucos jogos)",
     "elo_selecoes": "Elo das seleções",
+    "retrospecto_cbf": "Temporada da CBF",
 }
 
 
