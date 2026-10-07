@@ -26,14 +26,17 @@ def concurso_alvo_da_semana(conexao) -> dict | None:
 
     Janela de 0 a N dias, e não "exatamente N": com data exata, um dia sem o
     computador ligado deixava o concurso inteiro sem varredura, sem aviso.
-    O concurso que já tem linha em `fatores_externos` não é varrido de novo.
+    O concurso já varrido só é lido de novo no dia do prazo, uma vez ("segunda" leitura), se a
+    leitura anterior foi em outro dia; a percentual usa a leitura mais recente de cada time.
     """
     hoje = dt.date.today()
     linhas = conexao.execute(
         """
-        SELECT c.numero, c.data_limite_aposta FROM concursos c
+        SELECT c.numero, c.data_limite_aposta,
+               (SELECT MAX(substr(f.coletado_em, 1, 10)) FROM fatores_externos f WHERE f.concurso_numero = c.numero) AS ultima,
+               (SELECT COUNT(DISTINCT substr(f.coletado_em, 1, 10)) FROM fatores_externos f WHERE f.concurso_numero = c.numero) AS leituras
+        FROM concursos c
         WHERE c.data_limite_aposta IS NOT NULL
-          AND NOT EXISTS (SELECT 1 FROM fatores_externos f WHERE f.concurso_numero = c.numero)
         ORDER BY c.data_limite_aposta
         """
     ).fetchall()
@@ -43,8 +46,14 @@ def concurso_alvo_da_semana(conexao) -> dict | None:
         except (TypeError, ValueError):
             logger.warning("Concurso %s com data_limite_aposta inválida; ignorado na varredura.", linha["numero"])
             continue
-        if 0 <= (prazo - hoje).days <= config.VARREDURA_DIAS_ANTES_DO_PRAZO:
-            return {"numero": linha["numero"], "data_limite_aposta": linha["data_limite_aposta"]}
+        dias = (prazo - hoje).days
+        if not linha["leituras"] and 0 <= dias <= config.VARREDURA_DIAS_ANTES_DO_PRAZO:
+            return {"numero": linha["numero"], "data_limite_aposta": linha["data_limite_aposta"], "leitura": "primeira"}
+        # Segunda leitura no dia do prazo (Fase 1 do plano de 07/10/2026): a primeira é feita até dois dias antes
+        # e não pega desfalque confirmado nem escalação. Só uma vez, e só se a última leitura foi em outro dia.
+        if (dias == 0 and linha["leituras"] and linha["leituras"] < config.VARREDURA_LEITURAS_POR_CONCURSO
+                and linha["ultima"] < hoje.isoformat()):
+            return {"numero": linha["numero"], "data_limite_aposta": linha["data_limite_aposta"], "leitura": "segunda"}
     return None
 
 

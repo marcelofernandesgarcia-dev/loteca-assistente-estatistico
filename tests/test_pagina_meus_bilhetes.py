@@ -49,6 +49,8 @@ def test_bilhete_apurado_pode_ser_conferido_e_mostra_acerto(conexao_pronta):
     at = AppTest.from_file(str(PAGINA), default_timeout=60).run()
     assert not at.exception, [e.value for e in at.exception]
     assert any("1" in m.value for m in at.metric)  # "Bilhetes salvos": 1
+    valores = {m.label: m.value for m in at.metric}
+    assert valores["Total gasto"] == "R$ 2,00" and valores["Saldo"] == "R$ -2,00"  # vírgula decimal (07/10/2026)
     at.button[0].click().run()  # "Conferir"
     assert not at.exception, [e.value for e in at.exception]
     assert any("1 de 1 acertos" in w.value for w in at.markdown)

@@ -74,7 +74,8 @@ def _atualizar_noticias(conexao) -> None:
     conexao.commit()
     db.registrar_execucao(conexao, "noticias", sucesso=True, quantidade=len(resultados))
     conexao.commit()
-    logger.info("Notícias: concurso %s, %s participantes.", alvo["numero"], len(resultados))
+    logger.info("Notícias: concurso %s, %s leitura, %s participantes.", alvo["numero"], alvo.get("leitura", "primeira"),
+                len(resultados))
 
 
 def main() -> int:

@@ -49,6 +49,39 @@ def test_concurso_ja_varrido_nao_repete(conexao):
     assert concurso_alvo_da_semana(conexao) is None
 
 
+def _leitura(conexao, numero, quando: dt.date):
+    conexao.execute("INSERT INTO fatores_externos (participante_id, concurso_numero, coletado_em) VALUES (1, ?, ?)",
+                    (numero, f"{quando.isoformat()}T09:00:00"))
+
+
+def test_primeira_leitura_e_marcada_como_tal(conexao):
+    _concurso(conexao, 1274, 2)
+    assert concurso_alvo_da_semana(conexao)["leitura"] == "primeira"
+
+
+def test_segunda_leitura_no_dia_do_prazo_se_a_primeira_foi_antes(conexao):
+    _concurso(conexao, 1274, 0)
+    _leitura(conexao, 1274, dt.date.today() - dt.timedelta(days=2))
+    alvo = concurso_alvo_da_semana(conexao)
+    assert alvo["numero"] == 1274 and alvo["leitura"] == "segunda"
+
+
+def test_sem_segunda_leitura_se_ja_leu_hoje_ou_ja_fez_as_duas(conexao):
+    _concurso(conexao, 1274, 0)
+    _leitura(conexao, 1274, dt.date.today())
+    assert concurso_alvo_da_semana(conexao) is None  # a única leitura já foi hoje
+    conexao.execute("DELETE FROM fatores_externos")
+    _leitura(conexao, 1274, dt.date.today() - dt.timedelta(days=2))
+    _leitura(conexao, 1274, dt.date.today() - dt.timedelta(days=1))
+    assert concurso_alvo_da_semana(conexao) is None  # já fez as duas leituras
+
+
+def test_sem_segunda_leitura_antes_do_dia_do_prazo(conexao):
+    _concurso(conexao, 1274, 1)
+    _leitura(conexao, 1274, dt.date.today() - dt.timedelta(days=1))
+    assert concurso_alvo_da_semana(conexao) is None
+
+
 def test_data_invalida_e_ignorada_sem_derrubar_a_varredura(conexao, caplog):
     conexao.execute("INSERT INTO concursos (numero, data_limite_aposta) VALUES (1300, '0-invalida')")  # ordena antes das datas ISO
     _concurso(conexao, 1273, 1)

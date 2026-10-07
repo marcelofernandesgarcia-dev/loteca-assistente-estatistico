@@ -105,6 +105,9 @@ NOMES_SELECOES_NACIONAIS = {
     "EMIRADOS ARABES",
 }
 VARREDURA_DIAS_ANTES_DO_PRAZO = int(os.environ.get("LOTECA_VARREDURA_DIAS_ANTES", "2"))
+# Leituras de notícia por concurso: a primeira até 2 dias antes e a segunda no dia do prazo (desfalque
+# confirmado e escalação; plano aprovado em 07/10/2026). A tarefa agendada roda às 08h e o prazo é às 15h.
+VARREDURA_LEITURAS_POR_CONCURSO = int(os.environ.get("LOTECA_VARREDURA_LEITURAS", "2"))
 
 # Veículos prioritários do monitoramento de notícias (lista indicada pelo
 # usuário em 27/09/2026). Só os que têm site de notícias entram; TV

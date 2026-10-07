@@ -15,6 +15,7 @@ from util import mostrar_aviso_responsabilidade, obter_conexao
 
 import config
 from stats.backtest import executar_backtest
+from stats.premiacao import reais
 from stats.selecoes import backtest_selecoes
 
 st.title("Confiabilidade do modelo")
@@ -92,7 +93,7 @@ else:
     d1, d2, d3 = st.columns(3)
     d1.metric("Sempre mandante", f"{media['sempre_mandante']:.2f} / 14")
     d2.metric("Favorito do modelo", f"{media['favorito_do_modelo']:.2f} / 14")
-    d3.metric("Sugestão do app", f"{media['com_cobertura']:.2f} / 14", help=f"Custo médio: R$ {bilhetes['custo_medio_com_cobertura']:.2f}")
+    d3.metric("Sugestão do app", f"{media['com_cobertura']:.2f} / 14", help=f"Custo médio: {reais(bilhetes['custo_medio_com_cobertura'])}")
     p10, p11 = bilhetes["pelo_menos_10"], bilhetes["pelo_menos_11"]
     st.write(
         f"Concursos com **10 ou mais acertos**: sempre mandante {p10['sempre_mandante']:.1f}%, favorito do modelo "

@@ -33,6 +33,7 @@ from stats.bilhetes_salvos import salvar_bilhete
 from stats.painel import participantes_do_concurso
 from stats.percentual import origem_do_percentual
 from stats.prazo import formatar_restante, situacao_do_prazo
+from stats.premiacao import reais
 from stats.temporada import desempenho_no_ano, resumo_curto
 from stats.versoes_palpite import (
     LimiteDeVersoes,
@@ -407,7 +408,7 @@ else:
     st.caption(
         f"A sugestão do app é aposta simples em todos os jogos, com um único {tipo_multiplo} no jogo "
         f"{jogo_multiplo['num_jogo']} ({jogo_multiplo['casa']} x {jogo_multiplo['fora']}), o mais incerto pelo "
-        f"histórico -- {proposta['apostas']} apostas, R$ {proposta['custo']:.2f}. É uma estimativa: não garante acerto."
+        f"histórico -- {proposta['apostas']} apostas, {reais(proposta['custo'])}. É uma estimativa: não garante acerto."
     )
 
     # Cada jogo é um bloco: times em cima, os 3 quadrados embaixo. Os blocos
@@ -439,7 +440,7 @@ else:
     else:
         st.info(
             f"{volante['marcados']} de {volante['total']} jogos marcados · {volante['duplos']} duplo(s) · "
-            f"{volante['triplos']} triplo(s) · **{volante['apostas']} aposta(s), R$ {volante['custo']:.2f}** "
+            f"{volante['triplos']} triplo(s) · **{volante['apostas']} aposta(s), {reais(volante['custo'])}** "
             "(ver página 'Fechamento de bolão' para organizar como Bolão CAIXA)."
         )
     if volante["apostas"] > config.BILHETE_MAX_APOSTAS:
@@ -527,7 +528,7 @@ else:
                 esperados = f"{v['acertos_esperados']:.1f}".replace(".", ",") if v["acertos_esperados"] is not None else "-"
                 linhas_versoes.append([
                     f"{v['numero_versao']}", v["criado_em"][11:16],
-                    f"{v['apostas']} (R$ {v['custo']:.2f})".replace(".", ","), chance_todos, chance_quase, esperados,
+                    f"{v['apostas']} ({reais(v['custo'])})", chance_todos, chance_quase, esperados,
                     f"{v['resumo'].get('duplos', 0)} / {v['resumo'].get('triplos', 0)}",
                     str(v["resumo"].get("zebras", "-")),
                     f"sim (nº {v['bilhete_id']})" if v["bilhete_id"] else "não",
@@ -619,7 +620,7 @@ else:
                 aviso_versao = " (Limite de versões do concurso atingido: o bilhete foi salvo sem versão ligada.)"
             conexao.commit()
             st.success(
-                f"Bilhete salvo (nº {bilhete_id}) -- {volante['apostas']} apostas, R$ {volante['custo']:.2f}."
+                f"Bilhete salvo (nº {bilhete_id}) -- {volante['apostas']} apostas, {reais(volante['custo'])}."
                 f"{aviso_versao} Veja e confira depois em 'Meus bilhetes'. Fica só neste computador."
             )
     st.caption(

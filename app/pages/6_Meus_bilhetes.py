@@ -29,6 +29,7 @@ from stats.bilhetes_salvos import (
     registrar_premio,
     resumo_financeiro,
 )
+from stats.premiacao import reais
 from stats.versoes_palpite import (
     agregar_aprendizado,
     aprendizado_de_todos_os_concursos,
@@ -161,9 +162,9 @@ if not bilhetes:
 resumo = resumo_financeiro(conexao)
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Bilhetes salvos", resumo["bilhetes"])
-c2.metric("Total gasto", f"R$ {resumo['gasto_total']:.2f}")
-c3.metric("Total em prêmios (informado por você)", f"R$ {resumo['premio_total']:.2f}")
-c4.metric("Saldo", f"R$ {resumo['saldo']:.2f}", delta=None)
+c2.metric("Total gasto", reais(resumo["gasto_total"]))
+c3.metric("Total em prêmios (informado por você)", reais(resumo["premio_total"]))
+c4.metric("Saldo", reais(resumo["saldo"]), delta=None)
 st.caption(
     "O prêmio só entra aqui se você informar (abaixo, em cada bilhete apurado) -- o app não consulta a CAIXA "
     "para saber se você ganhou."
@@ -242,7 +243,7 @@ for bilhete in bilhetes:
     ).fetchall()
     total_jogos_bilhete = len(linhas_bilhete)
     jogos_apurados_antes = pode_conferir(linhas_bilhete)
-    titulo = f"Concurso {bilhete['concurso_numero']} · salvo em {formatar_data_br(bilhete['criado_em'][:10])} · {bilhete['apostas']} apostas · R$ {bilhete['custo']:.2f}"
+    titulo = f"Concurso {bilhete['concurso_numero']} · salvo em {formatar_data_br(bilhete['criado_em'][:10])} · {bilhete['apostas']} apostas · {reais(bilhete['custo'])}"
     if bilhete["conferido_em"] is not None:
         titulo += f" · {bilhete['acertos']}/{total_jogos_bilhete} acertos"
     with st.expander(titulo):
