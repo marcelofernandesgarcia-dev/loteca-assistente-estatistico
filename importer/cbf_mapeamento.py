@@ -54,7 +54,8 @@ def parear(conexao, equivalentes: dict[int, list[int]] | None = None) -> dict:
     for clube in clubes:
         alvo = tokens(clube["nome"])
         brutos = set()
-        if not clube["nome"].upper().startswith(config.LOTECA_PREFIXOS_OUTRA_CATEGORIA):
+        excluido = (clube["nome"].strip().upper(), clube["pais_ou_uf"]) in config.CBF_PAREAMENTO_EXCLUIDO
+        if not excluido and not clube["nome"].upper().startswith(config.LOTECA_PREFIXOS_OUTRA_CATEGORIA):
             brutos = {
                 t["cod_time"] for t in times_cbf
                 if t["uf"] == clube["pais_ou_uf"] and _compativeis(alvo, tokens(t["nome"]))

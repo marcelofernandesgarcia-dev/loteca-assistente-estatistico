@@ -405,6 +405,16 @@ def test_time_de_outra_categoria_nao_pareia_e_par_antigo_sai(conexao):
     assert resultado["pareados"] == 0 and resultado["removidos"] == ["F FERROVIARIA/SP"]
 
 
+def test_participante_excluido_pelo_usuario_nao_pareia_e_par_antigo_sai(conexao):
+    # "RECIFE/PE" retirado pelo usuário em 07/10/2026.
+    _cbf(conexao, 1, "Sport Recife", "PE")
+    recife = db.obter_ou_criar_participante(conexao, "RECIFE", "clube", "PE")
+    conexao.execute("INSERT INTO mapa_cbf_participante (participante_id, cod_time, metodo) VALUES (?, 1, 'uf+nome')",
+                    (recife,))
+    resultado = parear(conexao, equivalentes={})
+    assert resultado["pareados"] == 0 and resultado["removidos"] == ["RECIFE/PE"]
+
+
 def test_estrangeiro_e_selecao_nao_pareiam(conexao):
     _cbf(conexao, 1, "Barcelona", "SP")
     db.obter_ou_criar_participante(conexao, "BARCELONA", "clube", "ESP")

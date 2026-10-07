@@ -59,21 +59,31 @@ def test_primeira_leitura_e_marcada_como_tal(conexao):
     assert concurso_alvo_da_semana(conexao)["leitura"] == "primeira"
 
 
-def test_segunda_leitura_no_dia_do_prazo_se_a_primeira_foi_antes(conexao):
+AS_13H = dt.datetime.combine(dt.date.today(), dt.time(13, 5))
+AS_8H = dt.datetime.combine(dt.date.today(), dt.time(8, 0))
+
+
+def test_segunda_leitura_no_dia_do_prazo_a_partir_das_13h(conexao):
     _concurso(conexao, 1274, 0)
     _leitura(conexao, 1274, dt.date.today() - dt.timedelta(days=2))
-    alvo = concurso_alvo_da_semana(conexao)
+    assert concurso_alvo_da_semana(conexao, AS_8H) is None  # a tarefa das 8h não gasta a leitura final
+    alvo = concurso_alvo_da_semana(conexao, AS_13H)
     assert alvo["numero"] == 1274 and alvo["leitura"] == "segunda"
+
+
+def test_primeira_leitura_no_dia_do_prazo_nao_espera_as_13h(conexao):
+    _concurso(conexao, 1274, 0)
+    assert concurso_alvo_da_semana(conexao, AS_8H)["leitura"] == "primeira"
 
 
 def test_sem_segunda_leitura_se_ja_leu_hoje_ou_ja_fez_as_duas(conexao):
     _concurso(conexao, 1274, 0)
     _leitura(conexao, 1274, dt.date.today())
-    assert concurso_alvo_da_semana(conexao) is None  # a única leitura já foi hoje
+    assert concurso_alvo_da_semana(conexao, AS_13H) is None  # a única leitura já foi hoje
     conexao.execute("DELETE FROM fatores_externos")
     _leitura(conexao, 1274, dt.date.today() - dt.timedelta(days=2))
     _leitura(conexao, 1274, dt.date.today() - dt.timedelta(days=1))
-    assert concurso_alvo_da_semana(conexao) is None  # já fez as duas leituras
+    assert concurso_alvo_da_semana(conexao, AS_13H) is None  # já fez as duas leituras
 
 
 def test_sem_segunda_leitura_antes_do_dia_do_prazo(conexao):

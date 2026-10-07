@@ -79,6 +79,9 @@ CBF_TOKENS_IGNORADOS = {"SAF", "FC", "S", "A", "F", "DE", "DA", "DO", "EC", "CLU
 # (masculino profissional). "F ": todos os jogos com esse prefixo (concursos 624 a 627 e 682, 2014-2015) são
 # entre times com o mesmo prefixo -- uma categoria à parte, provavelmente feminina (conferido em 07/10/2026).
 LOTECA_PREFIXOS_OUTRA_CATEGORIA = ("F ",)
+# Participantes (nome, UF) que nunca pareiam, por decisão do usuário. "RECIFE/PE" (4 jogos até o concurso 106)
+# pareava com o Sport Recife sem confirmação; retirado em 07/10/2026.
+CBF_PAREAMENTO_EXCLUIDO = {("RECIFE", "PE")}
 
 # Regras de apuração (ver docs/manual-produtos-caixa-v21.md, item 10)
 # Concurso mais antigo confirmado na API é o nº 1 (18/02/2002).
@@ -124,6 +127,9 @@ VARREDURA_DIAS_ANTES_DO_PRAZO = int(os.environ.get("LOTECA_VARREDURA_DIAS_ANTES"
 # Leituras de notícia por concurso: a primeira até 2 dias antes e a segunda no dia do prazo (desfalque
 # confirmado e escalação; plano aprovado em 07/10/2026). A tarefa agendada roda às 08h e o prazo é às 15h.
 VARREDURA_LEITURAS_POR_CONCURSO = int(os.environ.get("LOTECA_VARREDURA_LEITURAS", "2"))
+# Hora a partir da qual a segunda leitura (a final) pode rodar no dia do prazo: decisão do usuário em 07/10/2026
+# (13h, duas horas antes do prazo das 15h). A tarefa das 8h deixa de fazê-la; a tarefa das 13h faz.
+VARREDURA_LEITURA_FINAL_HORA = int(os.environ.get("LOTECA_LEITURA_FINAL_HORA", "13"))
 # Versão das regras do filtro de notícias, gravada com cada manchete lida (noticias_lidas). Mudou alguma
 # barreira, palavra-chave ou peso? Atualize a data, para a medição separar as manchetes por versão.
 VARREDURA_VERSAO_REGRAS = "2026-10-07"

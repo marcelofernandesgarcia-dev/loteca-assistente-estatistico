@@ -136,6 +136,12 @@ Tarefa única que atualiza as três fontes (CAIXA, CBF e notícias) de uma vez, 
 schtasks /Create /SC DAILY /ST 08:00 /TN "Loteca - Atualizar Tudo" /TR "C:\Users\marce\Projetos\loteca-assistente-estatistico\.venv\Scripts\python.exe C:\Users\marce\Projetos\loteca-assistente-estatistico\scripts\atualizar_tudo.py"
 ```
 
+Leitura final de notícias (decisão do usuário em 07/10/2026; criada nesse dia): a mesma chamada às 13:00. No dia do prazo, a segunda leitura de notícias só roda a partir de `LOTECA_LEITURA_FINAL_HORA` (13h), duas horas antes do prazo das 15h; nos outros dias a chamada não repete o que já está em dia. Remover: `schtasks /Delete /TN "Loteca - Leitura final"`.
+
+```
+schtasks /Create /SC DAILY /ST 13:00 /TN "Loteca - Leitura final" /TR "C:\Users\marce\Projetos\loteca-assistente-estatistico\.venv\Scripts\python.exe C:\Users\marce\Projetos\loteca-assistente-estatistico\scripts\atualizar_tudo.py"
+```
+
 ## Escopo definido com o usuário (27/09/2026, revisado)
 
 - **Uso:** aplicativo de monitoramento e análise estatística — não é uma ferramenta de "palpite", e sim de orientação baseada em probabilidade e no histórico de cada participante (clube ou seleção nacional).

@@ -20,16 +20,19 @@ from externo.percentual_final import ajustes_do_concurso, percentuais_do_jogo
 logger = logging.getLogger(__name__)
 
 
-def concurso_alvo_da_semana(conexao) -> dict | None:
+def concurso_alvo_da_semana(conexao, agora: dt.datetime | None = None) -> dict | None:
     """Concurso ainda não varrido cujo prazo de aposta está a no máximo
     VARREDURA_DIAS_ANTES_DO_PRAZO dias de hoje (e não venceu).
 
     Janela de 0 a N dias, e não "exatamente N": com data exata, um dia sem o
     computador ligado deixava o concurso inteiro sem varredura, sem aviso.
     O concurso já varrido só é lido de novo no dia do prazo, uma vez ("segunda" leitura), se a
-    leitura anterior foi em outro dia; a percentual usa a leitura mais recente de cada time.
+    leitura anterior foi em outro dia e já passou de config.VARREDURA_LEITURA_FINAL_HORA (13h, decisão
+    do usuário em 07/10/2026: perto do prazo das 15h, para pegar escalação e desfalque confirmados).
+    A percentual usa a leitura mais recente de cada time.
     """
-    hoje = dt.date.today()
+    agora = agora or dt.datetime.now()
+    hoje = agora.date()
     linhas = conexao.execute(
         """
         SELECT c.numero, c.data_limite_aposta,
@@ -52,7 +55,7 @@ def concurso_alvo_da_semana(conexao) -> dict | None:
         # Segunda leitura no dia do prazo (Fase 1 do plano de 07/10/2026): a primeira é feita até dois dias antes
         # e não pega desfalque confirmado nem escalação. Só uma vez, e só se a última leitura foi em outro dia.
         if (dias == 0 and linha["leituras"] and linha["leituras"] < config.VARREDURA_LEITURAS_POR_CONCURSO
-                and linha["ultima"] < hoje.isoformat()):
+                and linha["ultima"] < hoje.isoformat() and agora.hour >= config.VARREDURA_LEITURA_FINAL_HORA):
             return {"numero": linha["numero"], "data_limite_aposta": linha["data_limite_aposta"], "leitura": "segunda"}
     return None
 
