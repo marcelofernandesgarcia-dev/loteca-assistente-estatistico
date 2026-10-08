@@ -42,9 +42,21 @@ def _banco(concursos=60, jogos_por_concurso=6, futuro=True):
 
 def test_rating_soma_zero_e_conta_jogos():
     r = elo_clubes.Ratings()
-    r.aplicar({"casa_id": 1, "fora_id": 2, "resultado": "1"})
+    r.aplicar({"casa_id": 1, "fora_id": 2, "resultado": "1", "gols_casa": 1, "gols_fora": 0})
     assert r.valor[1] + r.valor[2] == pytest.approx(2 * config.ELO_CLUBES_RATING_INICIAL)
     assert r.valor[1] > r.valor[2] and r.jogos[1] == r.jogos[2] == 1
+
+
+def test_goleada_mexe_mais_no_rating_que_vitoria_simples(monkeypatch):
+    # Variação V1 (margem de gols), aprovada no estudo S3 de 08/10/2026.
+    simples, goleada = elo_clubes.Ratings(), elo_clubes.Ratings()
+    simples.aplicar({"casa_id": 1, "fora_id": 2, "resultado": "1", "gols_casa": 1, "gols_fora": 0})
+    goleada.aplicar({"casa_id": 1, "fora_id": 2, "resultado": "1", "gols_casa": 4, "gols_fora": 0})
+    assert goleada.valor[1] > simples.valor[1]
+    monkeypatch.setattr(config, "ELO_CLUBES_MARGEM_DE_GOLS", False)
+    sem_margem = elo_clubes.Ratings()
+    sem_margem.aplicar({"casa_id": 1, "fora_id": 2, "resultado": "1", "gols_casa": 4, "gols_fora": 0})
+    assert sem_margem.valor[1] == pytest.approx(simples.valor[1])
 
 
 def test_walk_forward_nao_olha_o_resultado_do_proprio_concurso():

@@ -17,7 +17,7 @@ import numpy as np
 
 import config
 from stats import backtest
-from stats.selecoes import ajustar_curva, probabilidades
+from stats.selecoes import _multiplicador_de_gols, ajustar_curva, probabilidades
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,10 @@ class Ratings:
         casa, fora = jogo["casa_id"], jogo["fora_id"]
         esperado = 1.0 / (1.0 + 10 ** (-(self.valor[casa] + config.ELO_CLUBES_VANTAGEM_MANDANTE - self.valor[fora]) / 400.0))
         real = {"1": 1.0, "X": 0.5, "2": 0.0}[jogo["resultado"]]
-        delta = config.ELO_CLUBES_K * (real - esperado)
+        # Margem de gols (variação V1, aprovada no estudo S3 de 08/10/2026: docs/s3-s4-variacoes-do-elo-08-10-2026.md).
+        margem = (_multiplicador_de_gols(jogo["gols_casa"] - jogo["gols_fora"])
+                  if config.ELO_CLUBES_MARGEM_DE_GOLS and jogo.get("gols_casa") is not None else 1.0)
+        delta = config.ELO_CLUBES_K * margem * (real - esperado)
         self.valor[casa] += delta
         self.valor[fora] -= delta
         self.jogos[casa] += 1

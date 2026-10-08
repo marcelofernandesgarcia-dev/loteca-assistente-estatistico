@@ -421,6 +421,9 @@ ELO_CLUBES_ATIVO = os.environ.get("LOTECA_ELO_CLUBES", "1") == "1"
 ELO_CLUBES_RATING_INICIAL = 1500.0
 ELO_CLUBES_K = 20.0
 ELO_CLUBES_VANTAGEM_MANDANTE = 65.0
+# Margem de gols no ajuste do rating (variação V1, aprovada no estudo S3 de 08/10/2026: ganho +0,0014, q 0,014).
+# K ajustado, pi-ratings e jogos da CBF no rating não passaram no critério e não entram.
+ELO_CLUBES_MARGEM_DE_GOLS = os.environ.get("LOTECA_ELO_MARGEM", "1") == "1"
 ELO_CLUBES_TESTE_DESDE = 2020  # o estudo testa de 2020 em diante (mesma janela do modelo da temporada)
 CONFIABILIDADE_DESDE_ANO = 2020  # a página mede o app de hoje desde este ano (todas as peças do modelo existem)
 ELO_CLUBES_JOGOS_POUCOS = 10  # time com menos jogos da Loteca no rating: cobertura "baixa" (aviso de alta incerteza)
