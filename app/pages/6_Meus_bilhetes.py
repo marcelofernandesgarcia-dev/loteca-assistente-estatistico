@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import streamlit as st
+from bilhetes_ui import mostrar_quadro
 from chances_ui import mostrar_chances_do_bilhete, mostrar_conjunto, percentuais_atuais_do_concurso, reais, rotulo_do_bilhete
 from retrato_ui import mostrar_retrato
 from revisao_ui import mostrar_revisao
@@ -29,6 +30,7 @@ from stats.bilhetes_salvos import (
     listar_bilhetes,
     marcar_jogado,
     pode_conferir,
+    quadro_do_concurso,
     registrar_premio,
     resumo_financeiro,
 )
@@ -310,6 +312,12 @@ else:
             mostrar_conjunto(jogos_atuais, pcts_atuais, montados)
     else:
         st.info("Marque pelo menos um bilhete para ver as chances do conjunto.")
+
+# Quadro de bilhetes por concurso (08/10/2026): os bilhetes de cada concurso lado a lado, com a análise guardada.
+st.subheader("Quadro de bilhetes por concurso")
+for posicao, numero_quadro in enumerate(sorted({b["concurso_numero"] for b in bilhetes}, reverse=True)):
+    with st.expander(f"Concurso {numero_quadro}", expanded=posicao == 0):
+        mostrar_quadro(quadro_do_concurso(conexao, numero_quadro), f"Quadro de bilhetes do concurso {numero_quadro}")
 
 st.subheader("Bilhetes")
 

@@ -139,6 +139,28 @@ def test_variante_sem_base_e_origem_desconhecida_sao_recusadas(conexao):
         salvar_bilhete(c, 9100, {j1: ["1"], j2: ["1", "X"]}, {}, origem="outra")
 
 
+def test_quadro_do_concurso_traz_a_analise_guardada_e_os_acertos_so_com_resultado(conexao):
+    from stats.analise_palpite import analisar_palpite
+    from stats.bilhetes_salvos import quadro_do_concurso
+
+    c, (j1, j2) = conexao
+    pct = {"1": 70.0, "X": 20.0, "2": 10.0}
+    antigo = salvar_bilhete(c, 9100, {j1: ["1"], j2: ["1", "X"]}, {})  # sem análise guardada (bilhete antigo)
+    marcacoes = {j1: ["2"], j2: ["1", "X"]}  # jogo 1 só no resultado de 10%: zebra
+    analise = analisar_palpite([{"jogo_id": j, "num_jogo": n, "casa": "A", "fora": "B", "pct": pct,
+                                 "marcacoes": marcacoes[j], "sem_base_propria": False} for n, j in ((1, j1), (2, j2))])
+    alternativa = salvar_bilhete(c, 9100, marcacoes, {j1: pct, j2: pct}, analise=analise, origem="economico",
+                                 marcacoes_base={j1: ["2"], j2: ["1", "X", "2"]})
+    quadro = quadro_do_concurso(c, 9100)
+    assert [l["id"] for l in quadro] == [antigo, alternativa]  # ordem de criação
+    assert quadro[0]["zebras"] is None and quadro[0]["chance_todos"] is None and quadro[0]["origem"] == "volante"
+    assert quadro[1]["zebras"] == 1 and quadro[1]["origem"] == "economico"
+    assert quadro[1]["chance_todos"] == pytest.approx(analise["chance"]["chance_todos"])
+    assert (quadro[1]["duplos"], quadro[1]["triplos"], quadro[1]["acertos"]) == (1, 0, None)
+    c.execute("UPDATE jogos SET resultado = '1'")
+    assert [l["acertos"] for l in quadro_do_concurso(c, 9100)] == [2, 1]
+
+
 def test_bilhete_igual_acha_a_mesma_marcacao_em_qualquer_ordem(conexao):
     c, (j1, j2) = conexao
     assert bilhete_igual(c, 9100, {j1: ["1"], j2: ["X", "1"]}) is None

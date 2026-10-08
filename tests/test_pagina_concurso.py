@@ -383,6 +383,12 @@ def test_alternativas_levar_ao_volante_e_salvar_com_origem(banco):
         linha = c.execute("SELECT origem, marcacoes_base FROM bilhetes").fetchone()
         assert c.execute("SELECT COUNT(*) FROM versoes_palpite").fetchone()[0] == 0  # alternativa não vira versão
     assert linha["origem"] == "ajuste_leve" and '["1", "X", "2"]' in linha["marcacoes_base"]
+    # Quadro de bilhetes e coluna "Virou bilhete" (08/10/2026): a alternativa salva já aparece nos dois.
+    with db.sessao() as c:
+        salvo = c.execute("SELECT id FROM bilhetes").fetchone()[0]
+    textos = " ".join(m.value for m in at.markdown)
+    assert "Quadro de bilhetes do concurso 9002" in textos and f"<td>nº {salvo}</td><td>Ajuste leve</td>" in textos
+    assert f"<td>sim (nº {salvo})</td>" in textos
 
     # Mesma alternativa de novo: avisa e só grava com confirmação.
     _botao_chave(at, "variante_salvar_9002_ajuste_leve").click().run()

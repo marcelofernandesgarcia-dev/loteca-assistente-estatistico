@@ -129,6 +129,34 @@ def bilhete_igual(conexao, concurso_numero: int, marcacoes: dict) -> int | None:
     return None
 
 
+def quadro_do_concurso(conexao, concurso_numero: int) -> list[dict]:
+    """Uma linha por bilhete salvo no concurso, em ordem de criação, com a análise guardada no momento de salvar
+    (chances e acertos esperados pelos percentuais daquele dia, como na tabela de versões; decisão do usuário em
+    08/10/2026). `zebras` é None quando o bilhete é anterior à análise guardada; `acertos` só vem com todos os jogos
+    apurados."""
+    from stats.analise_palpite import ZEBRA  # import local: analise_palpite não depende deste módulo
+
+    linhas = []
+    for bilhete in conexao.execute(
+        "SELECT * FROM bilhetes WHERE concurso_numero = ? ORDER BY id", (concurso_numero,)
+    ).fetchall():
+        jogos = jogos_do_bilhete(conexao, bilhete["id"])
+        categorias = [j["categoria"] for j in jogos]
+        linhas.append({
+            "id": bilhete["id"], "origem": bilhete["origem"], "criado_em": bilhete["criado_em"],
+            "apostas": bilhete["apostas"], "custo": bilhete["custo"],
+            "chance_todos": bilhete["chance_todos"], "chance_todos_menos_um": bilhete["chance_todos_menos_um"],
+            "acertos_esperados": bilhete["acertos_esperados"],
+            "duplos": sum(1 for j in jogos if len(j["marcacoes"]) == 2),
+            "triplos": sum(1 for j in jogos if len(j["marcacoes"]) == 3),
+            "zebras": None if not categorias or None in categorias else sum(c == ZEBRA for c in categorias),
+            "jogado": bilhete["jogado_em"] is not None,
+            "acertos": sum(j["resultado"] in j["marcacoes"] for j in jogos) if pode_conferir(jogos) else None,
+            "total_jogos": len(jogos),
+        })
+    return linhas
+
+
 def listar_bilhetes(conexao, concurso_numero: int | None = None) -> list[dict]:
     if concurso_numero is not None:
         linhas = conexao.execute(

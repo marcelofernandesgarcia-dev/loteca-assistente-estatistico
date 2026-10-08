@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import streamlit as st
 from ano_em_curso_ui import mostrar_ano_em_curso, resumo_do_ano
+from bilhetes_ui import mostrar_quadro
 from calibracao_ui import mostrar_calibracao
 from chances_ui import mostrar_chances_do_bilhete
 from estilo_caixa import renderizar_cartao, renderizar_tabela, renderizar_titulo_cartao
@@ -34,7 +35,7 @@ from stats.contexto import selo_da_posicao
 from stats.concursos import concurso_a_jogar, ultimo_encerrado as buscar_ultimo_encerrado
 from stats.analise_palpite import NOME_CATEGORIA, ZEBRA, analisar_palpite, formatar_uma_em
 from stats.bilhete import PRECO_APOSTA, justificativa_da_sugestao, montar_bilhete, validar_volante
-from stats.bilhetes_salvos import bilhete_igual, jogos_do_bilhete, listar_bilhetes, salvar_bilhete
+from stats.bilhetes_salvos import bilhete_igual, jogos_do_bilhete, listar_bilhetes, quadro_do_concurso, salvar_bilhete
 from stats.variantes_bilhete import ORIGEM_VOLANTE, nome_da_origem
 from stats.ano_em_curso import frase_do_lado
 from stats.cobertura import cobertura_do_concurso
@@ -710,12 +711,21 @@ else:
         for colunas in lista:
             apostas *= len(colunas)
         de_onde = "" if origem == ORIGEM_VOLANTE else f" a partir da alternativa “{nome_da_origem(origem)}”"
-        st.success(
+        # A mensagem atravessa o recarregamento: assim as tabelas desenhadas antes do botão (alternativas, versões)
+        # já mostram o bilhete novo, e o aviso continua aparecendo no mesmo lugar.
+        st.session_state[_chave_aviso(chave)] = (
             f"Bilhete salvo (nº {bilhete_id}){de_onde} -- {apostas} apostas, {reais(apostas * PRECO_APOSTA)}."
-            f"{aviso_versao} Veja e confira depois em 'Meus bilhetes'. Fica só neste computador."
+            f"{aviso_versao} Ele já está no quadro de bilhetes abaixo. Fica só neste computador."
         )
+        st.rerun()
+
+    def _chave_aviso(chave: str) -> str:
+        return f"bilhete_salvo_{numero_vigente}_{chave}"
 
     def _confirmacao(chave: str, lista: list[list[str]], origem: str, base: dict | None) -> None:
+        aviso = st.session_state.pop(_chave_aviso(chave), None)
+        if aviso:
+            st.success(aviso)
         pendente = st.session_state.get(_chave_pendente(chave))
         if not pendente:
             return
@@ -756,6 +766,8 @@ else:
                 [j["num_jogo"] for j in jogos_vigente], _levar_ao_volante,
                 ao_salvar=lambda v: _pedir_ou_salvar(v["tipo"], v["marcacoes"], v["tipo"], marcacoes_atuais),
                 ao_confirmar=lambda v: _confirmacao(v["tipo"], v["marcacoes"], v["tipo"], marcacoes_atuais),
+                bilhete_salvo=lambda lista: bilhete_igual(
+                    conexao, numero_vigente, {j["id"]: m for j, m in zip(jogos_vigente, lista)}),
             )
 
     with st.expander(f"Ver detalhes dos jogos (desempenho em {ano_atual}, classificação na CBF e zona)"):
@@ -795,10 +807,9 @@ else:
         if not salvos:
             st.caption("Nenhum bilhete salvo para este concurso ainda. Depois de salvar, ele aparece aqui com as marcações.")
         else:
-            st.caption(
-                f"{len(salvos)} bilhete(s); se apostar todos, o gasto soma {reais(sum(b['custo'] for b in salvos))}. "
-                "Use 'Levar ao volante' para partir de um deles; a chance do conjunto está em 'Meus bilhetes'."
-            )
+            # Quadro de bilhetes (08/10/2026): todos lado a lado, com a análise guardada ao salvar.
+            mostrar_quadro(quadro_do_concurso(conexao, numero_vigente), f"Quadro de bilhetes do concurso {numero_vigente}")
+            st.caption("Abra um bilhete abaixo para ver as marcações; use 'Levar ao volante' para partir dele.")
 
             def _levar_bilhete(marcacoes_por_jogo: dict) -> None:
                 for jogo in jogos_vigente:

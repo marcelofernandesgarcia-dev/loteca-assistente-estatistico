@@ -8,32 +8,40 @@ from chances_ui import reais
 from estilo_caixa import renderizar_tabela
 from sugestoes_ui import texto_da_calibracao, texto_do_efeito
 
-from stats.analise_palpite import formatar_uma_em
+from stats.analise_palpite import ZEBRA, classificar_jogo, formatar_uma_em
 from stats.variantes_bilhete import NOMES, gerar_variantes
 from stats.versoes_palpite import frase_da_mudanca
 
 CABECALHOS = ["Bilhete", "Apostas (custo)", "Chance de 14 (pelos percentuais)", "Chance de 13 ou mais (pelos percentuais)",
-              "Acertos esperados", "Duplos / triplos", "Jogos mudados"]
+              "Acertos esperados", "Duplos / triplos", "Zebras", "Jogos mudados", "Virou bilhete"]
 
 
 def _decimal(valor: float) -> str:
     return f"{valor:.1f}".replace(".", ",")
 
 
-def _linha(nome: str, medidas: dict, mudados: str) -> list[str]:
+def zebras(pcts: list[dict], marcacoes: list[list[str]]) -> int:
+    """Jogos marcados só em resultado de pouca chance, pela mesma regra da análise do palpite."""
+    return sum(1 for p, m in zip(pcts, marcacoes) if classificar_jogo(p, m)["categoria"] == ZEBRA)
+
+
+def _linha(nome: str, medidas: dict, n_zebras: int, mudados: str, salvo: int | None) -> list[str]:
     return [
         nome, f"{medidas['apostas']} ({reais(medidas['custo'])})", formatar_uma_em(medidas["chance_14"]),
         formatar_uma_em(medidas["chance_13_ou_mais"]), _decimal(medidas["acertos_esperados"]),
-        f"{medidas['duplos']} / {medidas['triplos']}", mudados,
+        f"{medidas['duplos']} / {medidas['triplos']}", str(n_zebras), mudados,
+        f"sim (nº {salvo})" if salvo else "não",
     ]
 
 
-def linhas_da_comparacao(resultado: dict) -> list[list[str]]:
-    """O seu bilhete e cada variante, lado a lado. Nas chances, o "1 em X" (mesma leitura da tabela de versões)."""
-    linhas = [_linha("Seu bilhete (volante)", resultado["base"], "-")]
-    for i, v in enumerate(resultado["variantes"], start=1):
+def linhas_da_comparacao(resultado: dict, extras: list[tuple[int, int | None]]) -> list[list[str]]:
+    """O seu bilhete e cada variante, lado a lado, nas colunas da tabela de versões. `extras`: (zebras, nº do bilhete
+    salvo com a mesma marcação ou None), primeiro o do seu bilhete e depois o de cada variante, na mesma ordem."""
+    zebras_base, salvo_base = extras[0]
+    linhas = [_linha("Seu bilhete (volante)", resultado["base"], zebras_base, "-", salvo_base)]
+    for i, (v, (n_zebras, salvo)) in enumerate(zip(resultado["variantes"], extras[1:]), start=1):
         mudados = ", ".join(str(m["num_jogo"]) for m in v["mudancas"])
-        linhas.append(_linha(f"{i}. {v['nome']}", v["medidas"], mudados))
+        linhas.append(_linha(f"{i}. {v['nome']}", v["medidas"], n_zebras, mudados, salvo))
     return linhas
 
 
@@ -64,15 +72,18 @@ def mostrar_variantes(
     ao_levar: Callable[[list[list[str]]], None],
     ao_salvar: Callable[[dict], None],
     ao_confirmar: Callable[[dict], None],
+    bilhete_salvo: Callable[[list[list[str]]], int | None],
 ) -> None:
     """Monta e mostra até três alternativas. `ao_levar` roda como callback do botão (antes de o volante ser
-    redesenhado); `ao_salvar` grava ou pede confirmação; `ao_confirmar` mostra o aviso de bilhete igual, se houver."""
+    redesenhado); `ao_salvar` grava ou pede confirmação; `ao_confirmar` mostra o aviso de bilhete igual ou de bilhete
+    salvo, se houver; `bilhete_salvo` devolve o nº do bilhete já salvo com aquela marcação, ou None."""
     try:
         resultado = gerar_variantes(pcts, marcacoes, numeros)
     except ValueError as erro:
         st.info(str(erro))
         return
-    st.markdown(renderizar_tabela("Seu bilhete e as alternativas", CABECALHOS, linhas_da_comparacao(resultado)),
+    extras = [(zebras(pcts, m), bilhete_salvo(m)) for m in [marcacoes] + [v["marcacoes"] for v in resultado["variantes"]]]
+    st.markdown(renderizar_tabela("Seu bilhete e as alternativas", CABECALHOS, linhas_da_comparacao(resultado, extras)),
                 unsafe_allow_html=True)
     st.caption(
         "As chances são calculadas pelos percentuais do app e servem para comparar os bilhetes entre si. No teste com "
