@@ -14,5 +14,8 @@ O material do usuário de 07/10/2026 propunha ajustar duplos e triplos "para con
 - **838 concursos.** Correlação −0,048 (intervalo de 95%: −0,123 a +0,026; p = 0,19). **Sem diferença perceptível.**
 - Concurso 1273: dificuldade prevista de 8,13, um pouco acima da mediana (7,85; 10% dos concursos ficam abaixo de 6,75 e 10% acima de 9,28). Mesmo assim, foi o concurso com mais ganhadores por milhão em 2026.
 
+## Atualização (08/10/2026)
+O estudo D6 (`docs/d6-concursos-pulverizados-08-10-2026.md`) refez a pergunta com o modelo novo (Elo de clubes) e com mais sinais de antes do prazo (seleções, favoritos fortes, clubes brasileiros). Encontrou um sinal fraco, mas real, fora da amostra: área sob a curva ROC 0,585 (IC 95%: 0,517 a 0,649). A conclusão abaixo vale para a medida usada aqui (modelo antigo e só a dificuldade).
+
 ## Decisão
 O perfil do concurso não é previsível com os percentuais do app. Ele serve só para a revisão pós-jogo (D4) e nunca para mudar a sugestão de um concurso futuro.
