@@ -23,6 +23,7 @@ from sugestoes_ui import (
 )
 from util import formatar_data_br, mostrar_aviso_responsabilidade, obter_conexao
 from variantes_ui import mostrar_variantes
+from volante_ui import jogos_para_o_volante, renderizar_volante
 
 import config
 from externo.ajuste import evidencias_informativas
@@ -33,7 +34,7 @@ from stats.contexto import selo_da_posicao
 from stats.concursos import concurso_a_jogar, ultimo_encerrado as buscar_ultimo_encerrado
 from stats.analise_palpite import NOME_CATEGORIA, ZEBRA, analisar_palpite, formatar_uma_em
 from stats.bilhete import PRECO_APOSTA, justificativa_da_sugestao, montar_bilhete, validar_volante
-from stats.bilhetes_salvos import bilhete_igual, salvar_bilhete
+from stats.bilhetes_salvos import bilhete_igual, jogos_do_bilhete, listar_bilhetes, salvar_bilhete
 from stats.variantes_bilhete import ORIGEM_VOLANTE, nome_da_origem
 from stats.ano_em_curso import frase_do_lado
 from stats.cobertura import cobertura_do_concurso
@@ -631,10 +632,18 @@ else:
                         st.session_state[_chave(jogo["id"], coluna)] = coluna in colunas
 
             with st.container(horizontal=True, vertical_alignment="bottom"):
-                st.selectbox("Versão", [v["numero_versao"] for v in versoes], index=len(versoes) - 1,
-                             key=f"versao_escolhida_{numero_vigente}", width=140)
+                numero_escolhido = st.selectbox("Versão", [v["numero_versao"] for v in versoes], index=len(versoes) - 1,
+                                                key=f"versao_escolhida_{numero_vigente}", width=140)
                 st.button("Voltar a esta versão", on_click=_voltar_para_versao,
                           help="Recoloca as marcações da versão no volante; depois é só salvar ou continuar mudando.")
+            # Prévia da versão escolhida como volante de leitura (08/10/2026), com o percentual de quando foi guardada.
+            escolhida = next(v for v in versoes if v["numero_versao"] == numero_escolhido)
+            st.caption(f"Versão {numero_escolhido} no volante:")
+            st.markdown(renderizar_volante([
+                {"num_jogo": j["num_jogo"], "casa": j["casa"], "fora": j["fora"],
+                 "marcacoes": escolhida["marcacoes"].get(j["id"], []), "pct": escolhida["percentuais"].get(j["id"])}
+                for j in jogos_vigente
+            ], f"Versão {numero_escolhido}"), unsafe_allow_html=True)
 
     # Salvamento único (volante e alternativas usam o mesmo caminho: análise, retrato imutável e, no volante, a versão).
     def _analise_de(lista: list[list[str]]) -> dict:
@@ -777,6 +786,37 @@ else:
             _pedir_ou_salvar(ORIGEM_VOLANTE, marcacoes_lista, ORIGEM_VOLANTE, None)
     if volante["pode_salvar"]:
         _confirmacao(ORIGEM_VOLANTE, marcacoes_lista, ORIGEM_VOLANTE, None)
+
+    # Bilhetes salvos do concurso (pedido do usuário, 08/10/2026): cada um como volante de leitura, com as marcações
+    # e o percentual do dia em que foi salvo. O volante de cima continua abrindo em branco (decisão do usuário).
+    salvos = listar_bilhetes(conexao, numero_vigente)
+    with st.container(border=True):
+        st.markdown("#### Bilhetes salvos para este concurso")
+        if not salvos:
+            st.caption("Nenhum bilhete salvo para este concurso ainda. Depois de salvar, ele aparece aqui com as marcações.")
+        else:
+            st.caption(
+                f"{len(salvos)} bilhete(s); se apostar todos, o gasto soma {reais(sum(b['custo'] for b in salvos))}. "
+                "Use 'Levar ao volante' para partir de um deles; a chance do conjunto está em 'Meus bilhetes'."
+            )
+
+            def _levar_bilhete(marcacoes_por_jogo: dict) -> None:
+                for jogo in jogos_vigente:
+                    colunas = marcacoes_por_jogo.get(jogo["id"], [])
+                    for coluna in COLUNAS_VOLANTE:
+                        st.session_state[_chave(jogo["id"], coluna)] = coluna in colunas
+
+            for salvo in salvos:
+                linhas_salvo = jogos_do_bilhete(conexao, salvo["id"])
+                titulo_salvo = (f"Bilhete nº {salvo['id']} · {nome_da_origem(salvo.get('origem'))} · "
+                                f"{salvo['apostas']} apostas · {reais(salvo['custo'])} · "
+                                + ("apostado" if salvo["jogado_em"] else "rascunho"))
+                with st.expander(titulo_salvo):
+                    st.markdown(renderizar_volante(jogos_para_o_volante(linhas_salvo), f"Bilhete nº {salvo['id']}"),
+                                unsafe_allow_html=True)
+                    st.button("Levar ao volante", key=f"bilhete_levar_{salvo['id']}", on_click=_levar_bilhete,
+                              args=({linha["jogo_id"]: linha["marcacoes"] for linha in linhas_salvo},),
+                              help="Põe as marcações deste bilhete no volante, acima, para mexer e salvar outro.")
     st.caption(
         "Percentuais com o ajuste da última varredura de notícias (o valor entre parênteses mostra o efeito em pontos)."
         if ajustes

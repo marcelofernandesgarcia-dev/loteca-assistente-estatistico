@@ -6,12 +6,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-import pandas as pd
 import streamlit as st
 from chances_ui import mostrar_chances_do_bilhete, mostrar_conjunto, percentuais_atuais_do_concurso, reais, rotulo_do_bilhete
 from retrato_ui import mostrar_retrato
 from revisao_ui import mostrar_revisao
 from util import formatar_data_br, mostrar_aviso_responsabilidade, obter_conexao
+from volante_ui import jogos_para_o_volante, renderizar_volante
 
 import config
 from stats.analise_palpite import (
@@ -357,6 +357,10 @@ for bilhete in bilhetes:
                     f"{historia['acertos_bilhete']}."
                 )
             st.caption(texto)
+        # Volante de leitura (08/10/2026): a marcação como no volante, com o percentual do dia em que foi salvo e,
+        # depois do resultado, o resultado e o acerto de cada jogo.
+        st.markdown(renderizar_volante(jogos_para_o_volante(jogos_do_bilhete(conexao, bilhete["id"])),
+                                       f"Bilhete nº {bilhete['id']}"), unsafe_allow_html=True)
         # "Jogado de verdade" (plano v2, item D1): separa rascunho de aposta real sem importar o comprovante.
         jogado = st.checkbox(
             "Apostei este bilhete na lotérica", value=bilhete["jogado_em"] is not None, key=f"jogado_{bilhete['id']}",
@@ -393,15 +397,6 @@ for bilhete in bilhetes:
                     f"{resultado['acertos_sugestao_do_modelo']} de {resultado['total_jogos']} -- não é o que você "
                     "marcou, é só uma referência de comparação."
                 )
-            linhas = [
-                {
-                    "Jogo": j["num_jogo"], "Confronto": f"{j['casa']} x {j['fora']}",
-                    "Você marcou": ", ".join(j["marcacoes"]), "Resultado": j["resultado"],
-                    "Acertou": "Sim" if j["acertou"] else "Não",
-                }
-                for j in resultado["jogos"]
-            ]
-            st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
             if all(j["percentual_1"] is not None for j in resultado["jogos"]):
                 mostrar_aprendizado_do_bilhete(
                     [

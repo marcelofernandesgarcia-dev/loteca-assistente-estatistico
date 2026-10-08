@@ -310,6 +310,37 @@ def _dois_jogos_triplo_e_contra() -> AppTest:
     return at
 
 
+# --- Volante de leitura dos bilhetes salvos e da versão (08/10/2026) ---
+
+def test_bilhete_salvo_aparece_como_volante_e_pode_voltar_ao_volante(banco):
+    at = _abrir()
+    assert any("Nenhum bilhete salvo para este concurso ainda" in c.value for c in at.caption)
+    at = _marcar_duplo_1_2(at)
+    _botao(at, "Salvar bilhete").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    with db.sessao() as c:
+        bilhete_id = c.execute("SELECT id FROM bilhetes").fetchone()[0]
+    painel = next(e for e in at.expander if e.label.startswith(f"Bilhete nº {bilhete_id} · Seu volante"))
+    assert "rascunho" in painel.label
+    volante = next(m.value for m in painel.markdown if f'aria-label="Bilhete nº {bilhete_id}"' in m.value)
+    assert '<span>1</span><span class="vl-sr">, marcado</span>' in volante
+    assert '<span>X</span><span class="vl-sr">, não marcado</span>' in volante
+    assert '<span>2</span><span class="vl-sr">, marcado</span>' in volante
+
+    _botao(at, "Limpar").click().run()
+    assert not any(q.value for q in _quadrados(at))
+    _botao_chave(at, f"bilhete_levar_{bilhete_id}").click().run()
+    assert {q.key.rsplit("_", 1)[1] for q in _quadrados(at) if q.value} == {"1", "2"}
+
+
+def test_versao_escolhida_aparece_como_volante(banco):
+    at = _marcar_duplo_1_2(_abrir())
+    _botao(at, "Guardar esta versão").click().run()
+    assert any("Versão 1 no volante:" in c.value for c in at.caption)
+    volante = next(m.value for m in at.markdown if 'aria-label="Versão 1"' in m.value)
+    assert volante.count("vl-quadrado vl-marcado") == 2 and "(maior)" in volante
+
+
 def test_termometro_do_perfil_avisa_sem_base_suficiente(banco):
     # S6 (08/10/2026): o banco sintético não tem concursos passados completos.
     at = _abrir()

@@ -54,6 +54,10 @@ def test_bilhete_apurado_pode_ser_conferido_e_mostra_acerto(conexao_pronta):
     at.button[0].click().run()  # "Conferir"
     assert not at.exception, [e.value for e in at.exception]
     assert any("1 de 1 acertos" in w.value for w in at.markdown)
+    # Volante de leitura (08/10/2026): marcação, percentual do dia em que foi salvo, resultado e acerto.
+    volante = next(m.value for m in at.markdown if 'aria-label="Bilhete nº' in m.value)
+    assert '<span>1</span><span class="vl-sr">, marcado</span>' in volante and "<strong>50%</strong> (maior)" in volante
+    assert 'class="vl-jogo vl-acertou"' in volante and "✓ acertou" in volante
 
 
 def test_sem_versoes_orienta_e_com_versoes_mostra_como_o_bilhete_foi_montado(conexao_pronta):
