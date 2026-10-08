@@ -348,6 +348,8 @@ ORIGEM_TEXTO = {
     "frequencia_global": "Frequência simples (poucos jogos)",
     "elo_selecoes": "Elo das seleções",
     "retrospecto_cbf": "Temporada da CBF",
+    "temporada_cbf_e_elo": "Temporada da CBF + Elo de clubes",
+    "elo_clubes": "Elo de clubes",
 }
 
 

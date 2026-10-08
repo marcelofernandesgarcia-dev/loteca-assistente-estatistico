@@ -40,6 +40,8 @@ def cobertura_do_jogo(casa: dict, fora: dict, metodo_percentual: str, agora: dt.
     (data e hora ISO da leitura mais recente, ou None)}. `metodo_percentual`: de
     stats.percentual.origem_do_percentual. Devolve {'nivel', 'nome_nivel', 'faltas', 'alta_incerteza'}."""
     faltas = []
+    poucos_no_rating = [l for l in (casa, fora) if metodo_percentual == "elo_clubes"
+                        and l.get("jogos_rating", 0) < config.ELO_CLUBES_JOGOS_POUCOS]
     if metodo_percentual == "frequencia_global":
         nivel = "baixa"
         faltas.append("percentual sem base própria: poucos jogos na Loteca, usa a frequência geral de 1/X/2")
@@ -47,6 +49,9 @@ def cobertura_do_jogo(casa: dict, fora: dict, metodo_percentual: str, agora: dt.
         nivel = "selecoes"
     elif casa["cbf"] == "pontos_corridos" and fora["cbf"] == "pontos_corridos":
         nivel = "completa"
+    elif poucos_no_rating:
+        nivel = "baixa"
+        faltas += [f"{l['nome']}: só {l.get('jogos_rating', 0)} jogo(s) da Loteca no rating Elo" for l in poucos_no_rating]
     else:
         nivel = "parcial"
 
@@ -75,11 +80,13 @@ def cobertura_do_jogo(casa: dict, fora: dict, metodo_percentual: str, agora: dt.
 
 
 def cobertura_do_concurso(conexao, jogos: list[dict], resumo_ano: list[dict], ajustes: dict[int, dict],
-                          agora: dt.datetime) -> dict[int, dict]:
+                          agora: dt.datetime, origens: dict[int, str] | None = None) -> dict[int, dict]:
     """{jogo_id: cobertura}. `jogos`: id, num_jogo, casa_id, casa, fora_id, fora. `resumo_ano`: de
     stats.ano_em_curso.resumo_do_concurso_no_ano (mesma ordem de num_jogo). `ajustes`: de
-    externo.percentual_final.ajustes_do_concurso. Só leitura do banco."""
+    externo.percentual_final.ajustes_do_concurso. `origens`: {jogo_id: origem do percentual em uso} (de
+    percentuais_do_jogo); sem ele, vale a origem do modelo histórico. Só leitura do banco."""
     from stats.cbf import classificacao_do_participante
+    from stats.elo_clubes import jogos_no_rating
     from stats.percentual import origem_do_percentual
 
     tipos = {linha["id"]: linha["tipo"] for linha in conexao.execute("SELECT id, tipo FROM participantes")}
@@ -98,6 +105,9 @@ def cobertura_do_concurso(conexao, jogos: list[dict], resumo_ano: list[dict], aj
                 "jogos_no_ano": ano.get("jogos", 0), "ano": ano.get("ano", agora.year),
                 "noticias_em": ajuste["coletado_em"] if ajuste else None,
             })
-        metodo = origem_do_percentual(conexao, jogo["casa_id"], jogo["fora_id"])["metodo"]
+        metodo = (origens or {}).get(jogo["id"]) or origem_do_percentual(conexao, jogo["casa_id"], jogo["fora_id"])["metodo"]
+        if metodo == "elo_clubes":
+            for lado, participante_id in zip(lados, (jogo["casa_id"], jogo["fora_id"])):
+                lado["jogos_rating"] = jogos_no_rating(conexao, participante_id)
         saida[jogo["id"]] = cobertura_do_jogo(lados[0], lados[1], metodo, agora)
     return saida

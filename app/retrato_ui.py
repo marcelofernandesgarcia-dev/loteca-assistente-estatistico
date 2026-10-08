@@ -10,6 +10,8 @@ NOME_ORIGEM = {
     "elo_selecoes": "Elo das seleções",
     "frequencia_global": "frequência geral (sem base própria)",
     "retrospecto_cbf": "temporada da CBF",
+    "temporada_cbf_e_elo": "temporada da CBF + Elo de clubes",
+    "elo_clubes": "Elo de clubes",
 }
 
 

@@ -304,8 +304,9 @@ else:
 
     st.info(
         "**2. Percentual** -- para cada jogo do concurso a jogar, a chance de vitória do mandante, empate ou "
-        "vitória do visitante, sem odds de mercado. Clubes da mesma série A ou B: modelo da temporada da CBF "
-        "(pontos por jogo até o dia). Duas seleções: Elo. Demais jogos: histórico de gols na Loteca (Poisson). "
+        "vitória do visitante, sem odds de mercado. Clubes da mesma série A ou B: média entre o modelo da temporada "
+        "da CBF e o Elo de clubes. Demais jogos entre clubes: Elo de clubes (com todos os jogos da Loteca). Duas "
+        "seleções: Elo das seleções. "
         "A origem de cada jogo está em 'Ver como cada percentual foi corrigido'. Quando a varredura semanal de notícias já "
         "rodou para este concurso, o ajuste (limitado a "
         f"{config.AJUSTE_EXTERNO_TETO_PONTOS:.0f} pontos) já está aplicado: o número é o percentual final e o valor entre "
@@ -381,7 +382,8 @@ else:
         "nos de alta. É uma leitura, não uma previsão."
     )
     # Cobertura de dados (item A2 do plano v2, 07/10/2026): o app diz quando sabe pouco de um jogo.
-    cobertura_por_jogo = cobertura_do_concurso(conexao, jogos_vigente, resumo_ano_concurso, ajustes, dt.datetime.now())
+    cobertura_por_jogo = cobertura_do_concurso(conexao, jogos_vigente, resumo_ano_concurso, ajustes, dt.datetime.now(),
+                                               {j["id"]: calculos[j["id"]]["origem"] for j in jogos_vigente})
     n_incertos = sum(1 for c in cobertura_por_jogo.values() if c["alta_incerteza"])
     with st.expander(f"Cobertura de dados dos jogos ({n_incertos} com alta incerteza)"):
         st.caption(

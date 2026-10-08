@@ -415,6 +415,14 @@ ELO_TORNEIOS_CONTINENTAIS = {  # nomes como aparecem na base, em minúsculas
     "uefa euro", "copa américa", "african cup of nations", "afc asian cup", "gold cup",
     "confederations cup", "oceania nations cup", "concacaf championship",
 }
+# Elo de clubes com os jogos da própria Loteca (sugestão S2, aprovada em 07/10/2026). Valores de convenção,
+# fixados ANTES do teste e não ajustados ao resultado; o ajuste do K é a variação S3, testada à parte.
+ELO_CLUBES_ATIVO = os.environ.get("LOTECA_ELO_CLUBES", "1") == "1"
+ELO_CLUBES_RATING_INICIAL = 1500.0
+ELO_CLUBES_K = 20.0
+ELO_CLUBES_VANTAGEM_MANDANTE = 65.0
+ELO_CLUBES_TESTE_DESDE = 2020  # o estudo testa de 2020 em diante (mesma janela do modelo da temporada)
+ELO_CLUBES_JOGOS_POUCOS = 10  # time com menos jogos da Loteca no rating: cobertura "baixa" (aviso de alta incerteza)
 SELECOES_TREINO_DESDE = "1990-01-01"  # o ajuste da curva Elo -> probabilidade usa jogos a partir daqui
 SELECOES_CORTE_TESTE = "2010-01-01"  # a curva é ajustada só com jogos ANTES disto; o teste usa jogos DEPOIS
 SELECOES_TOLERANCIA_DIAS = 3  # dias de diferença aceitos ao casar um jogo da Loteca com a base

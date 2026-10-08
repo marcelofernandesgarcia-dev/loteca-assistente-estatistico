@@ -13,6 +13,8 @@ import config
 SEM_RETRATO = "sem retrato (salvo antes de 07/10/2026)"
 NOME_ORIGEM = {
     "retrospecto_cbf": "Séries A e B (temporada da CBF)",
+    "temporada_cbf_e_elo": "Séries A e B (temporada da CBF + Elo)",
+    "elo_clubes": "Outros clubes (Elo de clubes)",
     "elo_selecoes": "Seleções (Elo)",
     "poisson": "Outros clubes (histórico da Loteca)",
     "frequencia_global": "Sem base própria (frequência geral)",

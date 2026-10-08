@@ -8,8 +8,12 @@ import json
 
 from externo.ajuste import aplicar_ajuste
 from stats.calibracao import calibrar_jogo
+from stats.elo_clubes import ORIGEM as ORIGEM_ELO
+from stats.elo_clubes import prever as prever_elo
 from stats.modelo_cbf import ORIGEM as ORIGEM_CBF
 from stats.modelo_cbf import prever as prever_cbf
+
+ORIGEM_CBF_E_ELO = "temporada_cbf_e_elo"
 from stats.percentual import percentual_historico
 
 
@@ -41,14 +45,27 @@ def percentuais_do_jogo(conexao, casa_id: int, fora_id: int, ajustes: dict[int, 
     já com a calibração quando ela se aplica) e `final` (a base mais o ajuste das notícias). O deslocamento das
     notícias é sempre medido contra `historico`. `calibracao` explica a correção (origem, parâmetros, motivo).
 
-    Com `data_jogo`, jogo entre clubes da mesma série A ou B usa o modelo da temporada da CBF (item B2 do plano
-    v2), sem calibração; `anterior` traz o que o modelo anterior daria (base corrigida), para a tela mostrar os
-    dois lado a lado. Nos demais jogos, `anterior` é None."""
+    Com `data_jogo`, e sem calibração (os estudos mostraram que ela não ajuda nestes modelos):
+    - clubes da mesma série A ou B: média entre o modelo da temporada da CBF e o Elo de clubes (estudo S2,
+      docs/s2-elo-de-clubes-08-10-2026.md); só a temporada se o Elo estiver desligado;
+    - demais jogos entre dois clubes: Elo de clubes (mesmo estudo);
+    - seleções e o resto: como antes (Elo das seleções ou Poisson histórico calibrado).
+    `anterior` traz o que o modelo anterior (Poisson histórico calibrado) daria, para a tela mostrar os dois lado a
+    lado; None quando o modelo anterior é o que está em uso."""
     anterior_calibrado = calibrar_jogo(conexao, casa_id, fora_id, percentual_historico(conexao, casa_id, fora_id))
     cbf = prever_cbf(conexao, casa_id, fora_id, data_jogo)
-    if cbf is not None:
-        original, anterior = cbf, anterior_calibrado["calibrado"]
-        calibracao = {"original": cbf, "calibrado": cbf, "origem": ORIGEM_CBF, "aplicada": False, "expoente": None,
+    elo = prever_elo(conexao, casa_id, fora_id, data_jogo)
+    if cbf is not None and elo is not None:
+        novo, origem = {c: (cbf[c] + elo[c]) / 2 for c in ("1", "X", "2")}, ORIGEM_CBF_E_ELO
+    elif cbf is not None:
+        novo, origem = cbf, ORIGEM_CBF
+    elif elo is not None and anterior_calibrado["origem"] != "elo_selecoes":
+        novo, origem = elo, ORIGEM_ELO
+    else:
+        novo, origem = None, None
+    if novo is not None:
+        original, anterior = novo, anterior_calibrado["calibrado"]
+        calibracao = {"original": novo, "calibrado": novo, "origem": origem, "aplicada": False, "expoente": None,
                       "mistura": None, "motivo": "origem não corrigida"}
     else:
         original, anterior, calibracao = anterior_calibrado["original"], None, anterior_calibrado

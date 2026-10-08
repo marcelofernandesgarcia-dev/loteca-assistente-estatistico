@@ -23,8 +23,8 @@ def frase_da_correcao(calibracao: dict) -> str:
     if calibracao["aplicada"]:
         return f"corrigido (expoente {_virgula(calibracao['expoente'])}, mistura {_virgula(calibracao['mistura'])})"
     motivo = calibracao["motivo"]
-    if motivo == "origem não corrigida" and calibracao.get("origem") == "retrospecto_cbf":
-        return "sem correção (o modelo da temporada já sai calibrado; a correção piorou o teste)"
+    if motivo == "origem não corrigida" and calibracao.get("origem") in ("retrospecto_cbf", "temporada_cbf_e_elo", "elo_clubes"):
+        return "sem correção (no teste, a correção não melhorou este modelo)"
     if motivo == "origem não corrigida":
         return "sem correção (o Elo das seleções já está calibrado)"
     if motivo == "interruptor desligado":
@@ -86,8 +86,9 @@ def mostrar_calibracao(jogos: list[dict], calculos: dict[int, dict]) -> None:
             "são refeitos a cada concurso apurado, só com o passado. O ajuste de notícias entra depois, sobre a base corrigida."
         )
         st.caption(
-            "Jogos entre clubes da mesma série A ou B usam o modelo da temporada da CBF (pontos por jogo dos dois times "
-            "até o dia), adotado em 07/10/2026: em 1.676 jogos da Loteca testados sem olhar o futuro, errou menos que o "
-            "modelo anterior (perda logarítmica 1,0323 contra 1,0593). A última coluna mostra o que o modelo anterior daria, "
-            "para comparar. Para voltar ao anterior: variável de ambiente LOTECA_MODELO_CLUBES=historico."
+            "Clubes da mesma série A ou B: média entre o modelo da temporada da CBF (pontos por jogo até o dia) e o Elo "
+            "de clubes. Demais jogos entre clubes: Elo de clubes, calculado com todos os jogos da Loteca. Os dois foram "
+            "adotados depois de testados sem olhar o futuro (docs/b2-jogos-da-loteca-07-10-2026.md e "
+            "docs/s2-elo-de-clubes-08-10-2026.md). A última coluna mostra o que o modelo anterior daria, para comparar. "
+            "Para voltar ao anterior: LOTECA_ELO_CLUBES=0 e LOTECA_MODELO_CLUBES=historico."
         )
