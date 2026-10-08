@@ -50,6 +50,13 @@ Logística com os sinais de antes do prazo, treinada só nos anos anteriores, em
 | 1215 | 2025 | 846 | 146,3 | 12 | 2 | 5,75 | 8 |
 | 722 | 2016 | 298 | 132,1 | 11 | 0 | 9,67 | 3 |
 
+## Uso no app (S6, aprovado em 08/10/2026)
+"Concurso atual" mostra um termômetro informativo do perfil do concurso (`stats/perfil_concurso.py`, `app/perfil_ui.py`). Ele usa a mesma logística, ajustada com todos os concursos passados, e mostra três coisas: a posição do concurso entre eles, a taxa de pulverizados na mesma faixa (medida fora da amostra) e a área sob a curva ROC. Não muda a sugestão. Taxas fora da amostra no banco de 08/10/2026:
+- faixa de favoritos (posição de 80% ou mais): 30 de 188 (16%);
+- faixa comum: 40 de 398 (10%);
+- faixa difícil (posição de 20% ou menos): 9 de 131 (6,9%);
+- geral: 79 de 717 (11%).
+
 ## Como ler
 - Previsões da época: Elo de clubes nos jogos entre clubes, Elo das seleções e modelo histórico no resto.
 - O app nunca estima prêmio em reais; o estudo fala de ganhadores por milhão arrecadado, não de valor.

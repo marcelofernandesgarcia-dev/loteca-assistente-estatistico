@@ -13,6 +13,7 @@ from calibracao_ui import mostrar_calibracao
 from chances_ui import mostrar_chances_do_bilhete
 from estilo_caixa import renderizar_cartao, renderizar_tabela, renderizar_titulo_cartao
 from noticias_ui import mostrar_manchetes_lidas
+from perfil_ui import mostrar_perfil_do_concurso
 from premiacao_ui import mostrar_premiacao
 from sugestoes_ui import (
     complexidade_da_tela,
@@ -410,6 +411,13 @@ else:
             ),
             unsafe_allow_html=True,
         )
+
+    # Termômetro do perfil do concurso (S6, aprovado em 08/10/2026): só informativo, com a medida de acerto ao lado.
+    tipos = {linha["id"]: (linha["tipo"], linha["pais_ou_uf"]) for linha in conexao.execute(
+        "SELECT id, tipo, pais_ou_uf FROM participantes")}
+    mostrar_perfil_do_concurso(conexao, numero_vigente, [
+        {"p": dados_por_jogo[j["id"]]["pct"], "casa": tipos[j["casa_id"]], "fora": tipos[j["fora_id"]]} for j in jogos_vigente
+    ])
 
     # Card 3 -- volante: 3 quadrados por jogo (1, X, 2), como o volante da
     # CAIXA. Começa em branco (pedido do usuário, 29/09/2026); a sugestão do

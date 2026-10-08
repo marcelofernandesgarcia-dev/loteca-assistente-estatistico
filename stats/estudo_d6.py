@@ -25,7 +25,7 @@ from collections import defaultdict
 import numpy as np
 
 import config
-from stats import anti_manada, backtest, backtest_competicao as b2, calibracao as cal, elo_clubes
+from stats import anti_manada, backtest, calibracao as cal, elo_clubes
 from stats.associacao import ajustar_benjamini_hochberg
 
 PERCENTIL_PULVERIZADO = 0.90
@@ -47,6 +47,44 @@ DEPOIS = {
     "vitorias_mandante": "Vitórias do mandante",
     "surpresa": "Surpresa total (soma de −ln da chance do resultado)",
 }
+
+
+def sinais_dos_jogos(jogos: list[dict]) -> dict[str, float]:
+    """Os sinais de antes do prazo que vêm dos jogos (todos os de ANTES menos os dois do concurso). Cada jogo:
+    {'p': {'1','X','2'} em %, 'casa': (tipo, pais_ou_uf), 'fora': (tipo, pais_ou_uf)}. Usada pelo estudo e pelo
+    termômetro do perfil (stats.perfil_concurso), para os dois contarem do mesmo jeito."""
+    s = dict.fromkeys(("dificuldade", "favoritos_fortes", "equilibrados", "favorito_mandante", "selecoes",
+                       "brasileiros", "estrangeiros"), 0.0)
+    for j in jogos:
+        p = j["p"]
+        favorito = max(("1", "X", "2"), key=lambda k: p[k])
+        s["dificuldade"] += -math.log(max(p[favorito], 1e-9) / 100)
+        s["favoritos_fortes"] += p[favorito] >= 60
+        s["equilibrados"] += p[favorito] < 45
+        s["favorito_mandante"] += favorito == "1"
+        (tc, uc), (tf, uf) = j["casa"], j["fora"]
+        s["selecoes"] += tc == "selecao" and tf == "selecao"
+        s["brasileiros"] += tc == tf == "clube" and len(uc or "") == 2 and len(uf or "") == 2
+        s["estrangeiros"] += (tc == "clube" and len(uc or "") != 2) or (tf == "clube" and len(uf or "") != 2)
+    return s
+
+
+def ajustar_logistica(X: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Logística binária com leve regularização (Newton), sobre as colunas padronizadas. Devolve (pesos com o
+    intercepto primeiro, média e desvio usados na padronização)."""
+    media, desvio = X.mean(axis=0), X.std(axis=0) + 1e-9
+    Z = np.column_stack([np.ones(len(X)), (X - media) / desvio])
+    w = np.zeros(Z.shape[1])
+    for _ in range(50):
+        p = 1 / (1 + np.exp(-Z @ w))
+        H = Z.T @ (Z * (p * (1 - p))[:, None]) + 1e-2 * np.eye(Z.shape[1])
+        w -= np.linalg.solve(H, Z.T @ (p - y) + 1e-2 * w)
+    return w, media, desvio
+
+
+def pontuar(X: np.ndarray, modelo: tuple[np.ndarray, np.ndarray, np.ndarray]) -> np.ndarray:
+    w, media, desvio = modelo
+    return np.column_stack([np.ones(len(X)), (X - media) / desvio]) @ w
 
 
 def _previsoes(conexao) -> dict[int, dict]:
@@ -77,18 +115,11 @@ def montar(conexao) -> list[dict]:
             continue
         do_ano = sorted(por_ano[c["ano"]])
         posicao = sum(1 for v in do_ano if v <= c["ganhadores_por_milhao"]) / len(do_ano)
-        s = defaultdict(float)
+        s = defaultdict(float, sinais_dos_jogos([
+            {"p": previsoes[j["id"]], "casa": tipo[j["casa_id"]], "fora": tipo[j["fora_id"]]} for j in lista]))
         for j in lista:
             p = previsoes[j["id"]]
             favorito = max(("1", "X", "2"), key=lambda k: p[k])
-            s["dificuldade"] += -math.log(max(p[favorito], 1e-9) / 100)
-            s["favoritos_fortes"] += p[favorito] >= 60
-            s["equilibrados"] += p[favorito] < 45
-            s["favorito_mandante"] += favorito == "1"
-            (tc, uc), (tf, uf) = tipo[j["casa_id"]], tipo[j["fora_id"]]
-            s["selecoes"] += tc == "selecao" and tf == "selecao"
-            s["brasileiros"] += tc == tf == "clube" and len(uc or "") == 2 and len(uf or "") == 2
-            s["estrangeiros"] += (tc == "clube" and len(uc or "") != 2) or (tf == "clube" and len(uf or "") != 2)
             s["favoritos_confirmados"] += j["resultado"] == favorito
             s["zebras"] += p[j["resultado"]] < config.ANALISE_LIMIAR_ZEBRA
             s["empates"] += j["resultado"] == "X"
@@ -135,20 +166,17 @@ def teste_fora_da_amostra(linhas: list[dict]) -> dict:
     chaves = list(ANTES)
     anos = sorted({l["ano"] for l in linhas})
     pontos, rotulos = [], []
+    posicoes = []
     for ano in anos[3:]:
         treino = [l for l in linhas if l["ano"] < ano]
         teste = [l for l in linhas if l["ano"] == ano]
         Xt = np.array([[l[k] for k in chaves] for l in treino], dtype=float)
-        media, desvio = Xt.mean(axis=0), Xt.std(axis=0) + 1e-9
-        X = np.column_stack([np.ones(len(treino)), (Xt - media) / desvio])
-        y = np.array([int(l["pulverizado"]) for l in treino])
-        w = np.zeros(X.shape[1])
-        for _ in range(50):  # Newton para logística binária com leve regularização
-            p = 1 / (1 + np.exp(-X @ w))
-            H = X.T @ (X * (p * (1 - p))[:, None]) + 1e-2 * np.eye(X.shape[1])
-            w -= np.linalg.solve(H, X.T @ (p - y) + 1e-2 * w)
-        Xs = np.column_stack([np.ones(len(teste)), (np.array([[l[k] for k in chaves] for l in teste], dtype=float) - media) / desvio])
-        pontos += list(Xs @ w)
+        modelo = ajustar_logistica(Xt, np.array([int(l["pulverizado"]) for l in treino]))
+        do_treino = np.sort(pontuar(Xt, modelo))
+        novos = pontuar(np.array([[l[k] for k in chaves] for l in teste], dtype=float), modelo)
+        pontos += list(novos)
+        # Posição de cada concurso testado entre os concursos de treino (0 a 1), para medir o termômetro por faixa.
+        posicoes += list(np.searchsorted(do_treino, novos, side="right") / len(do_treino))
         rotulos += [l["pulverizado"] for l in teste]
     pontos, rotulos = np.array(pontos), np.array(rotulos)
     auc = _auc(pontos, rotulos)
@@ -162,7 +190,8 @@ def teste_fora_da_amostra(linhas: list[dict]) -> dict:
     ic = np.percentile(amostras, [2.5, 97.5])
     return {"concursos_testados": int(len(pontos)), "pulverizados_testados": int(rotulos.sum()),
             "auc": auc, "ic_inferior": float(ic[0]), "ic_superior": float(ic[1]),
-            "perceptivel": bool(ic[0] > 0.5)}
+            "perceptivel": bool(ic[0] > 0.5),
+            "posicoes": [float(x) for x in posicoes], "rotulos": [bool(x) for x in rotulos]}
 
 
 def estudar(conexao) -> dict:

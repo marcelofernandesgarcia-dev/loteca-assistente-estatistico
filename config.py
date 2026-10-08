@@ -294,6 +294,10 @@ VERSOES_CONCURSOS_MINIMOS = 10  # concursos com mais de uma versão antes de tir
 # número de duplos e triplos que ele escolheu.
 VARIANTES_MAX_TROCAS_AJUSTE = 2  # "ajuste leve": no máximo esta quantidade de trocas de um passo, uma de cada vez
 VARIANTES_COLUNAS_TIRADAS_ECONOMICO = 1  # "econômico": quantas colunas tirar, sempre a de menor perda por real
+# Termômetro do perfil do concurso (S6, aprovado pelo usuário em 08/10/2026; base no estudo D6). Só informativo.
+PERFIL_MIN_CONCURSOS = 200  # concursos passados completos antes de mostrar o termômetro
+PERFIL_LIMITE_FAVORITOS = 0.80  # posição entre os concursos passados a partir da qual o perfil é "de favoritos"
+PERFIL_LIMITE_DIFICIL = 0.20  # posição até a qual o perfil é "difícil"
 # Motivos opcionais da marcação: o que o usuário sabe e o app não coleta.
 ANALISE_MOTIVOS = (
     "Técnico novo",

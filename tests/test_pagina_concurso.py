@@ -310,6 +310,12 @@ def _dois_jogos_triplo_e_contra() -> AppTest:
     return at
 
 
+def test_termometro_do_perfil_avisa_sem_base_suficiente(banco):
+    # S6 (08/10/2026): o banco sintético não tem concursos passados completos.
+    at = _abrir()
+    assert any("Perfil do concurso: ainda não há concursos passados suficientes" in c.value for c in at.caption)
+
+
 def test_alternativas_so_aparecem_com_volante_pronto(banco):
     at = _abrir()
     assert "Bilhetes alternativos a partir do seu" in " ".join(m.value for m in at.markdown)
