@@ -292,6 +292,96 @@ def test_salvar_guarda_a_analise_e_o_motivo(banco):
         assert c.execute("SELECT acertos_esperados FROM bilhetes").fetchone()[0] is not None
 
 
+# --- Bilhetes alternativos a partir do volante (08/10/2026) ---
+
+def _dois_jogos_triplo_e_contra() -> AppTest:
+    """Jogo 1 em triplo e jogo 2 só no visitante: há troca pelo mesmo custo e economia possível."""
+    with db.sessao() as c:
+        alfa = c.execute("SELECT id FROM participantes WHERE nome = 'ALFA'").fetchone()[0]
+        beta = c.execute("SELECT id FROM participantes WHERE nome = 'BETA'").fetchone()[0]
+        c.execute("INSERT INTO jogos (concurso_numero, num_jogo, casa_id, fora_id, data_jogo) VALUES (9002, 2, ?, ?, '2099-01-02')",
+                  (beta, alfa))
+    at = _abrir()
+    colunas = {q.key.split("_", 2)[2]: q for q in _quadrados(at)}
+    ids = sorted({chave.rsplit("_", 1)[0] for chave in colunas}, key=int)
+    for coluna in ("1", "X", "2"):
+        colunas[f"{ids[0]}_{coluna}"].check()
+    colunas[f"{ids[1]}_2"].check().run()
+    return at
+
+
+def test_alternativas_so_aparecem_com_volante_pronto(banco):
+    at = _abrir()
+    assert "Bilhetes alternativos a partir do seu" in " ".join(m.value for m in at.markdown)
+    assert any("Aparece quando o volante estiver pronto para salvar" in i.value for i in at.info)
+
+
+def test_alternativas_levar_ao_volante_e_salvar_com_origem(banco):
+    at = _dois_jogos_triplo_e_contra()
+    assert not at.exception, [e.value for e in at.exception]
+    textos = " ".join(m.value for m in at.markdown)
+    assert "Seu bilhete e as alternativas" in textos and "1. Ajuste leve" in textos
+    assert "Econômico" in textos  # triplo vira duplo: custo menor
+    assert any("Custa R\\$ 4,00: R\\$ 2,00 a menos que o seu." in c.value for c in at.caption)  # "$" escapado
+
+    # O cartão diz o que muda ("jogo 2: 2 (seco) virou X (seco)"); depois de levar, o volante tem de mostrar isso.
+    import re
+
+    marcas = [m.value for m in at.markdown]
+    titulo = next(i for i, t in enumerate(marcas) if t.startswith("**1. Ajuste leve**"))
+    mudancas = {int(n): para for n, para in re.findall(r"jogo (\d+): \S+ \(\w+\) virou (\S+) \(", marcas[titulo + 1])}
+    assert mudancas
+    _botao_chave(at, "variante_levar_9002_ajuste_leve").click().run()
+    ids = sorted({int(q.key.split("_")[2]) for q in _quadrados(at)})
+    volante = {num: "".join(q.key.rsplit("_", 1)[1] for q in _quadrados(at) if q.value and int(q.key.split("_")[2]) == jogo_id)
+               for num, jogo_id in enumerate(ids, start=1)}
+    for num, para in mudancas.items():
+        assert volante[num] == para
+    assert sorted(len(v) for v in volante.values()) == [1, 3]  # mesmo custo: um seco e um triplo
+
+    at = _dois_jogos_triplo_e_contra_reaberto()
+    _botao_chave(at, "variante_salvar_9002_ajuste_leve").click().run()
+    assert not at.exception and any("a partir da alternativa “Ajuste leve”" in s.value for s in at.success)
+    with db.sessao() as c:
+        linha = c.execute("SELECT origem, marcacoes_base FROM bilhetes").fetchone()
+        assert c.execute("SELECT COUNT(*) FROM versoes_palpite").fetchone()[0] == 0  # alternativa não vira versão
+    assert linha["origem"] == "ajuste_leve" and '["1", "X", "2"]' in linha["marcacoes_base"]
+
+    # Mesma alternativa de novo: avisa e só grava com confirmação.
+    _botao_chave(at, "variante_salvar_9002_ajuste_leve").click().run()
+    assert any("Já existe o bilhete nº" in w.value for w in at.warning)
+    _botao_chave(at, "confirmar_9002_ajuste_leve").click().run()
+    with db.sessao() as c:
+        assert c.execute("SELECT COUNT(*) FROM bilhetes").fetchone()[0] == 2
+
+
+def _botao_chave(at: AppTest, chave: str):
+    return next(b for b in at.button if b.key == chave)
+
+
+def _dois_jogos_triplo_e_contra_reaberto() -> AppTest:
+    """Reabre a página com o mesmo volante do teste (o jogo 2 já está no banco)."""
+    at = _abrir()
+    colunas = {q.key.split("_", 2)[2]: q for q in _quadrados(at)}
+    ids = sorted({chave.rsplit("_", 1)[0] for chave in colunas}, key=int)
+    for coluna in ("1", "X", "2"):
+        colunas[f"{ids[0]}_{coluna}"].check()
+    colunas[f"{ids[1]}_2"].check().run()
+    return at
+
+
+def test_salvar_volante_igual_avisa_e_cancelar_nao_grava(banco):
+    at = _marcar_duplo_1_2(_abrir())
+    _botao(at, "Salvar bilhete").click().run()
+    _botao(at, "Salvar bilhete").click().run()
+    assert any("Já existe o bilhete nº" in w.value for w in at.warning)
+    _botao(at, "Cancelar").click().run()
+    assert not any("Já existe o bilhete nº" in w.value for w in at.warning)
+    with db.sessao() as c:
+        assert c.execute("SELECT COUNT(*) FROM bilhetes").fetchone()[0] == 1
+        assert c.execute("SELECT origem FROM bilhetes").fetchone()[0] == "volante"
+
+
 def test_cobertura_por_jogo_aparece_com_aviso_de_alta_incerteza(banco):
     # Item A2 do plano v2: ALFA e BETA não têm CBF nem jogos no ano -> parcial ou baixa, com aviso.
     at = _abrir()

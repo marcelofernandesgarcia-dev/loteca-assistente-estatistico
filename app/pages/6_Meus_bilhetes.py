@@ -38,9 +38,17 @@ from stats.painel_bilhetes import painel as painel_por_tipo
 from stats.frequencia import frequencia_global
 from stats.premiacao import reais
 from stats.retrato import retrato_do_bilhete
+from stats.variantes_bilhete import (
+    ORIGEM_VOLANTE,
+    comparar_com_a_base,
+    ler_marcacoes_base,
+    leituras_das_variantes,
+    nome_da_origem,
+)
 from stats.versoes_palpite import (
     agregar_aprendizado,
     aprendizado_de_todos_os_concursos,
+    diferencas,
     frase_da_mudanca,
     historia_do_bilhete,
     listar_versoes,
@@ -151,6 +159,28 @@ def mostrar_aprendizado_das_versoes(leituras: list[dict]) -> None:
         )
 
 
+def mostrar_aprendizado_das_alternativas(leituras: list[dict]) -> None:
+    """Bilhetes salvos a partir de uma alternativa: acertaram mais ou menos que o volante de onde saíram?"""
+    st.subheader("Minhas alternativas: acertaram mais que o volante?")
+    if not leituras:
+        st.info(
+            "Aparece quando um bilhete salvo a partir de uma alternativa (em 'Concurso atual') tiver o resultado. "
+            "Compara a alternativa com o volante de onde ela saiu."
+        )
+        return
+    agregado = agregar_aprendizado(leituras)
+    st.markdown(
+        f"Em {agregado['concursos']} bilhete(s) de alternativa, ela **acertou mais em {agregado['ajudaram']}**, "
+        f"**menos em {agregado['atrapalharam']}** e o mesmo em {agregado['iguais']} (saldo: "
+        f"{agregado['saldo_total']:+d} acerto(s))."
+    )
+    if not agregado["amostra_suficiente"]:
+        st.caption(
+            f"Ainda são poucos bilhetes (menos de {config.VERSOES_CONCURSOS_MINIMOS}): não dá para dizer se as "
+            "alternativas costumam ajudar. O número fica aqui para acompanhar."
+        )
+
+
 st.title("Meus bilhetes")
 mostrar_aviso_responsabilidade()
 st.caption(
@@ -202,6 +232,7 @@ else:
         "surpreendido. Origem, cobertura e notícia só existem para bilhetes salvos a partir de 07/10/2026."
     )
 mostrar_aprendizado_das_versoes(aprendizado_de_todos_os_concursos(conexao))
+mostrar_aprendizado_das_alternativas(leituras_das_variantes(conexao))
 
 _atuais_por_concurso: dict[int, tuple[list[dict], list[dict]]] = {}
 
@@ -290,6 +321,9 @@ for bilhete in bilhetes:
     total_jogos_bilhete = len(linhas_bilhete)
     jogos_apurados_antes = pode_conferir(linhas_bilhete)
     titulo = f"Concurso {bilhete['concurso_numero']} · salvo em {formatar_data_br(bilhete['criado_em'][:10])} · {bilhete['apostas']} apostas · {reais(bilhete['custo'])}"
+    alternativa = bilhete.get("origem") not in (None, ORIGEM_VOLANTE)
+    if alternativa:
+        titulo += f" · alternativa: {nome_da_origem(bilhete['origem'])}"
     titulo += " · apostado" if bilhete["jogado_em"] else " · rascunho"
     if bilhete["conferido_em"] is not None:
         titulo += f" · {bilhete['acertos']}/{total_jogos_bilhete} acertos"
@@ -298,6 +332,17 @@ for bilhete in bilhetes:
             linha["id"]: linha["num_jogo"]
             for linha in conexao.execute("SELECT id, num_jogo FROM jogos WHERE concurso_numero = ?", (bilhete["concurso_numero"],))
         }
+        base = ler_marcacoes_base(bilhete.get("marcacoes_base")) if alternativa else None
+        if base:
+            marcadas = {j["jogo_id"]: j["marcacoes"] for j in jogos_do_bilhete(conexao, bilhete["id"])}
+            mudancas = diferencas(base, marcadas, num_jogo)
+            texto = (f"Salvo a partir da alternativa “{nome_da_origem(bilhete['origem'])}” do seu volante. Do volante para "
+                     "esta: " + ("; ".join(frase_da_mudanca(m) for m in mudancas) or "sem mudança") + ".")
+            leitura = comparar_com_a_base(base, marcadas, resultados_do_concurso(conexao, bilhete["concurso_numero"]))
+            if leitura:
+                texto += (f" Com o resultado, o volante de partida teria feito {leitura['acertos_base']} acerto(s) e esta "
+                          f"alternativa fez {leitura['acertos_variante']}.")
+            st.caption(texto)
         historia = historia_do_bilhete(
             listar_versoes(conexao, bilhete["concurso_numero"]), bilhete["id"],
             resultados_do_concurso(conexao, bilhete["concurso_numero"]), num_jogo,

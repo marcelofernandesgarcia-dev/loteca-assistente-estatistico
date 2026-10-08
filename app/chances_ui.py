@@ -9,6 +9,7 @@ import config
 from externo.percentual_final import ajustes_do_concurso, percentuais_do_jogo
 from stats import chances_bilhete as cb
 from stats.analise_palpite import formatar_uma_em
+from stats.variantes_bilhete import NOMES
 
 
 def pct(probabilidade: float) -> str:
@@ -138,7 +139,9 @@ def mostrar_chances_do_bilhete(jogos: list[dict], pcts: list[dict], marcacoes: l
 # ---------------------------------------------------------------- conjunto de bilhetes
 
 def rotulo_do_bilhete(bilhete: dict) -> str:
-    return f"Bilhete {bilhete['id']} ({inteiro(bilhete['apostas'])} apostas, {reais(bilhete['custo'])})"
+    origem = bilhete.get("origem")
+    alternativa = f", alternativa {NOMES[origem]}" if origem in NOMES else ""
+    return f"Bilhete {bilhete['id']} ({inteiro(bilhete['apostas'])} apostas, {reais(bilhete['custo'])}{alternativa})"
 
 
 def linhas_por_bilhete(medidas: dict, rotulos: dict) -> list[list[str]]:

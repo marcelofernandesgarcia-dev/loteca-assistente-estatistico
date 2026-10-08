@@ -9,7 +9,14 @@ import datetime as dt
 import json
 
 import config
-from stats.bilhete import montar_bilhete
+from stats.bilhete import PRECO_APOSTA, montar_bilhete
+
+COLUNAS = ("1", "X", "2")
+ORIGENS = ("volante", "ajuste_leve", "reorganizado", "economico")
+
+
+def _normalizar(marcacoes: dict) -> dict[int, list[str]]:
+    return {int(jogo): [c for c in COLUNAS if c in set(colunas)] for jogo, colunas in marcacoes.items()}
 
 
 def salvar_bilhete(
@@ -19,20 +26,28 @@ def salvar_bilhete(
     percentuais: dict[int, dict],
     analise: dict | None = None,
     motivos: dict[int, list[str]] | None = None,
+    origem: str = "volante",
+    marcacoes_base: dict[int, list[str]] | None = None,
 ) -> int:
     """`marcacoes`: {jogo_id: ['1'] ou ['1', 'X'] ...}. `percentuais`: {jogo_id:
     {'1': %, 'X': %, '2': %}} -- o que estava na tela no momento de salvar.
     `analise` (de `stats.analise_palpite.analisar_palpite`, com `jogo_id` em
     cada jogo) e `motivos` ({jogo_id: [motivo, ...]}) são opcionais e ficam
     guardados para o aprendizado; só entram motivos de `config.ANALISE_MOTIVOS`.
-    Retorna o id do bilhete criado."""
+    `origem`: "volante" ou a variante de stats.variantes_bilhete; numa variante, `marcacoes_base` é o volante de
+    onde ela saiu (obrigatório), para comparar depois do resultado. Retorna o id do bilhete criado."""
+    if origem not in ORIGENS:
+        raise ValueError(f"Origem de bilhete desconhecida: {origem}.")
+    if origem != "volante" and not marcacoes_base:
+        raise ValueError("Bilhete de variante precisa do volante de onde saiu.")
     apostas = 1
     for colunas in marcacoes.values():
         apostas *= len(colunas)
     agora = dt.datetime.now().isoformat(timespec="seconds")
+    base = json.dumps({str(k): v for k, v in _normalizar(marcacoes_base).items()}) if marcacoes_base else None
     cursor = conexao.execute(
-        "INSERT INTO bilhetes (concurso_numero, criado_em, apostas, custo) VALUES (?, ?, ?, ?)",
-        (concurso_numero, agora, apostas, apostas * 2.0),
+        "INSERT INTO bilhetes (concurso_numero, criado_em, apostas, custo, origem, marcacoes_base) VALUES (?, ?, ?, ?, ?, ?)",
+        (concurso_numero, agora, apostas, apostas * PRECO_APOSTA, origem, base),
     )
     bilhete_id = cursor.lastrowid
     for jogo_id, colunas in marcacoes.items():
@@ -98,6 +113,20 @@ def jogos_conferidos_para_historico(conexao) -> list[list[dict]]:
             }
         )
     return list(por_bilhete.values())
+
+
+def bilhete_igual(conexao, concurso_numero: int, marcacoes: dict) -> int | None:
+    """Id do bilhete já salvo no concurso com exatamente estas marcações (o mais recente), ou None. A tela avisa e
+    deixa salvar de novo se o usuário confirmar (decisão do usuário, 08/10/2026)."""
+    alvo = _normalizar(marcacoes)
+    for linha in conexao.execute(
+        "SELECT id FROM bilhetes WHERE concurso_numero = ? ORDER BY id DESC", (concurso_numero,)
+    ).fetchall():
+        salvas = {r["jogo_id"]: r["marcacoes"].split(",") for r in conexao.execute(
+            "SELECT jogo_id, marcacoes FROM bilhete_jogos WHERE bilhete_id = ?", (linha["id"],))}
+        if _normalizar(salvas) == alvo:
+            return linha["id"]
+    return None
 
 
 def listar_bilhetes(conexao, concurso_numero: int | None = None) -> list[dict]:

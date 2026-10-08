@@ -153,6 +153,24 @@ def test_bilhete_sem_retrato_avisa_e_com_retrato_mostra_a_tabela(conexao_pronta)
     assert bilhete_id != novo
 
 
+def test_alternativa_salva_mostra_origem_e_compara_com_o_volante(conexao_pronta):
+    # Bilhetes alternativos (08/10/2026): o volante tinha 2, a alternativa trocou para 1 e o resultado foi 1.
+    at = AppTest.from_file(str(PAGINA), default_timeout=60).run()
+    assert any("Aparece quando um bilhete salvo a partir de uma alternativa" in i.value for i in at.info)
+    with db.sessao() as c:
+        jogo_id = c.execute("SELECT id FROM jogos").fetchone()["id"]
+        salvar_bilhete(c, 9001, {jogo_id: ["1"]}, {}, origem="ajuste_leve", marcacoes_base={jogo_id: ["2"]})
+    at = AppTest.from_file(str(PAGINA), default_timeout=60).run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert any("alternativa: Ajuste leve" in e.label for e in at.expander)
+    legendas = " ".join(c.value for c in at.caption)
+    assert "Salvo a partir da alternativa “Ajuste leve” do seu volante" in legendas
+    assert "jogo 1: 2 (seco) virou 1 (seco)" in legendas
+    assert "o volante de partida teria feito 0 acerto(s) e esta alternativa fez 1" in legendas
+    textos = " ".join(m.value for m in at.markdown)
+    assert "**acertou mais em 1**" in textos and "saldo: +1 acerto(s)" in textos
+
+
 def test_historico_aparece_so_depois_de_conferir_e_bilhete_mostra_o_que_ensina(conexao_pronta):
     at = AppTest.from_file(str(PAGINA), default_timeout=60).run()
     assert any("Aparece depois do primeiro bilhete conferido" in i.value for i in at.info)

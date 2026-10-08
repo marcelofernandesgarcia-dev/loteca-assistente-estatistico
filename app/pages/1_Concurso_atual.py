@@ -1,6 +1,7 @@
 import datetime as dt
 import email.utils
 import html
+import json
 import sys
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from sugestoes_ui import (
     texto_da_complexidade,
 )
 from util import formatar_data_br, mostrar_aviso_responsabilidade, obter_conexao
+from variantes_ui import mostrar_variantes
 
 import config
 from externo.ajuste import evidencias_informativas
@@ -29,8 +31,9 @@ from stats.cbf import classificacao_do_participante, resumo_curto_cbf
 from stats.contexto import selo_da_posicao
 from stats.concursos import concurso_a_jogar, ultimo_encerrado as buscar_ultimo_encerrado
 from stats.analise_palpite import NOME_CATEGORIA, ZEBRA, analisar_palpite, formatar_uma_em
-from stats.bilhete import justificativa_da_sugestao, montar_bilhete, validar_volante
-from stats.bilhetes_salvos import salvar_bilhete
+from stats.bilhete import PRECO_APOSTA, justificativa_da_sugestao, montar_bilhete, validar_volante
+from stats.bilhetes_salvos import bilhete_igual, salvar_bilhete
+from stats.variantes_bilhete import ORIGEM_VOLANTE, nome_da_origem
 from stats.ano_em_curso import frase_do_lado
 from stats.cobertura import cobertura_do_concurso
 from stats.retrato import gravar_retrato, retrato_do_jogo, retrato_geral
@@ -625,6 +628,119 @@ else:
                 st.button("Voltar a esta versão", on_click=_voltar_para_versao,
                           help="Recoloca as marcações da versão no volante; depois é só salvar ou continuar mudando.")
 
+    # Salvamento único (volante e alternativas usam o mesmo caminho: análise, retrato imutável e, no volante, a versão).
+    def _analise_de(lista: list[list[str]]) -> dict:
+        return analisar_palpite(
+            [
+                {
+                    "jogo_id": j["id"], "num_jogo": j["num_jogo"], "casa": j["casa"], "fora": j["fora"],
+                    "pct": dados_por_jogo[j["id"]]["pct"], "marcacoes": marcadas,
+                    "sem_base_propria": sem_base_por_jogo[j["id"]],
+                }
+                for j, marcadas in zip(jogos_vigente, lista)
+            ]
+        )
+
+    def _gravar_bilhete(lista: list[list[str]], origem: str, base: dict | None) -> tuple[int, str]:
+        marcacoes = {j["id"]: m for j, m in zip(jogos_vigente, lista)}
+        percentuais_por_jogo = {j["id"]: dados_por_jogo[j["id"]]["pct"] for j in jogos_vigente}
+        # Motivo anotado vale para a marcação que o usuário fez: numa alternativa, só nos jogos que não mudaram.
+        motivos = {j["id"]: st.session_state.get(f"motivo_{numero_vigente}_{j['id']}", []) for j in jogos_vigente
+                   if base is None or base.get(j["id"]) == marcacoes[j["id"]]}
+        analise_do_bilhete = _analise_de(lista)
+        # A análise é guardada mesmo se não foi aberta: o aprendizado precisa
+        # de todos os bilhetes, não só dos que foram analisados.
+        bilhete_id = salvar_bilhete(conexao, numero_vigente, marcacoes, percentuais_por_jogo, analise=analise_do_bilhete,
+                                    motivos=motivos, origem=origem, marcacoes_base=base)
+        # Retrato imutável do que estava na tela (item A1 do plano v2): a revisão pós-jogo e a
+        # comparação de modelos leem daqui, não do cálculo de hoje.
+        ano_por_jogo = {r["num_jogo"]: r for r in resumo_ano_concurso}
+        gravar_retrato(conexao, bilhete_id, retrato_geral(), {
+            j["id"]: retrato_do_jogo(
+                dict(j), calculos[j["id"]], ajustes, cobertura_por_jogo[j["id"]],
+                complexidade_por_jogo.get(j["num_jogo"]),
+                frase_do_lado(ano_por_jogo[j["num_jogo"]]["casa"]) if j["num_jogo"] in ano_por_jogo else None,
+                frase_do_lado(ano_por_jogo[j["num_jogo"]]["fora"]) if j["num_jogo"] in ano_por_jogo else None,
+                proposta["marcacoes"][i], marcacoes[j["id"]],
+            )
+            for i, j in enumerate(jogos_vigente)
+        })
+        # Bilhete do volante fica ligado a uma versão (a igual já guardada, ou uma nova), para o aprendizado
+        # comparar a primeira tentativa com a que virou bilhete. A alternativa guarda o volante de onde saiu.
+        aviso_versao = ""
+        if origem == ORIGEM_VOLANTE:
+            try:
+                guardada = guardar_versao(conexao, numero_vigente, marcacoes, percentuais_por_jogo, analise_do_bilhete)
+                ligar_ao_bilhete(conexao, guardada["versao"]["id"], bilhete_id)
+                aviso_versao = f" Ligado à versão {guardada['versao']['numero_versao']}."
+            except LimiteDeVersoes:
+                aviso_versao = " (Limite de versões do concurso atingido: o bilhete foi salvo sem versão ligada.)"
+        conexao.commit()
+        return bilhete_id, aviso_versao
+
+    def _chave_pendente(chave: str) -> str:
+        return f"bilhete_igual_{numero_vigente}_{chave}"
+
+    def _pedir_ou_salvar(chave: str, lista: list[list[str]], origem: str, base: dict | None, forcar: bool = False) -> None:
+        """Bilhete igual a um já salvo no concurso: avisa e só grava se o usuário confirmar (decisão de 08/10/2026)."""
+        marcacoes = {j["id"]: m for j, m in zip(jogos_vigente, lista)}
+        igual = None if forcar else bilhete_igual(conexao, numero_vigente, marcacoes)
+        if igual:
+            st.session_state[_chave_pendente(chave)] = (igual, json.dumps(lista))
+            return
+        bilhete_id, aviso_versao = _gravar_bilhete(lista, origem, base)
+        apostas = 1
+        for colunas in lista:
+            apostas *= len(colunas)
+        de_onde = "" if origem == ORIGEM_VOLANTE else f" a partir da alternativa “{nome_da_origem(origem)}”"
+        st.success(
+            f"Bilhete salvo (nº {bilhete_id}){de_onde} -- {apostas} apostas, {reais(apostas * PRECO_APOSTA)}."
+            f"{aviso_versao} Veja e confira depois em 'Meus bilhetes'. Fica só neste computador."
+        )
+
+    def _confirmacao(chave: str, lista: list[list[str]], origem: str, base: dict | None) -> None:
+        pendente = st.session_state.get(_chave_pendente(chave))
+        if not pendente:
+            return
+        igual, marcacao_pendente = pendente
+        if marcacao_pendente != json.dumps(lista):  # o volante mudou depois do aviso: o aviso não vale mais
+            st.session_state.pop(_chave_pendente(chave), None)
+            return
+        st.warning(
+            f"Já existe o bilhete nº {igual} com estas mesmas marcações neste concurso. Se apostar os dois, o gasto "
+            "dobra e as apostas se repetem. Quer salvar outro igual mesmo assim?"
+        )
+        with st.container(horizontal=True):
+            confirmar = st.button("Salvar mesmo assim", key=f"confirmar_{numero_vigente}_{chave}")
+            st.button("Cancelar", key=f"cancelar_{numero_vigente}_{chave}",
+                      on_click=lambda: st.session_state.pop(_chave_pendente(chave), None))
+        if confirmar:
+            st.session_state.pop(_chave_pendente(chave), None)
+            _pedir_ou_salvar(chave, lista, origem, base, forcar=True)
+
+    # Bilhetes alternativos a partir do volante (pedido do usuário, 08/10/2026).
+    with st.container(border=True):
+        st.markdown("#### Bilhetes alternativos a partir do seu")
+        st.caption(
+            "Até três bilhetes montados a partir do que está no volante: ajuste leve e reorganizado (mesmo custo) e "
+            "econômico (custo menor). Nenhum aumenta o custo nem o número de duplos e triplos que você escolheu. Para "
+            "partir de uma versão guardada, use 'Voltar a esta versão' antes."
+        )
+        if not volante["pode_salvar"]:
+            st.info("Aparece quando o volante estiver pronto para salvar: " + " ".join(volante["problemas"]))
+        else:
+            def _levar_ao_volante(lista: list[list[str]]) -> None:
+                for jogo, colunas in zip(jogos_vigente, lista):
+                    for coluna in COLUNAS_VOLANTE:
+                        st.session_state[_chave(jogo["id"], coluna)] = coluna in colunas
+
+            mostrar_variantes(
+                conexao, numero_vigente, [dados_por_jogo[j["id"]]["pct"] for j in jogos_vigente], marcacoes_lista,
+                [j["num_jogo"] for j in jogos_vigente], _levar_ao_volante,
+                ao_salvar=lambda v: _pedir_ou_salvar(v["tipo"], v["marcacoes"], v["tipo"], marcacoes_atuais),
+                ao_confirmar=lambda v: _confirmacao(v["tipo"], v["marcacoes"], v["tipo"], marcacoes_atuais),
+            )
+
     with st.expander(f"Ver detalhes dos jogos (desempenho em {ano_atual}, classificação na CBF e zona)"):
         for j in jogos_vigente:
             dado = dados_por_jogo[j["id"]]
@@ -650,41 +766,9 @@ else:
             for problema in volante["problemas"]:
                 st.error(problema)
         else:
-            marcacoes = {j["id"]: m for j, m in zip(jogos_vigente, marcacoes_lista)}
-            percentuais_por_jogo = {j["id"]: dados_por_jogo[j["id"]]["pct"] for j in jogos_vigente}
-            motivos = {j["id"]: st.session_state.get(f"motivo_{numero_vigente}_{j['id']}", []) for j in jogos_vigente}
-            # A análise é guardada mesmo se não foi aberta: o aprendizado precisa
-            # de todos os bilhetes, não só dos que foram analisados.
-            bilhete_id = salvar_bilhete(
-                conexao, numero_vigente, marcacoes, percentuais_por_jogo, analise=analise, motivos=motivos
-            )
-            # Retrato imutável do que estava na tela (item A1 do plano v2): a revisão pós-jogo e a
-            # comparação de modelos leem daqui, não do cálculo de hoje.
-            ano_por_jogo = {r["num_jogo"]: r for r in resumo_ano_concurso}
-            gravar_retrato(conexao, bilhete_id, retrato_geral(), {
-                j["id"]: retrato_do_jogo(
-                    dict(j), calculos[j["id"]], ajustes, cobertura_por_jogo[j["id"]],
-                    complexidade_por_jogo.get(j["num_jogo"]),
-                    frase_do_lado(ano_por_jogo[j["num_jogo"]]["casa"]) if j["num_jogo"] in ano_por_jogo else None,
-                    frase_do_lado(ano_por_jogo[j["num_jogo"]]["fora"]) if j["num_jogo"] in ano_por_jogo else None,
-                    proposta["marcacoes"][i], marcacoes[j["id"]],
-                )
-                for i, j in enumerate(jogos_vigente)
-            })
-            # Todo bilhete salvo fica ligado a uma versão (a igual já guardada, ou uma nova),
-            # para o aprendizado comparar a primeira tentativa com a que virou bilhete.
-            aviso_versao = ""
-            try:
-                guardada = guardar_versao(conexao, numero_vigente, marcacoes, percentuais_por_jogo, analise)
-                ligar_ao_bilhete(conexao, guardada["versao"]["id"], bilhete_id)
-                aviso_versao = f" Ligado à versão {guardada['versao']['numero_versao']}."
-            except LimiteDeVersoes:
-                aviso_versao = " (Limite de versões do concurso atingido: o bilhete foi salvo sem versão ligada.)"
-            conexao.commit()
-            st.success(
-                f"Bilhete salvo (nº {bilhete_id}) -- {volante['apostas']} apostas, {reais(volante['custo'])}."
-                f"{aviso_versao} Veja e confira depois em 'Meus bilhetes'. Fica só neste computador."
-            )
+            _pedir_ou_salvar(ORIGEM_VOLANTE, marcacoes_lista, ORIGEM_VOLANTE, None)
+    if volante["pode_salvar"]:
+        _confirmacao(ORIGEM_VOLANTE, marcacoes_lista, ORIGEM_VOLANTE, None)
     st.caption(
         "Percentuais com o ajuste da última varredura de notícias (o valor entre parênteses mostra o efeito em pontos)."
         if ajustes

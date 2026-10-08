@@ -290,6 +290,10 @@ SUGESTOES_MAX_TROCAS = 3  # quantas sugestões de alteração pelo mesmo custo m
 SUGESTOES_MAX_ECONOMIAS = 2  # quantas leituras de economia mostrar
 VERSOES_MAX_POR_CONCURSO = 20  # versões do palpite guardadas por concurso (decisão do usuário: gravadas no banco)
 VERSOES_CONCURSOS_MINIMOS = 10  # concursos com mais de uma versão antes de tirar conclusão sobre as mudanças
+# Bilhetes alternativos a partir do volante (pedido do usuário, 08/10/2026): nunca aumentam o custo nem o
+# número de duplos e triplos que ele escolheu.
+VARIANTES_MAX_TROCAS_AJUSTE = 2  # "ajuste leve": no máximo esta quantidade de trocas de um passo, uma de cada vez
+VARIANTES_COLUNAS_TIRADAS_ECONOMICO = 1  # "econômico": quantas colunas tirar, sempre a de menor perda por real
 # Motivos opcionais da marcação: o que o usuário sabe e o app não coleta.
 ANALISE_MOTIVOS = (
     "Técnico novo",
