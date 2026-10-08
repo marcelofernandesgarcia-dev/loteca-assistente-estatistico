@@ -21,7 +21,7 @@ from externo.varredura import concurso_alvo_da_semana, executar_para_concurso, r
 from importer.caixa_client import importar_concurso, importar_programacao
 from importer.cbf_client import coletar_todas
 from importer.cbf_mapeamento import parear
-from stats import calibracao
+from stats import calibracao, confiabilidade
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("atualizar_tudo")
@@ -86,6 +86,24 @@ def _atualizar_noticias(conexao) -> None:
                 len(resultados))
 
 
+def _atualizar_medicao(conexao) -> None:
+    """Refaz a medição de confiabilidade do app de hoje (sugestão S1) quando entrou concurso apurado novo.
+    Leva cerca de 1 a 2 minutos; a página 'Confiabilidade do modelo' só lê o resultado gravado."""
+    if not confiabilidade.precisa_medir(conexao):
+        logger.info("Medição de confiabilidade: já em dia com o último concurso apurado.")
+        return
+    medicao = confiabilidade.medir(conexao)
+    if medicao is None:
+        logger.info("Medição de confiabilidade: sem jogos no período.")
+        return
+    confiabilidade.gravar(conexao, medicao)
+    conexao.commit()
+    db.registrar_execucao(conexao, "medicao", sucesso=True, quantidade=medicao["total"]["n"])
+    conexao.commit()
+    logger.info("Medição de confiabilidade: %s jogos, perda log %.4f contra %.4f da frequência.",
+                medicao["total"]["n"], medicao["total"]["perda_log"], medicao["total"]["perda_log_frequencia"])
+
+
 def main() -> int:
     db.inicializar_schema()
     conexao = db.conectar()
@@ -93,6 +111,7 @@ def main() -> int:
     try:
         for nome, funcao in (
             ("caixa", _atualizar_caixa), ("cbf", _atualizar_cbf), ("calibracao", _atualizar_calibracao), ("noticias", _atualizar_noticias),
+            ("medicao", _atualizar_medicao),
         ):
             try:
                 funcao(conexao)

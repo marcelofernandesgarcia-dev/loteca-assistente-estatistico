@@ -112,6 +112,14 @@ BEGIN SELECT RAISE(ABORT, 'O retrato do bilhete não pode ser alterado.'); END;
 CREATE TRIGGER IF NOT EXISTS retratos_bilhete_sem_exclusao BEFORE DELETE ON retratos_bilhete
 BEGIN SELECT RAISE(ABORT, 'O retrato do bilhete não pode ser excluído.'); END;
 
+-- Medição da confiabilidade do app de hoje (sugestão S1, 08/10/2026), refeita quando entra concurso apurado.
+CREATE TABLE IF NOT EXISTS medicoes_modelo (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    calculado_em TEXT NOT NULL,
+    ultimo_concurso INTEGER NOT NULL,
+    conteudo TEXT NOT NULL
+);
+
 -- Anotações do usuário na revisão pós-jogo (item D2 do plano v2): só acrescentam, nunca mudam o retrato.
 CREATE TABLE IF NOT EXISTS notas_bilhete (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

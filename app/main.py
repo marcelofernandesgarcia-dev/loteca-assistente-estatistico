@@ -14,8 +14,9 @@ from stats.prazo import formatar_restante, situacao_do_prazo
 NOMES_FONTE = {
     "caixa": "CAIXA (concursos e programação)", "cbf": "CBF (classificação e jogos)",
     "calibracao": "Calibração dos percentuais", "noticias": "Notícias (ajuste externo)",
+    "medicao": "Medição da confiabilidade",
 }
-IDADE_ALERTA_HORAS = {"caixa": 24, "cbf": 7 * 24, "calibracao": 10 * 24, "noticias": 8 * 24}
+IDADE_ALERTA_HORAS = {"caixa": 24, "cbf": 7 * 24, "calibracao": 10 * 24, "noticias": 8 * 24, "medicao": 10 * 24}
 
 st.set_page_config(page_title="Loteca -- Assistente Estatístico", page_icon="⚽", layout="wide")
 

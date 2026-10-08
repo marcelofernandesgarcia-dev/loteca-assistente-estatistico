@@ -422,6 +422,7 @@ ELO_CLUBES_RATING_INICIAL = 1500.0
 ELO_CLUBES_K = 20.0
 ELO_CLUBES_VANTAGEM_MANDANTE = 65.0
 ELO_CLUBES_TESTE_DESDE = 2020  # o estudo testa de 2020 em diante (mesma janela do modelo da temporada)
+CONFIABILIDADE_DESDE_ANO = 2020  # a página mede o app de hoje desde este ano (todas as peças do modelo existem)
 ELO_CLUBES_JOGOS_POUCOS = 10  # time com menos jogos da Loteca no rating: cobertura "baixa" (aviso de alta incerteza)
 SELECOES_TREINO_DESDE = "1990-01-01"  # o ajuste da curva Elo -> probabilidade usa jogos a partir daqui
 SELECOES_CORTE_TESTE = "2010-01-01"  # a curva é ajustada só com jogos ANTES disto; o teste usa jogos DEPOIS

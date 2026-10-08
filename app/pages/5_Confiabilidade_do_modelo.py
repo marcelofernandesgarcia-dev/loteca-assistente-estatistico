@@ -14,6 +14,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import streamlit as st
+from confiabilidade_ui import mostrar_app_de_hoje
 from util import mostrar_aviso_responsabilidade, obter_conexao
 
 import config
@@ -26,12 +27,19 @@ logger = logging.getLogger(__name__)
 st.title("Confiabilidade do modelo")
 mostrar_aviso_responsabilidade()
 st.caption(
-    "O percentual atual (card 2 de 'Concurso atual') acerta mais que a frequência histórica pura "
+    "O percentual do app (card 2 de 'Concurso atual') acerta mais que a frequência histórica pura "
     "(47%/26%/27%)? Este painel mede, sem usar dado do futuro: cada concurso é avaliado só com os "
     "jogos de concursos anteriores a ele (walk-forward)."
 )
 
 conexao = obter_conexao()
+mostrar_app_de_hoje(conexao)
+
+st.header("Histórico: o modelo anterior")
+st.caption(
+    "O modelo antigo do app (Poisson sobre o histórico da Loteca, sem calibração), medido desde 2002. Ele não "
+    "dá mais o percentual dos jogos entre clubes nem das seleções; fica aqui como registro do ponto de partida."
+)
 with st.spinner("Calculando..."):
     resultado = executar_backtest(conexao)
     try:
@@ -55,7 +63,7 @@ atual, referencia = resultado["modelos"]["atual"], resultado["modelos"]["frequen
 veredito = resultado["comparacao_atual_vs_global"]["veredito"]
 cor_veredito = {"melhor que a referência": "success", "pior que a referência": "error"}.get(veredito, "warning")
 getattr(st, cor_veredito)(
-    f"**Veredito:** o percentual atual (Poisson) é **{veredito}** da frequência histórica simples, "
+    f"**Veredito do modelo anterior:** o Poisson sobre o histórico é **{veredito}** da frequência histórica simples, "
     "com 95% de confiança (diferença medida na perda logarítmica -- quanto menor, melhor a probabilidade dada "
     "ao que de fato aconteceu)."
 )
@@ -216,16 +224,14 @@ if medicao:
 
 st.subheader("O que isso quer dizer")
 if veredito == "pior que a referência":
-    st.warning(
-        "Nos jogos que envolvem clubes, o percentual calculado (Poisson sobre o histórico) **não supera** simplesmente usar a frequência "
-        "histórica de 1/X/2 (47%/26%/27%) -- e é mais confiante do que deveria nas faixas altas (veja a calibração "
-        "acima). Isso não muda o objetivo do app (organizar a análise), mas significa que os percentuais de hoje "
-        "devem ser lidos como **estimativa exploratória**, não como vantagem estatística comprovada. Nos jogos "
-        "entre clubes da mesma série A ou B, o app já usa o modelo da temporada da CBF, que passou nessa medição "
-        "(seção acima); os demais jogos de clubes seguem com este modelo."
+    st.info(
+        "O modelo anterior (Poisson sobre o histórico) **não superava** a frequência histórica de 1/X/2 e era mais "
+        "confiante do que deveria nas faixas altas. Por isso ele foi substituído, jogo a jogo, por modelos que passaram "
+        "no teste: o Elo das seleções, o modelo da temporada da CBF e o Elo de clubes. O resultado do app de hoje está "
+        "no topo desta página. Hoje o modelo anterior só dá o percentual de jogos sem outra base."
     )
 else:
-    st.success("O percentual calculado supera a frequência histórica simples nesta medição.")
+    st.success("O modelo anterior supera a frequência histórica simples nesta medição.")
 st.caption(
     "Metodologia: stats/backtest.py. Cada concurso usa só jogos de concursos anteriores (garantia testada em "
     "tests/test_backtest.py). Jogos decididos por sorteio são excluídos. Detalhes em "
