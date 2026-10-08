@@ -37,8 +37,8 @@ def consultar(triplos: int, duplos: int) -> dict | None:
 
 
 def calcular(triplos: int, duplos: int) -> dict:
-    """Calcula pela fórmula oficial (2^duplos x 3^triplos x R$2,00) mesmo
-    para combinações fora da tabela de bolão -- útil para conferir o custo
-    de uma aposta que não vai virar bolão fracionado."""
+    """Calcula pela fórmula oficial (2^duplos x 3^triplos x preço da aposta)
+    mesmo para combinações fora da tabela de bolão -- útil para conferir o
+    custo de uma aposta que não vai virar bolão fracionado."""
     apostas = (2**duplos) * (3**triplos)
-    return {"triplos": triplos, "duplos": duplos, "apostas": apostas, "valor_reais": apostas * 2.0}
+    return {"triplos": triplos, "duplos": duplos, "apostas": apostas, "valor_reais": apostas * config.PRECO_APOSTA_LOTECA}

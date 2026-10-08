@@ -9,7 +9,7 @@ máximo oficiais (Manual de Produtos v21, item 6.3.3). Não promete acerto.
 """
 import config
 
-PRECO_APOSTA = 2.0
+PRECO_APOSTA = config.PRECO_APOSTA_LOTECA  # fonte e divergências registradas em config.py
 
 
 def validar_volante(marcacoes: list[list[str]]) -> dict:

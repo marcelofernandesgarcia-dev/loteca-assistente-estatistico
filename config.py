@@ -271,6 +271,15 @@ SUGESTAO_LIMIAR_DUPLO = float(os.environ.get("LOTECA_LIMIAR_DUPLO", "45.0"))
 
 # Máximo oficial de apostas por bilhete (Manual de Produtos v21, item 6.3.3).
 BILHETE_MAX_APOSTAS = 864
+# Preço de uma aposta da Loteca: R$ 2,00, conforme o Anexo I do Manual de Produtos v21 (agosto de 2026; tabela em
+# data/loteca-boloes-oficial.csv) e o comprovante do concurso 1273 (16 apostas por R$ 32,00). Divergências
+# registradas (08/10/2026): o item 6.3.6 do mesmo manual cita "R$ 3,00 - 01 DUPLO", e o CAIXA Informa de 2019
+# (docs/fontes-oficiais/, histórico) traz R$ 1,50. Trocar só aqui quando a CAIXA reajustar.
+PRECO_APOSTA_LOTECA = 2.0
+PRECO_APOSTA_FONTE = "Anexo I do Manual de Produtos das Loterias CAIXA v21 (agosto de 2026)"
+# Chance "pelo método da CAIXA": cada resultado com 1 em 3 (o que reproduz as chances da aposta mínima publicadas
+# no item 6.3.6 do Manual v21). 3^14 resultados possíveis nos 14 jogos.
+JOGOS_POR_CONCURSO = 14
 
 # Análise do palpite (stats/analise_palpite.py; item 20, aprovado pelo usuário
 # em 29/09/2026). Tudo por regra sobre os percentuais já calculados.
