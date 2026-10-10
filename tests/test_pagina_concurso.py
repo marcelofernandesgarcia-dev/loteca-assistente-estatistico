@@ -333,6 +333,19 @@ def test_bilhete_salvo_aparece_como_volante_e_pode_voltar_ao_volante(banco):
     assert {q.key.rsplit("_", 1)[1] for q in _quadrados(at) if q.value} == {"1", "2"}
 
 
+def test_foi_apostado_no_bilhete_salvo_do_concurso(banco):
+    # 10/10/2026: a pergunta também aparece em "Concurso atual"; prazo ainda aberto, sem aviso de prazo.
+    at = _marcar_duplo_1_2(_abrir())
+    _botao(at, "Salvar bilhete").click().run()
+    assert not any("O prazo deste concurso já passou" in w.value for w in at.warning)
+    _botao(at, "Foi apostado?").click().run()
+    _botao(at, "Sim, apostei").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert any(e.label.startswith("Bilhete nº") and e.label.endswith("· apostado") for e in at.expander)
+    with db.sessao() as c:
+        assert c.execute("SELECT jogado_em FROM bilhetes").fetchone()[0] is not None
+
+
 def test_versao_escolhida_aparece_como_volante(banco):
     at = _marcar_duplo_1_2(_abrir())
     _botao(at, "Guardar esta versão").click().run()

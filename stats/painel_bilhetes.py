@@ -76,9 +76,12 @@ def painel(jogos: list[dict]) -> dict[str, list[dict]]:
     }
 
 
-def jogos_conferidos(conexao, so_apostados: bool = False) -> list[dict]:
-    """Jogos dos bilhetes conferidos, com o percentual guardado e o retrato do jogo quando existe."""
-    filtro = "AND b.jogado_em IS NOT NULL" if so_apostados else ""
+def jogos_conferidos(conexao) -> list[dict]:
+    """Jogos dos bilhetes apostados e conferidos, com o percentual guardado e o retrato do jogo quando existe.
+    Rascunho e simulação não contam (decisão do usuário, 10/10/2026)."""
+    from stats.bilhetes_salvos import SO_APOSTADOS_B  # import local, como nos outros módulos de leitura
+
+    filtro = f"AND {SO_APOSTADOS_B}"
     linhas = conexao.execute(
         f"""
         SELECT bj.bilhete_id, bj.jogo_id, bj.marcacoes, bj.percentual_1, bj.percentual_x, bj.percentual_2,

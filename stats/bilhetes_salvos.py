@@ -13,6 +13,13 @@ from stats.bilhete import PRECO_APOSTA, montar_bilhete
 
 COLUNAS = ("1", "X", "2")
 ORIGENS = ("volante", "ajuste_leve", "reorganizado", "economico")
+APOSTADO, SIMULADO, RASCUNHO = "apostado", "simulado", "rascunho"
+SITUACOES = (APOSTADO, SIMULADO, RASCUNHO)
+NOME_SITUACAO = {APOSTADO: "apostado", SIMULADO: "simulado (não jogado)", RASCUNHO: "rascunho (sem resposta)"}
+# Só bilhete apostado e não arquivado entra nas contas (decisão do usuário, 10/10/2026). Trecho de SQL sobre a
+# tabela `bilhetes` (com ou sem o apelido `b.`, conforme o uso).
+SO_APOSTADOS = "jogado_em IS NOT NULL AND arquivado_em IS NULL"
+SO_APOSTADOS_B = "b.jogado_em IS NOT NULL AND b.arquivado_em IS NULL"
 
 
 def _normalizar(marcacoes: dict) -> dict[int, list[str]]:
@@ -86,17 +93,18 @@ def _gravar_analise(conexao, bilhete_id: int, analise: dict | None, motivos: dic
 
 
 def jogos_conferidos_para_historico(conexao) -> list[list[dict]]:
-    """Bilhetes já conferidos, cada um como a lista dos seus jogos no formato
+    """Bilhetes apostados já conferidos, cada um como a lista dos seus jogos no formato
     de `stats.analise_palpite.agregar_historico`. Jogo sem percentual salvo
-    fica de fora (não há como analisar)."""
+    fica de fora (não há como analisar); rascunho e simulação não contam."""
     linhas = conexao.execute(
-        """
+        f"""
         SELECT bj.bilhete_id, bj.marcacoes, bj.percentual_1, bj.percentual_x, bj.percentual_2,
                bj.categoria, bj.motivos, j.resultado, j.num_jogo
         FROM bilhete_jogos bj
         JOIN bilhetes b ON b.id = bj.bilhete_id
         JOIN jogos j ON j.id = bj.jogo_id
         WHERE b.conferido_em IS NOT NULL AND j.resultado IS NOT NULL AND bj.percentual_1 IS NOT NULL
+          AND {SO_APOSTADOS_B}
         ORDER BY bj.bilhete_id, j.num_jogo
         """
     ).fetchall()
@@ -120,7 +128,7 @@ def bilhete_igual(conexao, concurso_numero: int, marcacoes: dict) -> int | None:
     deixa salvar de novo se o usuário confirmar (decisão do usuário, 08/10/2026)."""
     alvo = _normalizar(marcacoes)
     for linha in conexao.execute(
-        "SELECT id FROM bilhetes WHERE concurso_numero = ? ORDER BY id DESC", (concurso_numero,)
+        "SELECT id FROM bilhetes WHERE concurso_numero = ? AND arquivado_em IS NULL ORDER BY id DESC", (concurso_numero,)
     ).fetchall():
         salvas = {r["jogo_id"]: r["marcacoes"].split(",") for r in conexao.execute(
             "SELECT jogo_id, marcacoes FROM bilhete_jogos WHERE bilhete_id = ?", (linha["id"],))}
@@ -138,7 +146,7 @@ def quadro_do_concurso(conexao, concurso_numero: int) -> list[dict]:
 
     linhas = []
     for bilhete in conexao.execute(
-        "SELECT * FROM bilhetes WHERE concurso_numero = ? ORDER BY id", (concurso_numero,)
+        "SELECT * FROM bilhetes WHERE concurso_numero = ? AND arquivado_em IS NULL ORDER BY id", (concurso_numero,)
     ).fetchall():
         jogos = jogos_do_bilhete(conexao, bilhete["id"])
         categorias = [j["categoria"] for j in jogos]
@@ -150,7 +158,7 @@ def quadro_do_concurso(conexao, concurso_numero: int) -> list[dict]:
             "duplos": sum(1 for j in jogos if len(j["marcacoes"]) == 2),
             "triplos": sum(1 for j in jogos if len(j["marcacoes"]) == 3),
             "zebras": None if not categorias or None in categorias else sum(c == ZEBRA for c in categorias),
-            "jogado": bilhete["jogado_em"] is not None,
+            "situacao": situacao(bilhete),
             "acertos": sum(j["resultado"] in j["marcacoes"] for j in jogos) if pode_conferir(jogos) else None,
             "total_jogos": len(jogos),
         })
@@ -158,13 +166,15 @@ def quadro_do_concurso(conexao, concurso_numero: int) -> list[dict]:
 
 
 def listar_bilhetes(conexao, concurso_numero: int | None = None) -> list[dict]:
+    """Bilhetes não arquivados (os simulados "limpos" ficam em listar_arquivados), mais recentes primeiro."""
     if concurso_numero is not None:
         linhas = conexao.execute(
-            "SELECT * FROM bilhetes WHERE concurso_numero = ? ORDER BY criado_em DESC", (concurso_numero,)
+            "SELECT * FROM bilhetes WHERE concurso_numero = ? AND arquivado_em IS NULL ORDER BY criado_em DESC",
+            (concurso_numero,),
         )
     else:
-        linhas = conexao.execute("SELECT * FROM bilhetes ORDER BY criado_em DESC")
-    return [dict(linha) for linha in linhas]
+        linhas = conexao.execute("SELECT * FROM bilhetes WHERE arquivado_em IS NULL ORDER BY criado_em DESC")
+    return [{**dict(linha), "situacao": situacao(linha)} for linha in linhas]
 
 
 def jogos_do_bilhete(conexao, bilhete_id: int) -> list[dict]:
@@ -219,11 +229,49 @@ def conferir_bilhete(conexao, bilhete_id: int) -> dict | None:
     return {"acertos": acertos, "total_jogos": len(jogos), "acertos_sugestao_do_modelo": acertos_sugestao, "jogos": jogos}
 
 
-def marcar_jogado(conexao, bilhete_id: int, jogado: bool) -> None:
-    """Marca (ou desmarca) o bilhete como apostado de verdade (plano v2, item D1). Só a data da marcação é
-    guardada; nada do comprovante da CAIXA entra no app."""
-    agora = dt.datetime.now().isoformat(timespec="seconds") if jogado else None
-    conexao.execute("UPDATE bilhetes SET jogado_em = ? WHERE id = ?", (agora, bilhete_id))
+def situacao(bilhete) -> str:
+    """'apostado', 'simulado' ou 'rascunho' (salvo e ainda sem resposta)."""
+    if bilhete["jogado_em"] is not None:
+        return APOSTADO
+    if bilhete["simulado_em"] is not None:
+        return SIMULADO
+    return RASCUNHO
+
+
+def confirmar_situacao(conexao, bilhete_id: int, nova: str) -> None:
+    """Grava a resposta do usuário a "Foi apostado?" (pedido de 10/10/2026). 'rascunho' desfaz a resposta. Só a data
+    da resposta é guardada; nada do comprovante da CAIXA entra no app. Bilhete arquivado precisa ser restaurado antes."""
+    if nova not in SITUACOES:
+        raise ValueError(f"Situação desconhecida: {nova}.")
+    linha = conexao.execute("SELECT arquivado_em FROM bilhetes WHERE id = ?", (bilhete_id,)).fetchone()
+    if linha is None:
+        raise ValueError(f"Bilhete nº {bilhete_id} não existe.")
+    if linha["arquivado_em"] is not None:
+        raise ValueError(f"O bilhete nº {bilhete_id} está arquivado; restaure-o antes de mudar a situação.")
+    agora = dt.datetime.now().isoformat(timespec="seconds")
+    conexao.execute("UPDATE bilhetes SET jogado_em = ?, simulado_em = ? WHERE id = ?",
+                    (agora if nova == APOSTADO else None, agora if nova == SIMULADO else None, bilhete_id))
+
+
+def arquivar_simulados(conexao) -> int:
+    """'Limpar simulados': arquiva só os bilhetes confirmados como simulação. Eles somem das listas e das contas, mas
+    ficam guardados (com o retrato imutável) e podem ser restaurados. Devolve quantos foram arquivados."""
+    agora = dt.datetime.now().isoformat(timespec="seconds")
+    cursor = conexao.execute(
+        "UPDATE bilhetes SET arquivado_em = ? WHERE simulado_em IS NOT NULL AND jogado_em IS NULL AND arquivado_em IS NULL",
+        (agora,),
+    )
+    return cursor.rowcount
+
+
+def restaurar_bilhete(conexao, bilhete_id: int) -> None:
+    """Desfaz o arquivamento: o bilhete volta às listas, ainda como simulado."""
+    conexao.execute("UPDATE bilhetes SET arquivado_em = NULL WHERE id = ?", (bilhete_id,))
+
+
+def listar_arquivados(conexao) -> list[dict]:
+    return [dict(l) for l in conexao.execute(
+        "SELECT * FROM bilhetes WHERE arquivado_em IS NOT NULL ORDER BY arquivado_em DESC, id DESC")]
 
 
 def registrar_premio(conexao, bilhete_id: int, valor: float) -> None:
@@ -232,16 +280,20 @@ def registrar_premio(conexao, bilhete_id: int, valor: float) -> None:
 
 
 def resumo_financeiro(conexao) -> dict:
+    """Gasto, prêmio e saldo só dos bilhetes apostados (decisão de 10/10/2026: rascunho e simulação não contam).
+    As contagens de rascunho e simulado servem para a tela lembrar o que falta responder."""
     linha = conexao.execute(
-        "SELECT COUNT(*) AS n, COALESCE(SUM(custo), 0) AS gasto, COALESCE(SUM(premio_informado), 0) AS premio,"
-        " COUNT(jogado_em) AS jogados, COALESCE(SUM(CASE WHEN jogado_em IS NOT NULL THEN custo END), 0) AS gasto_jogado"
-        " FROM bilhetes"
+        f"SELECT COUNT(*) AS n, COUNT(jogado_em) AS apostados, COUNT(simulado_em) AS simulados,"
+        f" COALESCE(SUM(CASE WHEN {SO_APOSTADOS} THEN custo END), 0) AS gasto,"
+        f" COALESCE(SUM(CASE WHEN {SO_APOSTADOS} THEN premio_informado END), 0) AS premio"
+        " FROM bilhetes WHERE arquivado_em IS NULL"
     ).fetchone()
     return {
         "bilhetes": linha["n"],
+        "apostados": linha["apostados"],
+        "simulados": linha["simulados"],
+        "rascunhos": linha["n"] - linha["apostados"] - linha["simulados"],
         "gasto_total": linha["gasto"],
         "premio_total": linha["premio"],
         "saldo": linha["premio"] - linha["gasto"],
-        "jogados": linha["jogados"],
-        "gasto_jogado": linha["gasto_jogado"],
     }

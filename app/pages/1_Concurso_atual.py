@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import streamlit as st
 from ano_em_curso_ui import mostrar_ano_em_curso, resumo_do_ano
-from bilhetes_ui import mostrar_quadro
+from bilhetes_ui import mostrar_pergunta_aposta, mostrar_quadro
 from calibracao_ui import mostrar_calibracao
 from chances_ui import mostrar_chances_do_bilhete
 from estilo_caixa import renderizar_cartao, renderizar_tabela, renderizar_titulo_cartao
@@ -35,7 +35,14 @@ from stats.contexto import selo_da_posicao
 from stats.concursos import concurso_a_jogar, ultimo_encerrado as buscar_ultimo_encerrado
 from stats.analise_palpite import NOME_CATEGORIA, ZEBRA, analisar_palpite, formatar_uma_em
 from stats.bilhete import PRECO_APOSTA, justificativa_da_sugestao, montar_bilhete, validar_volante
-from stats.bilhetes_salvos import bilhete_igual, jogos_do_bilhete, listar_bilhetes, quadro_do_concurso, salvar_bilhete
+from stats.bilhetes_salvos import (
+    NOME_SITUACAO,
+    bilhete_igual,
+    jogos_do_bilhete,
+    listar_bilhetes,
+    quadro_do_concurso,
+    salvar_bilhete,
+)
 from stats.variantes_bilhete import ORIGEM_VOLANTE, nome_da_origem
 from stats.ano_em_curso import frase_do_lado
 from stats.cobertura import cobertura_do_concurso
@@ -802,6 +809,8 @@ else:
     # Bilhetes salvos do concurso (pedido do usuário, 08/10/2026): cada um como volante de leitura, com as marcações
     # e o percentual do dia em que foi salvo. O volante de cima continua abrindo em branco (decisão do usuário).
     salvos = listar_bilhetes(conexao, numero_vigente)
+    # Sem concurso aberto, o vigente já foi apurado; com concurso aberto, vale o prazo de aposta.
+    prazo_encerrado = not a_jogar or situacao_do_prazo(a_jogar["data_limite_aposta"], a_jogar["horario_fim_apostas"])["aberto"] is False
     with st.container(border=True):
         st.markdown("#### Bilhetes salvos para este concurso")
         if not salvos:
@@ -821,10 +830,12 @@ else:
                 linhas_salvo = jogos_do_bilhete(conexao, salvo["id"])
                 titulo_salvo = (f"Bilhete nº {salvo['id']} · {nome_da_origem(salvo.get('origem'))} · "
                                 f"{salvo['apostas']} apostas · {reais(salvo['custo'])} · "
-                                + ("apostado" if salvo["jogado_em"] else "rascunho"))
+                                + NOME_SITUACAO[salvo["situacao"]])
                 with st.expander(titulo_salvo):
                     st.markdown(renderizar_volante(jogos_para_o_volante(linhas_salvo), f"Bilhete nº {salvo['id']}"),
                                 unsafe_allow_html=True)
+                    # "Foi apostado?" (10/10/2026): só bilhete apostado entra nas contas.
+                    mostrar_pergunta_aposta(conexao, salvo, f"atual_{salvo['id']}", prazo_encerrado)
                     st.button("Levar ao volante", key=f"bilhete_levar_{salvo['id']}", on_click=_levar_bilhete,
                               args=({linha["jogo_id"]: linha["marcacoes"] for linha in linhas_salvo},),
                               help="Põe as marcações deste bilhete no volante, acima, para mexer e salvar outro.")

@@ -250,7 +250,9 @@ CREATE TABLE IF NOT EXISTS bilhetes (
     acertos_esperados REAL,
     jogado_em TEXT,
     origem TEXT,
-    marcacoes_base TEXT
+    marcacoes_base TEXT,
+    simulado_em TEXT,
+    arquivado_em TEXT
 );
 
 CREATE TABLE IF NOT EXISTS bilhete_jogos (
@@ -351,8 +353,12 @@ def _garantir_colunas(conexao: sqlite3.Connection) -> None:
         # Vazio = rascunho. O comprovante da CAIXA nunca é importado (tem dado pessoal).
         # origem e marcacoes_base (08/10/2026): bilhete salvo a partir de uma variante do volante ("ajuste_leve",
         # "reorganizado", "economico") e o volante de onde ela saiu, para comparar depois do resultado. Vazio = volante.
+        # simulado_em e arquivado_em (10/10/2026): o usuário confirma se apostou ("apostado" = jogado_em, "simulado"
+        # = simulado_em; sem resposta = rascunho). "Limpar simulados" arquiva (some das listas e das contas, pode ser
+        # restaurado); nada é apagado, e o retrato imutável continua guardado.
         "bilhetes": [("chance_todos", "REAL"), ("chance_todos_menos_um", "REAL"), ("acertos_esperados", "REAL"),
-                     ("jogado_em", "TEXT"), ("origem", "TEXT"), ("marcacoes_base", "TEXT")],
+                     ("jogado_em", "TEXT"), ("origem", "TEXT"), ("marcacoes_base", "TEXT"), ("simulado_em", "TEXT"),
+                     ("arquivado_em", "TEXT")],
         "bilhete_jogos": [("categoria", "TEXT"), ("chance_coberta", "REAL"), ("sem_base_propria", "INTEGER"), ("motivos", "TEXT")],
     }
     for tabela, colunas in novas.items():

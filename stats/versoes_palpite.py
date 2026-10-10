@@ -90,12 +90,20 @@ def acertos(marcacoes: dict, resultados: dict[int, str | None]) -> int | None:
     return sum(1 for jogo_id, colunas in marc.items() if resultados[jogo_id] in colunas)
 
 
-def aprendizado_das_versoes(versoes: list[dict], resultados: dict[int, str | None]) -> dict | None:
+def aprendizado_das_versoes(versoes: list[dict], resultados: dict[int, str | None],
+                            apostados: set[int] | None = None) -> dict | None:
     """Depois do resultado: a primeira versão x a que virou bilhete (ou a última, se nenhuma
-    virou). None se há uma versão só ou falta resultado. `versoes` em ordem de criação."""
+    virou). None se há uma versão só ou falta resultado. `versoes` em ordem de criação.
+    `apostados` (ids dos bilhetes confirmados como apostados): quando vem, só conta a versão
+    que virou bilhete apostado; sem ela, o concurso não entra (decisão do usuário, 10/10/2026)."""
     if len(versoes) < 2:
         return None
-    final = next((v for v in reversed(versoes) if v.get("bilhete_id")), versoes[-1])
+    if apostados is not None:
+        final = next((v for v in reversed(versoes) if v.get("bilhete_id") in apostados), None)
+        if final is None:
+            return None
+    else:
+        final = next((v for v in reversed(versoes) if v.get("bilhete_id")), versoes[-1])
     primeira = versoes[0]
     if final is primeira:
         return None
@@ -213,7 +221,11 @@ def resultados_do_concurso(conexao, concurso_numero: int) -> dict[int, str | Non
 
 
 def aprendizado_de_todos_os_concursos(conexao) -> list[dict]:
-    """`aprendizado_das_versoes` de cada concurso com mais de uma versão e resultado completo."""
+    """`aprendizado_das_versoes` de cada concurso com mais de uma versão, resultado completo e bilhete apostado
+    (rascunho e simulação não contam)."""
+    from stats.bilhetes_salvos import SO_APOSTADOS  # import local: bilhetes_salvos não depende deste módulo
+
+    apostados = {linha[0] for linha in conexao.execute(f"SELECT id FROM bilhetes WHERE {SO_APOSTADOS}")}
     concursos = [
         linha[0] for linha in conexao.execute(
             "SELECT concurso_numero FROM versoes_palpite GROUP BY concurso_numero HAVING COUNT(*) > 1 ORDER BY concurso_numero"
@@ -221,7 +233,7 @@ def aprendizado_de_todos_os_concursos(conexao) -> list[dict]:
     ]
     saida = []
     for numero in concursos:
-        leitura = aprendizado_das_versoes(listar_versoes(conexao, numero), resultados_do_concurso(conexao, numero))
+        leitura = aprendizado_das_versoes(listar_versoes(conexao, numero), resultados_do_concurso(conexao, numero), apostados)
         if leitura:
             saida.append({"concurso_numero": numero, **leitura})
     return saida

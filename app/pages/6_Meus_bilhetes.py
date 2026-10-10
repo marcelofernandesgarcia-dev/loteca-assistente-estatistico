@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import streamlit as st
-from bilhetes_ui import mostrar_quadro
+from bilhetes_ui import mostrar_pergunta_aposta, mostrar_quadro
 from chances_ui import mostrar_chances_do_bilhete, mostrar_conjunto, percentuais_atuais_do_concurso, reais, rotulo_do_bilhete
 from retrato_ui import mostrar_retrato
 from revisao_ui import mostrar_revisao
@@ -24,16 +24,20 @@ from stats.analise_palpite import (
     avaliar_depois_do_resultado,
 )
 from stats.bilhetes_salvos import (
+    NOME_SITUACAO,
+    arquivar_simulados,
     conferir_bilhete,
     jogos_conferidos_para_historico,
     jogos_do_bilhete,
+    listar_arquivados,
     listar_bilhetes,
-    marcar_jogado,
     pode_conferir,
     quadro_do_concurso,
     registrar_premio,
+    restaurar_bilhete,
     resumo_financeiro,
 )
+from stats.prazo import situacao_do_prazo
 from stats.anti_manada import carregar_concursos
 from stats.painel_bilhetes import DIMENSOES, jogos_conferidos
 from stats.painel_bilhetes import painel as painel_por_tipo
@@ -194,32 +198,75 @@ st.caption(
 conexao = obter_conexao()
 bilhetes = listar_bilhetes(conexao)
 
+
+def mostrar_arquivados() -> None:
+    """Simulados "limpos": fora das listas e das contas, guardados e restauráveis (decisão de 10/10/2026)."""
+    arquivados = listar_arquivados(conexao)
+    if not arquivados:
+        return
+    with st.expander(f"Bilhetes arquivados ({len(arquivados)} simulado(s) limpo(s))"):
+        st.caption("Não entram em nenhuma lista nem conta. O retrato de cada um continua guardado. Restaurar devolve o "
+                   "bilhete à lista, ainda como simulado.")
+        for arquivado in arquivados:
+            with st.container(horizontal=True, vertical_alignment="center"):
+                st.markdown(f"Bilhete nº {arquivado['id']} · concurso {arquivado['concurso_numero']} · "
+                            f"{arquivado['apostas']} apostas · {reais(arquivado['custo'])}")
+                if st.button("Restaurar", key=f"restaurar_{arquivado['id']}"):
+                    restaurar_bilhete(conexao, arquivado["id"])
+                    conexao.commit()
+                    st.rerun()
+
+
+aviso_limpeza = st.session_state.pop("aviso_limpeza", None)
+if aviso_limpeza:
+    st.success(aviso_limpeza)
+
 if not bilhetes:
     st.info("Nenhum bilhete salvo ainda -- vá em 'Concurso atual', marque o bilhete e clique em 'Salvar bilhete'.")
+    mostrar_arquivados()
     conexao.close()
     st.stop()
 
 resumo = resumo_financeiro(conexao)
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("Bilhetes salvos", resumo["bilhetes"])
-c2.metric("Total gasto", reais(resumo["gasto_total"]))
+c1.metric("Bilhetes apostados", resumo["apostados"])
+c2.metric("Total gasto (apostados)", reais(resumo["gasto_total"]))
 c3.metric("Total em prêmios (informado por você)", reais(resumo["premio_total"]))
 c4.metric("Saldo", reais(resumo["saldo"]), delta=None)
 st.caption(
-    "O prêmio só entra aqui se você informar (abaixo, em cada bilhete apurado) -- o app não consulta a CAIXA "
-    "para saber se você ganhou. "
-    f"Marcados como apostados de verdade: {resumo['jogados']} de {resumo['bilhetes']} bilhetes "
-    f"({reais(resumo['gasto_jogado'])}); os demais são rascunhos. O total gasto soma todos os bilhetes salvos."
+    "Só os bilhetes confirmados como apostados entram no gasto, no saldo, no histórico, nos painéis e no "
+    f"aprendizado. Sem resposta ainda: {resumo['rascunhos']}; simulados: {resumo['simulados']}. Responda em cada "
+    "bilhete, no botão 'Foi apostado?'. O prêmio só entra se você informar -- o app não consulta a CAIXA."
 )
+
+# "Limpar simulados" (pedido do usuário, 10/10/2026): arquiva só os confirmados como simulação, com confirmação.
+if resumo["simulados"]:
+    if not st.session_state.get("limpar_simulados_aberto"):
+        st.button(f"Limpar simulados ({resumo['simulados']})", key="limpar_simulados",
+                  on_click=lambda: st.session_state.update({"limpar_simulados_aberto": True}))
+    else:
+        st.warning(
+            f"Isto vai tirar {resumo['simulados']} bilhete(s) simulado(s) da lista e das contas. Eles ficam guardados "
+            "em 'Bilhetes arquivados' e podem ser restaurados. Rascunhos e apostados não são tocados. Confirmar?"
+        )
+        with st.container(horizontal=True):
+            confirmar_limpeza = st.button("Confirmar limpeza", key="limpar_simulados_confirmar", type="primary")
+            st.button("Cancelar", key="limpar_simulados_cancelar",
+                      on_click=lambda: st.session_state.pop("limpar_simulados_aberto", None))
+        if confirmar_limpeza:
+            quantos = arquivar_simulados(conexao)
+            conexao.commit()
+            st.session_state.pop("limpar_simulados_aberto", None)
+            st.session_state["aviso_limpeza"] = f"{quantos} bilhete(s) simulado(s) arquivado(s)."
+            st.rerun()
 
 mostrar_historico(agregar_historico(jogos_conferidos_para_historico(conexao)))
 
-# Painel por tipo de jogo (plano v2, item D5).
+# Painel por tipo de jogo (plano v2, item D5): só bilhetes apostados (decisão de 10/10/2026).
 st.subheader("Acertos por tipo de jogo")
-so_apostados = st.toggle("Só bilhetes apostados de verdade", key="painel_so_apostados")
-jogos_painel = jogos_conferidos(conexao, so_apostados)
+jogos_painel = jogos_conferidos(conexao)
 if not jogos_painel:
-    st.info("Aparece depois do primeiro bilhete conferido" + (" e marcado como apostado." if so_apostados else "."))
+    st.info("Aparece depois do primeiro bilhete apostado e conferido.")
 else:
     dimensao = st.radio("Separar por", list(DIMENSOES), format_func=DIMENSOES.get, horizontal=True, key="painel_dimensao")
     st.markdown(
@@ -278,6 +325,14 @@ def _concurso_aberto(numero_concurso: int) -> bool:
     return bool(total) and bool(sem_resultado)
 
 
+def _prazo_passou(numero_concurso: int) -> bool:
+    """O prazo de aposta do concurso já acabou (ou ele já foi todo apurado): hora de responder se apostou."""
+    linha = conexao.execute("SELECT data_limite_aposta, horario_fim_apostas FROM concursos WHERE numero = ?",
+                            (numero_concurso,)).fetchone()
+    prazo = situacao_do_prazo(linha["data_limite_aposta"], linha["horario_fim_apostas"]) if linha else {"aberto": None}
+    return prazo["aberto"] is False or not _concurso_aberto(numero_concurso)
+
+
 st.subheader("Conjunto de bilhetes do concurso")
 concursos_abertos = sorted({b["concurso_numero"] for b in bilhetes if _concurso_aberto(b["concurso_numero"])}, reverse=True)
 if not concursos_abertos:
@@ -332,7 +387,7 @@ for bilhete in bilhetes:
     alternativa = bilhete.get("origem") not in (None, ORIGEM_VOLANTE)
     if alternativa:
         titulo += f" · alternativa: {nome_da_origem(bilhete['origem'])}"
-    titulo += " · apostado" if bilhete["jogado_em"] else " · rascunho"
+    titulo += f" · {NOME_SITUACAO[bilhete['situacao']]}"
     if bilhete["conferido_em"] is not None:
         titulo += f" · {bilhete['acertos']}/{total_jogos_bilhete} acertos"
     with st.expander(titulo):
@@ -369,15 +424,9 @@ for bilhete in bilhetes:
         # depois do resultado, o resultado e o acerto de cada jogo.
         st.markdown(renderizar_volante(jogos_para_o_volante(jogos_do_bilhete(conexao, bilhete["id"])),
                                        f"Bilhete nº {bilhete['id']}"), unsafe_allow_html=True)
-        # "Jogado de verdade" (plano v2, item D1): separa rascunho de aposta real sem importar o comprovante.
-        jogado = st.checkbox(
-            "Apostei este bilhete na lotérica", value=bilhete["jogado_em"] is not None, key=f"jogado_{bilhete['id']}",
-            help="Só a marcação é guardada. O comprovante da CAIXA não é importado: ele tem dados pessoais.",
-        )
-        if jogado != (bilhete["jogado_em"] is not None):
-            marcar_jogado(conexao, bilhete["id"], jogado)
-            conexao.commit()
-            st.rerun()
+        # "Foi apostado?" (10/10/2026, substitui a caixinha do item D1): só a data da resposta é guardada; o
+        # comprovante da CAIXA nunca é importado (tem dados pessoais).
+        mostrar_pergunta_aposta(conexao, bilhete, f"meus_{bilhete['id']}", _prazo_passou(bilhete["concurso_numero"]))
         mostrar_retrato(retrato_do_bilhete(conexao, bilhete["id"]), f"retrato_{bilhete['id']}")
         if bilhete["conferido_em"] is None and _concurso_aberto(bilhete["concurso_numero"]):
             jogos_atuais, pcts_atuais = _atuais(bilhete["concurso_numero"])
@@ -428,4 +477,5 @@ for bilhete in bilhetes:
                 conexao.commit()
                 st.rerun()
 
+mostrar_arquivados()
 conexao.close()

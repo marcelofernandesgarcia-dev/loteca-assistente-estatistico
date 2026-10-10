@@ -169,12 +169,13 @@ def ler_marcacoes_base(texto: str | None) -> dict[int, list[str]] | None:
 def leituras_das_variantes(conexao) -> list[dict]:
     """Uma leitura por bilhete salvo a partir de uma variante, com resultado completo: quantos acertos a variante fez
     a mais (ou a menos) que o volante de onde saiu. Formato de stats.versoes_palpite.agregar_aprendizado (`saldo`)."""
-    from stats.bilhetes_salvos import jogos_do_bilhete  # import local: bilhetes_salvos não depende deste módulo
+    from stats.bilhetes_salvos import SO_APOSTADOS, jogos_do_bilhete  # import local: sem dependência circular
 
     saida = []
     for linha in conexao.execute(
         "SELECT id, concurso_numero, origem, marcacoes_base FROM bilhetes"
-        " WHERE origem IS NOT NULL AND origem != ? AND marcacoes_base IS NOT NULL ORDER BY id", (ORIGEM_VOLANTE,)
+        f" WHERE origem IS NOT NULL AND origem != ? AND marcacoes_base IS NOT NULL AND {SO_APOSTADOS} ORDER BY id",
+        (ORIGEM_VOLANTE,),
     ).fetchall():
         jogos = jogos_do_bilhete(conexao, linha["id"])
         resultados = {j["jogo_id"]: j["resultado"] for j in jogos}

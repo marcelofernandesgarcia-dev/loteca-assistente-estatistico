@@ -116,13 +116,21 @@ def test_limite_de_versoes(banco, monkeypatch):
             guardar_versao(c, 9002, {1: ["X"], 2: ["1"]}, {}, None)
 
 
-def test_aprendizado_de_todos_so_com_resultado_completo(banco):
+def test_aprendizado_de_todos_so_com_resultado_completo_e_bilhete_apostado(banco):
+    from stats.bilhetes_salvos import confirmar_situacao
+
     with db.sessao() as c:
         guardar_versao(c, 9002, {1: ["1"], 2: ["1"]}, {}, None)
-        guardar_versao(c, 9002, {1: ["1"], 2: ["2"]}, {}, None)
+        v2 = guardar_versao(c, 9002, {1: ["1"], 2: ["2"]}, {}, None)
+        c.execute("INSERT INTO bilhetes (id, concurso_numero, criado_em, apostas, custo) VALUES (7, 9002, 'x', 1, 2.0)")
+        ligar_ao_bilhete(c, v2["versao"]["id"], 7)
         assert aprendizado_de_todos_os_concursos(c) == []  # ainda sem resultado
         c.execute("UPDATE jogos SET resultado = '1' WHERE id = 1")
         c.execute("UPDATE jogos SET resultado = '2' WHERE id = 2")
+        assert aprendizado_de_todos_os_concursos(c) == []  # bilhete ainda em rascunho: não conta (10/10/2026)
+        confirmar_situacao(c, 7, "simulado")
+        assert aprendizado_de_todos_os_concursos(c) == []
+        confirmar_situacao(c, 7, "apostado")
         leituras = aprendizado_de_todos_os_concursos(c)
     assert leituras == [{"concurso_numero": 9002, "versoes": 2, "numero_final": 2, "acertos_primeira": 1,
                          "acertos_final": 2, "saldo": 1, "apostas_primeira": 1, "apostas_final": 1}]

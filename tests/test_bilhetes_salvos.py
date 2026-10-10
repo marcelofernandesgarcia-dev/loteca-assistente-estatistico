@@ -5,8 +5,14 @@ import pytest
 
 import db
 from stats.bilhetes_salvos import (
+    arquivar_simulados,
+    bilhete_igual,
+    confirmar_situacao,
     conferir_bilhete,
     jogos_do_bilhete,
+    listar_arquivados,
+    quadro_do_concurso,
+    restaurar_bilhete,
     listar_bilhetes,
     pode_conferir,
     registrar_premio,
@@ -133,13 +139,54 @@ def test_registrar_premio_e_resumo_financeiro(conexao):
     marcacoes, percentuais = _marcacoes_e_percentuais(conexao)
     b1 = salvar_bilhete(conexao, 1271, marcacoes, percentuais)
     b2 = salvar_bilhete(conexao, 1271, marcacoes, percentuais)
+    b3 = salvar_bilhete(conexao, 1271, marcacoes, percentuais)
     registrar_premio(conexao, b1, 25.50)
+    registrar_premio(conexao, b3, 99.0)  # prêmio de bilhete simulado não entra
+    # 10/10/2026: só o apostado conta no gasto, no prêmio e no saldo.
+    assert resumo_financeiro(conexao)["gasto_total"] == 0 and resumo_financeiro(conexao)["rascunhos"] == 3
+    confirmar_situacao(conexao, b1, "apostado")
+    confirmar_situacao(conexao, b2, "apostado")
+    confirmar_situacao(conexao, b3, "simulado")
 
     resumo = resumo_financeiro(conexao)
-    assert resumo["bilhetes"] == 2
+    assert (resumo["bilhetes"], resumo["apostados"], resumo["simulados"], resumo["rascunhos"]) == (3, 2, 1, 0)
     assert resumo["gasto_total"] == pytest.approx(4.0)  # 2 bilhetes de 1 aposta (2 jogos, 1 marcação cada) = R$2 cada
     assert resumo["premio_total"] == pytest.approx(25.50)
     assert resumo["saldo"] == pytest.approx(21.50)
+
+
+# --- "Foi apostado?" e "Limpar simulados" (10/10/2026) ---
+
+def test_situacao_responder_desfazer_limpar_e_restaurar(conexao):
+    marcacoes, percentuais = _marcacoes_e_percentuais(conexao)
+    apostado = salvar_bilhete(conexao, 1271, marcacoes, percentuais)
+    simulado = salvar_bilhete(conexao, 1271, {k: ["2"] for k in marcacoes}, percentuais)
+    rascunho = salvar_bilhete(conexao, 1271, {k: ["X"] for k in marcacoes}, percentuais)
+    assert {b["situacao"] for b in listar_bilhetes(conexao)} == {"rascunho"}
+
+    confirmar_situacao(conexao, apostado, "apostado")
+    confirmar_situacao(conexao, simulado, "apostado")
+    confirmar_situacao(conexao, simulado, "simulado")  # trocar a resposta não deixa as duas datas
+    linha = conexao.execute("SELECT jogado_em, simulado_em FROM bilhetes WHERE id = ?", (simulado,)).fetchone()
+    assert linha["jogado_em"] is None and linha["simulado_em"] is not None
+    with pytest.raises(ValueError, match="Situação desconhecida"):
+        confirmar_situacao(conexao, rascunho, "talvez")
+
+    # Limpar arquiva só o simulado: rascunho e apostado ficam.
+    assert arquivar_simulados(conexao) == 1 and arquivar_simulados(conexao) == 0
+    assert {b["id"]: b["situacao"] for b in listar_bilhetes(conexao)} == {apostado: "apostado", rascunho: "rascunho"}
+    assert [b["id"] for b in listar_arquivados(conexao)] == [simulado]
+    assert [l["id"] for l in quadro_do_concurso(conexao, 1271)] == [apostado, rascunho]
+    assert bilhete_igual(conexao, 1271, {k: ["2"] for k in marcacoes}) is None  # arquivado não dispara o aviso
+    assert resumo_financeiro(conexao)["simulados"] == 0
+    with pytest.raises(ValueError, match="arquivado"):
+        confirmar_situacao(conexao, simulado, "apostado")
+    assert conexao.execute("SELECT COUNT(*) FROM bilhetes").fetchone()[0] == 3  # nada foi apagado
+
+    restaurar_bilhete(conexao, simulado)
+    assert {b["id"]: b["situacao"] for b in listar_bilhetes(conexao)}[simulado] == "simulado"
+    confirmar_situacao(conexao, apostado, "rascunho")  # desfazer a resposta
+    assert {b["id"]: b["situacao"] for b in listar_bilhetes(conexao)}[apostado] == "rascunho"
 
 
 def test_listar_bilhetes_filtra_por_concurso(conexao):
@@ -189,6 +236,8 @@ def test_historico_so_traz_bilhetes_conferidos(conexao):
     conferido = salvar_bilhete(conexao, 1271, marcacoes, percentuais, motivos={list(marcacoes)[0]: ["Intuição"]})
     salvar_bilhete(conexao, 1271, marcacoes, percentuais)  # não conferido
     conferir_bilhete(conexao, conferido)
+    assert jogos_conferidos_para_historico(conexao) == []  # rascunho não entra (10/10/2026)
+    confirmar_situacao(conexao, conferido, "apostado")
     historico = jogos_conferidos_para_historico(conexao)
     assert len(historico) == 1 and len(historico[0]) == 2
     assert historico[0][0]["motivos"] == ["Intuição"] and historico[0][0]["resultado"] == "1"

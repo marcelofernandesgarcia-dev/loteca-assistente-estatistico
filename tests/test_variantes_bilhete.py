@@ -4,7 +4,7 @@ import pytest
 import config
 import db
 from stats import variantes_bilhete as vb
-from stats.bilhetes_salvos import bilhete_igual, conferir_bilhete, salvar_bilhete
+from stats.bilhetes_salvos import bilhete_igual, conferir_bilhete, confirmar_situacao, salvar_bilhete
 
 PCTS = [
     {"1": 70, "X": 20, "2": 10},  # favorito forte
@@ -127,6 +127,8 @@ def test_salvar_variante_grava_origem_e_base_e_le_depois_do_resultado(conexao):
     assert vb.leituras_das_variantes(c) == []  # sem resultado ainda
     c.execute("UPDATE jogos SET resultado = '1'")
     conferir_bilhete(c, bilhete)
+    assert vb.leituras_das_variantes(c) == []  # rascunho não conta (10/10/2026)
+    confirmar_situacao(c, bilhete, "apostado")
     assert vb.leituras_das_variantes(c) == [{"bilhete_id": bilhete, "concurso_numero": 9100, "origem": "ajuste_leve",
                                              "acertos_base": 1, "acertos_variante": 2, "saldo": 1}]
 
